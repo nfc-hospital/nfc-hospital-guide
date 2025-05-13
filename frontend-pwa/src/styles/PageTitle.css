@@ -1,0 +1,18 @@
+/* 페이지 타이틀 컴포넌트 스타일 */
+.page-title {
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.page-title h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+@media screen and (max-width: 480px) {
+  .page-title h1 {
+    font-size: 20px;
+  }
+}

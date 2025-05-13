@@ -1,42 +1,175 @@
-#root {
-  max-width: 1280px;
+/* 전체 앱 스타일 */
+:root {
+  --primary-color: #3498db;
+  --primary-dark: #2980b9;
+  --secondary-color: #2ecc71;
+  --secondary-dark: #27ae60;
+  --warning-color: #e74c3c;
+  --warning-dark: #c0392b;
+  --text-color: #333;
+  --text-light: #666;
+  --bg-color: #f5f5f5;
+  --bg-light: #ffffff;
+  --border-color: #ddd;
+  --border-radius: 8px;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  --transition: all 0.3s ease;
+  --font-family: 'Noto Sans KR', sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+/* 앱 컨테이너 */
+.app-container {
+  position: relative;
+  min-height: 100vh;
+  max-width: 768px; /* 모바일 중심 레이아웃 */
   margin: 0 auto;
-  padding: 2rem;
+  background-color: var(--bg-light);
+  box-shadow: var(--shadow);
+}
+
+/* NFC 미지원 경고 배너 */
+.nfc-warning {
+  background-color: var(--warning-color);
+  color: white;
+  padding: 8px 16px;
   text-align: center;
+  font-size: 14px;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+/* 버튼 공통 스타일 */
+button {
+  cursor: pointer;
+  font-family: var(--font-family);
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 8px 16px;
+  font-size: 16px;
+  font-weight: 500;
+  transition: var(--transition);
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 기본 버튼 스타일 */
+.primary-button {
+  background-color: var(--primary-color);
+  color: white;
+}
+
+.primary-button:hover:not(:disabled) {
+  background-color: var(--primary-dark);
+}
+
+.secondary-button {
+  background-color: var(--secondary-color);
+  color: white;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background-color: var(--secondary-dark);
+}
+
+/* 로딩 인디케이터 */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 200px;
+  font-size: 18px;
+  color: var(--text-light);
+}
+
+/* 에러 메시지 */
+.error-container {
+  padding: 16px;
+  background-color: rgba(231, 76, 60, 0.1);
+  border-left: 4px solid var(--warning-color);
+  color: var(--warning-dark);
+  margin: 16px;
+  border-radius: var(--border-radius);
+}
+
+/* 입력 필드 공통 스타일 */
+input, textarea, select {
+  font-family: var(--font-family);
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 16px;
+  transition: var(--transition);
+}
+
+input:focus, textarea:focus, select:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+/* 헤더 공통 스타일 */
+.hospital-header {
+  padding: 16px;
+  background-color: var(--primary-color);
+  color: white;
+  text-align: center;
+  position: relative;
+}
+
+.hospital-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/* 푸터 공통 스타일 */
+.hospital-footer {
+  padding: 16px;
+  background-color: var(--bg-color);
+  color: var(--text-light);
+  text-align: center;
+  font-size: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* 미디어 쿼리 - 모바일 우선 */
+@media screen and (max-width: 480px) {
+  body {
+    font-size: 14px;
   }
-  to {
-    transform: rotate(360deg);
+  
+  .app-container {
+    box-shadow: none;
+  }
+  
+  .hospital-header h1 {
+    font-size: 18px;
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
+/* 미디어 쿼리 - 태블릿 이상 */
+@media screen and (min-width: 768px) {
+  body {
+    background-color: #e8e8e8;
+    padding: 16px;
   }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
+  
+  .app-container {
+    border-radius: 12px;
+    overflow: hidden;
+  }
 }

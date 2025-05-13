@@ -1,0 +1,149 @@
+/* 대기 정보 컴포넌트 스타일 - 수정된 버전 */
+.waiting-info-container {
+  margin-bottom: 16px;
+}
+
+.waiting-info-container h3 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: var(--text-color);
+}
+
+.waiting-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-radius: var(--border-radius);
+  margin-bottom: 12px;
+  position: relative;
+}
+
+/* 대기 상태별 배경색 */
+.status-none {
+  background-color: rgba(46, 204, 113, 0.1);
+  border-left: 4px solid var(--secondary-color);
+}
+
+.status-low {
+  background-color: rgba(52, 152, 219, 0.1);
+  border-left: 4px solid var(--primary-color);
+}
+
+.status-medium {
+  background-color: rgba(243, 156, 18, 0.1);
+  border-left: 4px solid #f39c12;
+}
+
+.status-high {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-left: 4px solid var(--warning-color);
+}
+
+.waiting-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-right: 16px;
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.count-number {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.count-label {
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.waiting-time {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 16px;
+}
+
+.time-number {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.time-label {
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.waiting-text {
+  font-weight: 500;
+  padding-left: 16px;
+}
+
+/* 상태별 텍스트 색상 */
+.status-none .waiting-text {
+  color: var(--secondary-color);
+}
+
+.status-low .waiting-text {
+  color: var(--primary-color);
+}
+
+.status-medium .waiting-text {
+  color: #f39c12;
+}
+
+.status-high .waiting-text {
+  color: var(--warning-color);
+}
+
+.last-updated {
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-light);
+  margin-top: 8px;
+}
+
+/* 애니메이션 효과 - 대기 상태 변경 시 페이드 효과 */
+.waiting-status {
+  transition: background-color 0.3s ease, border-left-color 0.3s ease;
+}
+
+.count-number, .time-number {
+  transition: color 0.3s ease;
+}
+
+/* 모바일 반응형 */
+@media screen and (max-width: 480px) {
+  .waiting-status {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  
+  .waiting-count, .waiting-time {
+    border-right: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    padding-right: 0;
+    padding-bottom: 16px;
+    width: 100%;
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+    align-items: baseline;
+  }
+  
+  .waiting-text {
+    padding-left: 0;
+    align-self: center;
+  }
+  
+  .count-number, .time-number {
+    font-size: 24px;
+    margin-bottom: 0;
+  }
+}

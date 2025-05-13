@@ -1,0 +1,112 @@
+/* 검사 카드 스타일 - 수정된 버전 */
+.exam-card {
+  background-color: white;
+  border-radius: var(--border-radius);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  transition: var(--transition);
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.exam-card:hover {
+  border-color: var(--primary-color);
+}
+
+.exam-card.expanded {
+  box-shadow: var(--shadow);
+}
+
+.exam-card-header {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid transparent;
+  transition: var(--transition);
+}
+
+.exam-card.expanded .exam-card-header {
+  border-bottom-color: var(--border-color);
+}
+
+.exam-time-badge {
+  background-color: var(--primary-color);
+  color: white;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-right: 12px;
+  min-width: 50px;
+  text-align: center;
+}
+
+.exam-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.expand-icon {
+  color: var(--text-light);
+  font-size: 12px;
+  transition: var(--transition);
+}
+
+.exam-card-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease;
+  max-height: 0;
+  padding: 0 16px;
+}
+
+.exam-card.expanded .exam-card-content {
+  max-height: 200px;
+  padding: 16px;
+}
+
+.exam-location {
+  font-size: 14px;
+  color: var(--text-light);
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.label {
+  font-weight: 500;
+  color: var(--text-color);
+  margin-right: 4px;
+}
+
+.exam-preparation {
+  background-color: rgba(46, 204, 113, 0.1);
+  border-left: 3px solid var(--secondary-color);
+  padding: 12px;
+  margin: 12px 0;
+  border-radius: 4px;
+}
+
+.exam-preparation p {
+  font-size: 14px;
+  color: var(--text-color);
+  margin-top: 4px;
+}
+
+.go-button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  width: 100%;
+  margin-top: 12px;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.go-button:hover {
+  background-color: var(--primary-dark);
+}
