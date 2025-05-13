@@ -1,0 +1,29 @@
+# 공통
+node_modules/
+dist/
+.env
+.DS_Store
+
+# Frontend
+/frontend-pwa/node_modules/
+/frontend-pwa/dist/
+/frontend-pwa/.env
+
+# Backend
+/backend/node_modules/
+/backend/dist/
+/backend/.env
+
+# Admin Dashboard
+/admin-dashboard/node_modules/
+/admin-dashboard/dist/
+/admin-dashboard/.env
+
+# Chatbot Server
+/chatbot-server/__pycache__/
+/chatbot-server/.venv/
+/chatbot-server/.env
+
+# 로그, 빌드 파일
+*.log
+logs/
