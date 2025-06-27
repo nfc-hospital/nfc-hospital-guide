@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import '../styles/ChatbotButton.css';
 
-const ChatbotButton = () => {
+export default function ChatbotButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     { 
@@ -13,7 +12,7 @@ const ChatbotButton = () => {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   
-  const toggleChatbot = () => {
+  const toggleChat = () => {
     setIsOpen(!isOpen);
   };
   
@@ -101,69 +100,88 @@ const ChatbotButton = () => {
   };
   
   return (
-    <div className="chatbot-container">
-      <button 
-        className={`chatbot-button ${isOpen ? 'active' : ''}`}
-        onClick={toggleChatbot}
+    <>
+      {/* 챗봇 버튼 */}
+      <button
+        onClick={toggleChat}
+        className="fixed bottom-4 right-4 p-4 bg-primary-600 text-white rounded-full shadow-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
       >
-        {isOpen ? '✕' : '💬'}
+        {isOpen ? (
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        ) : (
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+        )}
       </button>
-      
+
+      {/* 챗봇 창 */}
       {isOpen && (
-        <div className="chatbot-dialog">
-          <div className="chatbot-header">
-            <h3>AI 도우미</h3>
+        <div className="fixed bottom-20 right-4 w-80 bg-white rounded-lg shadow-xl">
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">
+              AI 도우미
+            </h3>
           </div>
           
-          <div className="chatbot-messages">
-            {messages.map((msg, index) => (
-              <div 
-                key={index} 
-                className={`message ${msg.type}`}
-              >
-                <div className="message-content">{msg.text}</div>
-                <div className="message-time">{msg.time}</div>
-              </div>
-            ))}
-            
-            {isTyping && (
-              <div className="message bot typing">
-                <div className="typing-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+          <div className="h-96 p-4 overflow-y-auto">
+            {/* 챗봇 메시지들 */}
+            <div className="space-y-4">
+              {messages.map((msg, index) => (
+                <div 
+                  key={index} 
+                  className={`flex justify-${msg.type === 'user' ? 'end' : 'start'}`}
+                >
+                  <div className={`bg-${msg.type === 'user' ? 'primary' : 'gray'}-100 rounded-lg px-4 py-2 max-w-xs`}>
+                    <p className="text-sm text-gray-900">{msg.text}</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              ))}
+              
+              {isTyping && (
+                <div className="flex justify-end">
+                  <div className="bg-gray-100 rounded-lg px-4 py-2 max-w-xs">
+                    <div className="typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-          
-          <form className="chatbot-input" onSubmit={handleSendMessage}>
-            <input
-              type="text"
-              value={input}
-              onChange={handleInputChange}
-              placeholder="질문을 입력하세요..."
-              disabled={isTyping}
-            />
-            <button 
-              type="button" 
-              className="voice-button"
-              onClick={handleVoiceInput}
-            >
-              🎤
-            </button>
-            <button 
-              type="submit" 
-              className="send-button"
-              disabled={isTyping || !input.trim()}
-            >
-              ↑
-            </button>
-          </form>
+
+          <div className="p-4 border-t border-gray-200">
+            <form className="flex space-x-2">
+              <input
+                type="text"
+                value={input}
+                onChange={handleInputChange}
+                placeholder="메시지를 입력하세요..."
+                className="flex-1 rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                disabled={isTyping}
+              />
+              <button
+                type="button"
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                onClick={handleVoiceInput}
+              >
+                🎤
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                disabled={isTyping || !input.trim()}
+              >
+                전송
+              </button>
+            </form>
+          </div>
         </div>
       )}
-    </div>
+    </>
   );
-};
-
-export default ChatbotButton;
+}

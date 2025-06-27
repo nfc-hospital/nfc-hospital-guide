@@ -1,0 +1,288 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* 색상 변수 */
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-secondary: #64748b;
+  --color-accent: #f59e0b;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
+  
+  /* 배경색 */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  
+  /* 텍스트 색상 */
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  
+  /* 테두리 색상 */
+  --border-primary: #e2e8f0;
+  --border-secondary: #cbd5e1;
+  
+  /* 그림자 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  
+  /* 간격 */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* 폰트 크기 */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  
+  /* 반응형 중단점 */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
+/* 기본 스타일 */
+body {
+  @apply bg-gray-50 text-gray-900 min-h-screen;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* 레이아웃 */
+.container {
+  @apply mx-auto px-4 sm:px-6 lg:px-8 max-w-7xl;
+}
+
+.page-container {
+  @apply min-h-screen flex flex-col;
+}
+
+.main-content {
+  @apply flex-grow;
+}
+
+/* 버튼 */
+.btn {
+  @apply inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2;
+}
+
+.btn-primary {
+  @apply bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+}
+
+.btn-secondary {
+  @apply bg-white text-gray-700 border-gray-300 hover:bg-gray-50 focus:ring-primary-500;
+}
+
+/* 카드 */
+.card {
+  @apply bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden;
+}
+
+.card-header {
+  @apply px-4 py-5 border-b border-gray-200 sm:px-6;
+}
+
+.card-body {
+  @apply px-4 py-5 sm:p-6;
+}
+
+.card-footer {
+  @apply px-4 py-4 border-t border-gray-200 sm:px-6;
+}
+
+/* 폼 */
+.form-group {
+  @apply space-y-1;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700;
+}
+
+.form-input {
+  @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm;
+}
+
+.form-error {
+  @apply mt-1 text-sm text-red-600;
+}
+
+/* 알림 */
+.alert {
+  @apply rounded-md p-4 mb-4;
+}
+
+.alert-success {
+  @apply bg-green-50 text-green-800;
+}
+
+.alert-error {
+  @apply bg-red-50 text-red-800;
+}
+
+.alert-warning {
+  @apply bg-yellow-50 text-yellow-800;
+}
+
+.alert-info {
+  @apply bg-blue-50 text-blue-800;
+}
+
+/* 로딩 스피너 */
+.spinner {
+  @apply animate-spin rounded-full border-4 border-gray-300 border-t-primary-600 h-8 w-8;
+}
+
+/* 네비게이션 */
+.nav-link {
+  @apply text-gray-500 hover:text-gray-900 px-3 py-2 text-sm font-medium;
+}
+
+.nav-link-active {
+  @apply text-primary-600 hover:text-primary-900;
+}
+
+/* 모달 */
+.modal-backdrop {
+  @apply fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity;
+}
+
+.modal-container {
+  @apply fixed inset-0 z-10 overflow-y-auto;
+}
+
+.modal-content {
+  @apply relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6;
+}
+
+/* 태그 */
+.tag {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+
+.tag-primary {
+  @apply bg-primary-100 text-primary-800;
+}
+
+.tag-secondary {
+  @apply bg-gray-100 text-gray-800;
+}
+
+/* 페이지네이션 */
+.pagination {
+  @apply flex justify-center space-x-1;
+}
+
+.pagination-item {
+  @apply relative inline-flex items-center px-4 py-2 text-sm font-medium border border-gray-300 bg-white hover:bg-gray-50;
+}
+
+.pagination-item-active {
+  @apply z-10 bg-primary-50 border-primary-500 text-primary-600;
+}
+
+/* 테이블 */
+.table {
+  @apply min-w-full divide-y divide-gray-300;
+}
+
+.table th {
+  @apply px-3 py-3.5 text-left text-sm font-semibold text-gray-900;
+}
+
+.table td {
+  @apply whitespace-nowrap px-3 py-4 text-sm text-gray-500;
+}
+
+/* NFC 관련 */
+.nfc-status {
+  @apply flex items-center space-x-2 text-sm;
+}
+
+.nfc-status-icon {
+  @apply h-4 w-4;
+}
+
+.nfc-status-available {
+  @apply text-green-600;
+}
+
+.nfc-status-unavailable {
+  @apply text-red-600;
+}
+
+/* 대기열 정보 */
+.waiting-info {
+  @apply rounded-lg bg-white shadow p-6;
+}
+
+.waiting-number {
+  @apply text-4xl font-bold text-primary-600;
+}
+
+.waiting-time {
+  @apply text-2xl font-semibold text-gray-900;
+}
+
+/* 검사 카드 */
+.exam-card {
+  @apply divide-y divide-gray-200 rounded-lg bg-white shadow;
+}
+
+.exam-card-header {
+  @apply px-4 py-5 sm:px-6;
+}
+
+.exam-card-body {
+  @apply px-4 py-5 sm:p-6;
+}
+
+/* 지도 네비게이터 */
+.map-navigator {
+  @apply relative w-full h-64 sm:h-96 rounded-lg overflow-hidden;
+}
+
+.map-controls {
+  @apply absolute bottom-4 right-4 flex space-x-2;
+}
+
+/* 챗봇 버튼 */
+.chatbot-button {
+  @apply fixed bottom-4 right-4 rounded-full bg-primary-600 p-4 text-white shadow-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+}
+
+/* 접근성 */
+.sr-only {
+  @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
+}
+
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+}
+
+/* 반응형 유틸리티 */
+@media (max-width: 640px) {
+  .hide-on-mobile {
+    @apply hidden;
+  }
+}
+
+@media (min-width: 641px) {
+  .show-on-mobile {
+    @apply hidden;
+  }
+} 

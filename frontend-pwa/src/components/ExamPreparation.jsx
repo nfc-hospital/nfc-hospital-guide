@@ -1,48 +1,36 @@
-import { useState } from 'react';
-import '../styles/ExamPreparation.css';
+import { useState, useEffect } from 'react';
 
-const ExamPreparation = ({ preparation, description }) => {
-  const [preparationChecked, setPreparationChecked] = useState(false);
-  
-  const handleCheckboxChange = () => {
-    setPreparationChecked(!preparationChecked);
-  };
-  
+export default function ExamPreparation({ preparations }) {
+  if (!preparations?.length) {
+    return null;
+  }
+
   return (
-    <div className="section-container exam-preparation-container">
-      <h3>검사 준비사항</h3>
+    <div className="bg-white rounded-lg shadow-sm p-6">
+      <h2 className="text-lg font-medium text-gray-900 mb-4">
+        검사 전 준비사항
+      </h2>
       
-      <div className="preparation-description">
-        <p>{description}</p>
-      </div>
-      
-      <div className="preparation-checklist">
-        <label className="checkbox-container">
-          <input 
-            type="checkbox" 
-            checked={preparationChecked}
-            onChange={handleCheckboxChange}
-          />
-          <span className="checkmark"></span>
-          <div className="preparation-text">
-            <span className="emphasis">{preparation}</span>
-            <span className="confirmation-text">
-              {preparationChecked 
-                ? '준비 완료되었습니다' 
-                : '위 사항을 확인하신 후 체크해주세요'}
-            </span>
-          </div>
-        </label>
-      </div>
-      
-      {preparationChecked && (
-        <div className="preparation-confirm">
-          <div className="confirm-icon">✓</div>
-          <p>준비사항 확인 완료</p>
-        </div>
-      )}
+      <ul className="space-y-3">
+        {preparations.map((prep, index) => (
+          <li key={index} className="flex items-start">
+            <svg
+              className="h-5 w-5 text-primary-600 mt-0.5 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+            <span className="text-gray-700">{prep}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
-};
-
-export default ExamPreparation;
+}

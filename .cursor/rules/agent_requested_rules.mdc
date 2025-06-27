@@ -1,0 +1,692 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Agent Requested Rules - 복잡한 기능 구현 가이드
+
+**사용 시점**: 복잡한 기능 구현, 시스템 통합, 성능 최적화, 고급 보안 구현 시
+**호출 방법**: "복잡한 [기능명] 구현 가이드를 참조해줘" 또는 "@agent-guide [기능명]"
+
+**도움이 되는 작업**: 실시간 대기열 시스템, EMR 연동, WebSocket 구현, 캐싱 전략, 배포 자동화, 성능 모니터링
+
+## 1. 실시간 대기열 시스템 구현
+
+### WebSocket 기반 실시간 업데이트
+```javascript
+// Node.js 서버 (WebSocket)
+const WebSocket = require('ws');
+const Redis = require('redis');
+
+class QueueManager {
+  constructor() {
+    this.wss = new WebSocket.Server({ port: 8080 });
+    this.redis = Redis.createClient();
+    this.connections = new Map(); // userId -> WebSocket
+    this.setupWebSocketHandlers();
+  }
+
+  setupWebSocketHandlers() {
+    this.wss.on('connection', (ws, req) => {
+      ws.on('message', async (message) => {
+        const data = JSON.parse(message);
+        
+        if (data.type === 'subscribe_queue') {
+          await this.subscribeToQueue(ws, data.userId, data.examId);
+        }
+      });
+
+      ws.on('close', () => {
+        this.removeConnection(ws);
+      });
+    });
+  }
+
+  async subscribeToQueue(ws, userId, examId) {
+    this.connections.set(userId, ws);
+    
+    // Redis에서 현재 대기열 상태 조회
+    const queueData = await this.redis.get(`queue:${examId}`);
+    
+    if (queueData) {
+      ws.send(JSON.stringify({
+        type: 'queue_update',
+        data: JSON.parse(queueData)
+      }));
+    }
+  }
+
+  async updateQueue(examId, queueData) {
+    // Redis에 대기열 데이터 저장
+    await this.redis.set(`queue:${examId}`, JSON.stringify(queueData));
+    
+    // 해당 검사를 구독하는 모든 클라이언트에게 업데이트 전송
+    for (const [userId, ws] of this.connections) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'queue_update',
+          examId,
+          data: queueData,
+          timestamp: new Date().toISOString()
+        }));
+      }
+    }
+  }
+
+  async callPatient(userId, examId) {
+    const ws = this.connections.get(userId);
+    
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'patient_call',
+        examId,
+        message: '검사실로 입장해주세요.',
+        timestamp: new Date().toISOString()
+      }));
+    }
+    
+    // FCM 푸시 알림도 함께 전송
+    await this.sendPushNotification(userId, '검사 호출', '검사실로 입장해주세요.');
+  }
+}
+```
+
+### React 클라이언트 WebSocket 연동
+```jsx
+import { useState, useEffect, useRef } from 'react';
+
+const useQueueWebSocket = (userId, examId) => {
+  const [queueStatus, setQueueStatus] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const wsRef = useRef(null);
+
+  useEffect(() => {
+    if (!userId || !examId) return;
+
+    const ws = new WebSocket('ws://localhost:8080');
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setIsConnected(true);
+      // 대기열 구독
+      ws.send(JSON.stringify({
+        type: 'subscribe_queue',
+        userId,
+        examId
+      }));
+    };
+
+    ws.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+      
+      switch (message.type) {
+        case 'queue_update':
+          setQueueStatus(message.data);
+          break;
+        case 'patient_call':
+          // 환자 호출 알림
+          showCallNotification(message.message);
+          break;
+      }
+    };
+
+    ws.onclose = () => {
+      setIsConnected(false);
+    };
+
+    return () => {
+      ws.close();
+    };
+  }, [userId, examId]);
+
+  const showCallNotification = (message) => {
+    // 브라우저 알림 + 음성 알림
+    if (Notification.permission === 'granted') {
+      new Notification('검사 호출', { body: message });
+    }
+    
+    // 음성 안내
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.lang = 'ko-KR';
+      speechSynthesis.speak(utterance);
+    }
+  };
+
+  return { queueStatus, isConnected };
+};
+```
+
+## 2. EMR/HIS 시스템 연동
+
+### 가상 DB 중계 시스템
+```javascript
+// EMR 연동 서비스
+class EMRIntegrationService {
+  constructor() {
+    this.emrConfig = {
+      host: process.env.EMR_HOST,
+      apiKey: process.env.EMR_API_KEY,
+      timeout: 30000
+    };
+    this.virtualDB = new VirtualDatabase();
+  }
+
+  async syncPatientData(patientId) {
+    try {
+      // EMR에서 환자 데이터 조회 (Read-Only)
+      const emrData = await this.fetchFromEMR(`/patients/${patientId}`);
+      
+      // 가상 DB에 동기화 (개인정보 마스킹)
+      const sanitizedData = this.sanitizePatientData(emrData);
+      await this.virtualDB.upsertPatient(patientId, sanitizedData);
+      
+      return sanitizedData;
+    } catch (error) {
+      console.error('EMR 동기화 실패:', error);
+      throw new Error('환자 데이터 동기화에 실패했습니다.');
+    }
+  }
+
+  async fetchFromEMR(endpoint) {
+    const response = await fetch(`${this.emrConfig.host}${endpoint}`, {
+      headers: {
+        'Authorization': `Bearer ${this.emrConfig.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      timeout: this.emrConfig.timeout
+    });
+
+    if (!response.ok) {
+      throw new Error(`EMR API 오류: ${response.status}`);
+    }
+
+    return response.json();
+  }
+
+  sanitizePatientData(emrData) {
+    return {
+      patientId: emrData.id,
+      name: emrData.name,
+      phoneNumber: this.maskPhoneNumber(emrData.phone),
+      birthDate: emrData.birthDate,
+      appointments: emrData.appointments?.map(apt => ({
+        examId: apt.examId,
+        examName: apt.examName,
+        scheduledTime: apt.scheduledTime,
+        status: apt.status,
+        department: apt.department
+      })) || []
+    };
+  }
+
+  maskPhoneNumber(phone) {
+    if (!phone || phone.length < 4) return phone;
+    return `****${phone.slice(-4)}`;
+  }
+
+  // 실시간 동기화를 위한 웹훅 핸들러
+  async handleEMRWebhook(req, res) {
+    try {
+      const { eventType, patientId, data } = req.body;
+      
+      switch (eventType) {
+        case 'appointment_created':
+        case 'appointment_updated':
+          await this.syncPatientData(patientId);
+          break;
+        case 'patient_arrival':
+          await this.handlePatientArrival(patientId, data);
+          break;
+      }
+
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error('EMR 웹훅 처리 실패:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  }
+}
+```
+
+### 가상 데이터베이스 클래스
+```javascript
+class VirtualDatabase {
+  constructor() {
+    this.pool = require('./config/database').pool;
+  }
+
+  async upsertPatient(patientId, data) {
+    const connection = await this.pool.getConnection();
+    
+    try {
+      await connection.beginTransaction();
+      
+      // 환자 기본 정보 업데이트
+      await connection.execute(`
+        INSERT INTO virtual_patients (patient_id, name, phone_masked, birth_date, updated_at)
+        VALUES (?, ?, ?, ?, NOW())
+        ON DUPLICATE KEY UPDATE
+        name = VALUES(name),
+        phone_masked = VALUES(phone_masked),
+        updated_at = NOW()
+      `, [patientId, data.name, data.phoneNumber, data.birthDate]);
+
+      // 예약 정보 동기화
+      if (data.appointments) {
+        await connection.execute(
+          'DELETE FROM virtual_appointments WHERE patient_id = ?',
+          [patientId]
+        );
+
+        for (const apt of data.appointments) {
+          await connection.execute(`
+            INSERT INTO virtual_appointments 
+            (patient_id, exam_id, exam_name, scheduled_time, status, department)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `, [patientId, apt.examId, apt.examName, apt.scheduledTime, apt.status, apt.department]);
+        }
+      }
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async getPatientAppointments(patientId) {
+    const [rows] = await this.pool.execute(`
+      SELECT va.*, vp.name as patient_name
+      FROM virtual_appointments va
+      JOIN virtual_patients vp ON va.patient_id = vp.patient_id
+      WHERE va.patient_id = ? AND DATE(va.scheduled_time) = CURDATE()
+      ORDER BY va.scheduled_time
+    `, [patientId]);
+
+    return rows;
+  }
+}
+```
+
+## 3. 고성능 캐싱 전략
+
+### Redis 기반 캐싱 시스템
+```javascript
+// 캐싱 매니저
+class CacheManager {
+  constructor() {
+    this.redis = require('redis').createClient({
+      host: process.env.REDIS_HOST,
+      port: process.env.REDIS_PORT,
+      password: process.env.REDIS_PASSWORD
+    });
+    
+    this.defaultTTL = {
+      user_session: 3600,      // 1시간
+      queue_status: 30,        // 30초
+      hospital_info: 86400,    // 24시간
+      nfc_tag_info: 3600       // 1시간
+    };
+  }
+
+  async get(key, fetchFunction = null) {
+    try {
+      const cached = await this.redis.get(key);
+      
+      if (cached) {
+        return JSON.parse(cached);
+      }
+      
+      if (fetchFunction) {
+        const data = await fetchFunction();
+        await this.set(key, data);
+        return data;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('캐시 조회 실패:', error);
+      return fetchFunction ? await fetchFunction() : null;
+    }
+  }
+
+  async set(key, data, ttl = null) {
+    try {
+      const cacheKey = this.getCacheKey(key);
+      const expirationTime = ttl || this.getDefaultTTL(key);
+      
+      await this.redis.setex(cacheKey, expirationTime, JSON.stringify(data));
+    } catch (error) {
+      console.error('캐시 저장 실패:', error);
+    }
+  }
+
+  async invalidate(pattern) {
+    try {
+      const keys = await this.redis.keys(pattern);
+      if (keys.length > 0) {
+        await this.redis.del(...keys);
+      }
+    } catch (error) {
+      console.error('캐시 무효화 실패:', error);
+    }
+  }
+
+  getCacheKey(key) {
+    const prefix = process.env.CACHE_PREFIX || 'nfc_hospital';
+    return `${prefix}:${key}`;
+  }
+
+  getDefaultTTL(key) {
+    for (const [pattern, ttl] of Object.entries(this.defaultTTL)) {
+      if (key.includes(pattern)) {
+        return ttl;
+      }
+    }
+    return 300; // 기본 5분
+  }
+
+  // 캐싱 미들웨어
+  middleware(keyGenerator, ttl = null) {
+    return async (req, res, next) => {
+      const cacheKey = keyGenerator(req);
+      
+      try {
+        const cached = await this.get(cacheKey);
+        
+        if (cached) {
+          return res.json(cached);
+        }
+        
+        // 원본 응답을 캐시
+        const originalSend = res.json;
+        res.json = (data) => {
+          if (res.statusCode === 200) {
+            this.set(cacheKey, data, ttl);
+          }
+          originalSend.call(res, data);
+        };
+        
+        next();
+      } catch (error) {
+        console.error('캐시 미들웨어 오류:', error);
+        next();
+      }
+    };
+  }
+}
+
+// 사용 예시
+const cache = new CacheManager();
+
+// 병원 정보 캐싱
+app.get('/api/v1/hospital/info', 
+  cache.middleware(req => 'hospital_info', 86400),
+  async (req, res) => {
+    const hospitalInfo = await getHospitalInfo();
+    res.json({ success: true, data: hospitalInfo });
+  }
+);
+```
+
+## 4. 성능 모니터링 및 로깅
+
+### APM (Application Performance Monitoring)
+```javascript
+// 성능 모니터링 미들웨어
+class PerformanceMonitor {
+  constructor() {
+    this.metrics = {
+      requests: new Map(),
+      responseTime: [],
+      errors: [],
+      activeConnections: 0
+    };
+  }
+
+  // 요청 추적 미들웨어
+  trackRequest() {
+    return (req, res, next) => {
+      const startTime = Date.now();
+      const requestId = this.generateRequestId();
+      
+      req.requestId = requestId;
+      req.startTime = startTime;
+      
+      // 응답 완료 시 메트릭 수집
+      res.on('finish', () => {
+        const duration = Date.now() - startTime;
+        this.recordMetric(req, res, duration);
+      });
+      
+      next();
+    };
+  }
+
+  recordMetric(req, res, duration) {
+    const metric = {
+      requestId: req.requestId,
+      method: req.method,
+      url: req.url,
+      statusCode: res.statusCode,
+      duration,
+      userAgent: req.get('User-Agent'),
+      ip: req.ip,
+      userId: req.user?.userId,
+      timestamp: new Date().toISOString()
+    };
+
+    // 응답 시간 기록
+    this.metrics.responseTime.push(duration);
+    if (this.metrics.responseTime.length > 1000) {
+      this.metrics.responseTime.shift();
+    }
+
+    // 에러 기록
+    if (res.statusCode >= 400) {
+      this.metrics.errors.push(metric);
+      if (this.metrics.errors.length > 100) {
+        this.metrics.errors.shift();
+      }
+    }
+
+    // 느린 요청 로깅
+    if (duration > 5000) { // 5초 이상
+      console.warn('Slow request detected:', metric);
+    }
+
+    // 외부 모니터링 서비스로 전송 (선택적)
+    this.sendToMonitoringService(metric);
+  }
+
+  // 실시간 성능 대시보드 데이터
+  getMetrics() {
+    const now = Date.now();
+    const recentMetrics = this.metrics.responseTime
+      .filter(time => now - time < 60000); // 최근 1분
+
+    return {
+      activeConnections: this.metrics.activeConnections,
+      averageResponseTime: this.calculateAverage(recentMetrics),
+      requestsPerMinute: recentMetrics.length,
+      errorRate: this.calculateErrorRate(),
+      slowRequests: this.metrics.responseTime.filter(time => time > 2000).length,
+      uptime: process.uptime(),
+      memoryUsage: process.memoryUsage(),
+      cpuUsage: process.cpuUsage()
+    };
+  }
+
+  generateRequestId() {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  calculateAverage(arr) {
+    return arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+  }
+
+  calculateErrorRate() {
+    const totalRequests = this.metrics.responseTime.length;
+    const errorCount = this.metrics.errors.length;
+    return totalRequests > 0 ? (errorCount / totalRequests) * 100 : 0;
+  }
+}
+
+// 구조화된 로깅
+class StructuredLogger {
+  constructor() {
+    this.winston = require('winston');
+    this.logger = this.winston.createLogger({
+      level: 'info',
+      format: this.winston.format.combine(
+        this.winston.format.timestamp(),
+        this.winston.format.errors({ stack: true }),
+        this.winston.format.json()
+      ),
+      transports: [
+        new this.winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+        new this.winston.transports.File({ filename: 'logs/combined.log' }),
+        new this.winston.transports.Console({
+          format: this.winston.format.simple()
+        })
+      ]
+    });
+  }
+
+  logUserAction(userId, action, details) {
+    this.logger.info('User action', {
+      userId,
+      action,
+      details,
+      timestamp: new Date().toISOString(),
+      type: 'user_action'
+    });
+  }
+
+  logSystemEvent(event, data) {
+    this.logger.info('System event', {
+      event,
+      data,
+      timestamp: new Date().toISOString(),
+      type: 'system_event'
+    });
+  }
+
+  logSecurityEvent(userId, event, details) {
+    this.logger.warn('Security event', {
+      userId,
+      event,
+      details,
+      timestamp: new Date().toISOString(),
+      type: 'security_event'
+    });
+  }
+}
+```
+
+## 5. 배포 자동화 (CI/CD)
+
+### GitHub Actions 워크플로우
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd ai-server && pip install -r requirements.txt
+    
+    - name: Run tests
+      run: |
+        npm test
+        cd ai-server && python -m pytest
+    
+    - name: Run security audit
+      run: npm audit
+    
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-northeast-2
+    
+    - name: Deploy to EC2
+      run: |
+        # Docker 이미지 빌드 및 푸시
+        docker build -t nfc-hospital-api ./backend
+        docker build -t nfc-hospital-ai ./ai-server
+        
+        # ECR 푸시
+        aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $ECR_REGISTRY
+        
+        docker tag nfc-hospital-api:latest $ECR_REGISTRY/nfc-hospital-api:latest
+        docker tag nfc-hospital-ai:latest $ECR_REGISTRY/nfc-hospital-ai:latest
+        
+        docker push $ECR_REGISTRY/nfc-hospital-api:latest
+        docker push $ECR_REGISTRY/nfc-hospital-ai:latest
+        
+        # ECS 서비스 업데이트
+        aws ecs update-service --cluster nfc-hospital --service api-service --force-new-deployment
+        aws ecs update-service --cluster nfc-hospital --service ai-service --force-new-deployment
+```
+
+### Docker 구성
+```dockerfile
+# backend/Dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+# 의존성 설치
+COPY package*.json ./
+RUN npm ci --only=production
+
+# 애플리케이션 코드 복사
+COPY . .
+
+# 보안 설정
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nodejs -u 1001
+USER nodejs
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+CMD ["node", "server.js"]
+```
+
+
+이러한 복잡한 기능들을 구현할 때는 항상 보안, 성능, 확장성을 고려하여 단계적으로 개발하고 충분한 테스트를 거쳐야 합니다.

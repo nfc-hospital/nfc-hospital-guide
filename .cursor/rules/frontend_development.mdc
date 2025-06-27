@@ -1,0 +1,331 @@
+---
+description: 
+globs: src/**/*.js,src/**/*.jsx,src/**/*.ts,src/**/*.tsx,public/**/*.html,public/**/*.css
+alwaysApply: false
+---
+# React/Frontend Development Rules
+
+**파일 패턴**: `src/**/*.{js,jsx,ts,tsx}`, `public/**/*.{html,css}`
+**적용 조건**: React PWA 프론트엔드 개발 시
+
+**도움이 되는 작업**: React 컴포넌트 개발, PWA 구현, NFC 연동, UI/UX 개발, 접근성 구현
+
+## 1. React 컴포넌트 개발 가이드
+
+### 기본 컴포넌트 구조
+```jsx
+import React, { useState, useEffect } from 'react';
+
+// Props 인터페이스 정의 (TypeScript 사용 시)
+interface ComponentProps {
+  title: string;
+  onAction?: () => void;
+  // 모든 props에 기본값 제공 또는 optional 처리
+}
+
+// 기본값이 있는 함수형 컴포넌트
+const MyComponent = ({ 
+  title = '기본 제목', 
+  onAction = () => {} 
+}: ComponentProps) => {
+  // 상태 관리는 useState/useReducer만 사용
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <div className="p-4 bg-white rounded-lg shadow">
+      <h2 className="text-xl font-semibold mb-4">{title}</h2>
+      {/* 접근성을 위한 semantic HTML 사용 */}
+    </div>
+  );
+};
+
+export default MyComponent; // default export 사용
+```
+
+### 상태 관리 원칙
+- **localStorage/sessionStorage 절대 사용 금지**
+- **useState**: 단순한 로컬 상태
+- **useReducer**: 복잡한 상태 로직
+- **Context API**: 전역 상태 (JWT 토큰, 사용자 정보)
+
+```jsx
+// 올바른 상태 관리 예시
+const [userToken, setUserToken] = useState(null);
+const [appointments, setAppointments] = useState([]);
+
+// 잘못된 예시 - 절대 사용 금지
+// localStorage.setItem('token', token); // ❌
+// sessionStorage.setItem('data', data); // ❌
+```
+
+## 2. PWA 구현 가이드
+
+### Service Worker 등록
+```javascript
+// public/sw.js
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open('nfc-hospital-v1').then((cache) => {
+      return cache.addAll([
+        '/',
+        '/static/css/main.css',
+        '/static/js/main.js',
+        '/offline.html'
+      ]);
+    })
+  );
+});
+```
+
+### Manifest 설정
+```json
+{
+  "name": "NFC 병원 안내 시스템",
+  "short_name": "NFC Hospital",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
+```
+
+## 3. NFC 연동 구현
+
+### Web NFC API 사용
+```javascript
+import { useState, useCallback } from 'react';
+
+const useNFC = () => {
+  const [isScanning, setIsScanning] = useState(false);
+  const [lastScan, setLastScan] = useState(null);
+
+  const startNFCScan = useCallback(async () => {
+    if ('NDEFReader' in window) {
+      try {
+        const ndef = new NDEFReader();
+        setIsScanning(true);
+        
+        await ndef.scan();
+        
+        ndef.addEventListener('reading', ({ message }) => {
+          const tagData = message.records[0].data;
+          setLastScan(tagData);
+          // API 호출
+          handleNFCScan(tagData);
+        });
+        
+        ndef.addEventListener('readingerror', () => {
+          console.error('NFC 읽기 오류');
+          setIsScanning(false);
+        });
+        
+      } catch (error) {
+        console.error('NFC 스캔 실패:', error);
+        setIsScanning(false);
+      }
+    } else {
+      // Fallback: QR 코드 스캔 제안
+      alert('이 기기는 NFC를 지원하지 않습니다. QR 코드를 사용해주세요.');
+    }
+  }, []);
+
+  const handleNFCScan = async (tagId) => {
+    try {
+      const response = await fetch('/api/v1/nfc/scan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify({ 
+          tagId, 
+          timestamp: new Date().toISOString() 
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // 스캔 결과 처리
+      }
+    } catch (error) {
+      console.error('NFC 스캔 처리 실패:', error);
+    }
+  };
+
+  return { isScanning, lastScan, startNFCScan };
+};
+```
+
+## 4. Tailwind CSS 스타일링
+
+### 허용된 클래스만 사용
+```jsx
+// ✅ 올바른 사용 - 코어 유틸리티 클래스
+<div className="flex items-center justify-between p-4 bg-blue-500 text-white rounded-lg shadow-md">
+  <h1 className="text-xl font-bold">제목</h1>
+  <button className="px-4 py-2 bg-white text-blue-500 rounded hover:bg-gray-100">
+    버튼
+  </button>
+</div>
+
+// ❌ 피해야 할 사용 - 커스텀 클래스나 고급 기능
+<div className="bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">
+  사용 불가
+</div>
+```
+
+### 반응형 디자인
+```jsx
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  {/* 모바일: 1열, 태블릿: 2열, 데스크톱: 3열 */}
+</div>
+```
+
+## 5. 접근성 (Accessibility) 구현
+
+### 고령층 친화적 UI
+```jsx
+const AccessibleButton = ({ children, onClick, size = 'large' }) => {
+  const sizeClasses = {
+    large: 'text-lg px-6 py-4',    // 큰 터치 영역
+    medium: 'text-base px-4 py-3'
+  };
+
+  return (
+    <button
+      className={`
+        ${sizeClasses[size]}
+        bg-blue-600 text-white rounded-lg
+        hover:bg-blue-700 focus:ring-4 focus:ring-blue-300
+        transition-colors duration-200
+        min-h-[44px] min-w-[44px]  // 최소 터치 영역
+      `}
+      onClick={onClick}
+      aria-label={typeof children === 'string' ? children : undefined}
+    >
+      {children}
+    </button>
+  );
+};
+```
+
+### 음성 안내 (TTS) 구현
+```javascript
+const useTTS = () => {
+  const speak = useCallback((text, options = {}) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'ko-KR';
+      utterance.rate = 0.8; // 느린 속도
+      utterance.volume = 0.8;
+      
+      speechSynthesis.speak(utterance);
+    }
+  }, []);
+
+  return { speak };
+};
+```
+
+## 6. API 연동 패턴
+
+### 커스텀 훅 사용
+```javascript
+const useAPI = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const apiCall = useCallback(async (endpoint, options = {}) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/v1${endpoint}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`,
+          ...options.headers
+        },
+        ...options
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { apiCall, loading, error };
+};
+```
+
+## 7. 컴포넌트 파일 구조
+
+```
+src/
+├── components/
+│   ├── common/          # 공통 컴포넌트
+│   │   ├── Button.jsx
+│   │   ├── Modal.jsx
+│   │   └── LoadingSpinner.jsx
+│   ├── nfc/             # NFC 관련 컴포넌트
+│   │   ├── NFCScanner.jsx
+│   │   └── TagReader.jsx
+│   ├── queue/           # 대기열 관련
+│   │   ├── QueueStatus.jsx
+│   │   └── WaitingList.jsx
+│   └── chatbot/         # 챗봇 관련
+│       ├── ChatInterface.jsx
+│       └── VoiceInput.jsx
+├── hooks/               # 커스텀 훅
+│   ├── useNFC.js
+│   ├── useAuth.js
+│   └── useAPI.js
+├── utils/               # 유틸리티 함수
+│   ├── auth.js
+│   └── formatters.js
+└── pages/               # 페이지 컴포넌트
+    ├── PatientDashboard.jsx
+    ├── AdminDashboard.jsx
+    └── LoginPage.jsx
+```
+
+## 8. 성능 최적화
+
+### React.memo 사용
+```jsx
+const ExpensiveComponent = React.memo(({ data, onUpdate }) => {
+  // 렌더링 비용이 높은 컴포넌트
+  return <div>{/* 복잡한 UI */}</div>;
+});
+```
+
+### 지연 로딩
+```jsx
+const AdminDashboard = React.lazy(() => import('./AdminDashboard'));
+
+const App = () => (
+  <Suspense fallback={<LoadingSpinner />}>
+    <AdminDashboard />
+  </Suspense>
+);
+```
+
+
+이 규칙들을 따라 개발하면 NFC 병원 안내 시스템의 프론트엔드를 효율적이고 접근성이 높은 PWA로 구현할 수 있습니다.

@@ -1,46 +1,44 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import NFCStatus from '../NFCStatus';
-import '../../styles/Header.css';
 
-const Header = () => {
-  const { user, isAuthenticated, logout } = useAuth();
-  
+export default function Header() {
+  const { user, logout } = useAuth();
+
   return (
-    <header className="app-header">
-      <div className="header-left">
-        <Link to="/" className="header-logo">
-          서울 대학 병원
-        </Link>
-      </div>
-      
-      <div className="header-center">
-        {isAuthenticated && (
-          <h1 className="current-page-title">
-            {/* 현재 페이지 타이틀은 페이지 컴포넌트에서 설정 */}
-            {document.title.replace(' - 서울 대학 병원', '')}
-          </h1>
-        )}
-      </div>
-      
-      <div className="header-right">
-        <NFCStatus />
-        
-        {isAuthenticated ? (
-          <div className="user-menu">
-            <span className="user-name">{user?.name || '환자'}</span>
-            <button className="logout-button" onClick={logout}>
-              로그아웃
-            </button>
-          </div>
-        ) : (
-          <Link to="/login" className="login-button">
-            로그인
+    <header className="bg-white shadow">
+      <div className="container mx-auto px-4">
+        <div className="flex justify-between items-center h-16">
+          <Link to="/" className="flex items-center space-x-2">
+            <img
+              src="/images/logo.png"
+              alt="Logo"
+              className="h-8 w-auto"
+            />
+            <span className="text-xl font-semibold text-gray-900">
+              NFC 병원 안내
+            </span>
           </Link>
-        )}
+
+          <nav className="flex items-center space-x-4">
+            {user ? (
+              <button
+                onClick={logout}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                로그아웃
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="text-gray-600 hover:text-gray-900"
+              >
+                로그인
+              </Link>
+            )}
+          </nav>
+        </div>
       </div>
     </header>
   );
-};
-
-export default Header;
+}

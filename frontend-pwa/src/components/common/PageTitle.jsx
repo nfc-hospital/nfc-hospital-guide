@@ -1,22 +1,25 @@
+import React from 'react';
 import { useEffect } from 'react';
-import PropTypes from 'prop-types';
-import '../../styles/PageTitle.css';
 
-const PageTitle = ({ title }) => {
+/**
+ * @typedef {Object} PageTitleProps
+ * @property {string} title - 페이지의 제목
+ */
+
+/**
+ * 페이지 제목을 표시하는 컴포넌트
+ * @param {PageTitleProps} props
+ * @returns {JSX.Element}
+ */
+export default function PageTitle({ title }) {
   useEffect(() => {
     // 페이지 제목 업데이트
     document.title = `${title} - 서울 대학 병원`;
   }, [title]);
 
   return (
-    <div className="page-title">
-      <h1>{title}</h1>
-    </div>
+    <h1 className="text-2xl font-bold text-gray-900 mb-6">
+      {title}
+    </h1>
   );
-};
-
-PageTitle.propTypes = {
-  title: PropTypes.string.isRequired
-};
-
-export default PageTitle;
+}

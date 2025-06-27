@@ -1,0 +1,39 @@
+{
+  "name": "nfc-hospital-guide",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend-pwa",
+    "admin-dashboard",
+    "backend",
+    "chatbot-server"
+  ],
+  "scripts": {
+    "dev": "pnpm run -r dev",
+    "dev:frontend": "pnpm --filter frontend-pwa dev",
+    "dev:admin": "pnpm --filter admin-dashboard dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "dev:chatbot": "pnpm --filter chatbot-server dev",
+    "build": "pnpm run -r build",
+    "start": "pnpm run -r start",
+    "test": "pnpm run -r test",
+    "lint": "pnpm run -r lint",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "clean": "pnpm run -r clean"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+} 

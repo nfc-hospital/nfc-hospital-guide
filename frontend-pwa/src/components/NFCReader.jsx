@@ -1,165 +1,92 @@
 import { useState, useEffect } from 'react';
-import '../styles/NFCReader.css';
+import { useNavigate } from 'react-router-dom';
 
-const NFCReader = () => {
-  const [nfcStatus, setNfcStatus] = useState('idle'); // idle, scanning, success, error
-  const [lastScanned, setLastScanned] = useState(null);
-  const [errorMessage, setErrorMessage] = useState('');
-  
+export default function NFCReader({ onTagScanned }) {
+  const [scanning, setScanning] = useState(false);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
+
   useEffect(() => {
-    // 컴포넌트 마운트 시 NFC 스캔 시작
-    startNFCScan();
-    
-    // 컴포넌트 언마운트 시 정리
-    return () => {
-      // 필요한 경우 NFC 스캔 중지 로직 추가
+    const startScanning = async () => {
+      if (!('NDEFReader' in window)) {
+        setError('이 브라우저는 NFC를 지원하지 않습니다.');
+        return;
+      }
+
+      try {
+        setScanning(true);
+        const ndef = new window.NDEFReader();
+        await ndef.scan();
+
+        ndef.addEventListener("reading", ({ message, serialNumber }) => {
+          console.log("NFC 태그가 인식되었습니다:", serialNumber);
+          
+          // 테스트용 examId
+          const examId = "xray-123";
+          
+          // 태그 인식 후 처리
+          if (onTagScanned) {
+            onTagScanned();
+          }
+          
+          // 검사 페이지로 이동
+          navigate(`/exam/${examId}`);
+        });
+
+        ndef.addEventListener("error", (error) => {
+          setError('NFC 태그 읽기에 실패했습니다.');
+          console.error("NFC 오류:", error);
+        });
+
+      } catch (error) {
+        console.error("NFC 스캔 시작 실패:", error);
+        setError('NFC 스캔을 시작할 수 없습니다.');
+        setScanning(false);
+      }
     };
-  }, []);
-  
-  const startNFCScan = async () => {
-    if (!('NDEFReader' in window)) {
-      console.error('NFC is not supported in this browser');
-      return;
-    }
-    
-    try {
-      const ndef = new window.NDEFReader();
-      setNfcStatus('scanning');
-      
-      await ndef.scan();
-      console.log('NFC scan started successfully');
-      
-      ndef.addEventListener('reading', ({ message, serialNumber }) => {
-        console.log('NFC tag read!');
-        
-        // NFC 메시지 처리
-        if (message && message.records) {
-          handleNFCMessage(message.records, serialNumber);
-        }
-      });
-      
-      ndef.addEventListener('readingerror', () => {
-        console.error('NFC reading error');
-        setNfcStatus('error');
-        setErrorMessage('태그 읽기 오류가 발생했습니다. 다시 시도해주세요.');
-        
-        // 3초 후 다시 스캔 상태로 변경
-        setTimeout(() => {
-          setNfcStatus('scanning');
-          setErrorMessage('');
-        }, 3000);
-      });
-    } catch (error) {
-      console.error('NFC scan error:', error);
-      setNfcStatus('error');
-      
-      if (error.name === 'NotAllowedError') {
-        setErrorMessage('NFC 권한이 거부되었습니다. 브라우저 설정을 확인해주세요.');
-      } else if (error.name === 'NotSupportedError') {
-        setErrorMessage('이 기기에서는 NFC를 사용할 수 없습니다.');
-      } else {
-        setErrorMessage('NFC 스캔 중 오류가 발생했습니다.');
-      }
-    }
-  };
-  
-  const handleNFCMessage = (records, serialNumber) => {
-    try {
-      // 첫 번째 레코드의 데이터를 텍스트로 변환
-      const record = records[0];
-      
-      if (record && record.recordType === 'text') {
-        const textDecoder = new TextDecoder();
-        const text = textDecoder.decode(record.data);
-        
-        // 태그 ID와 내용 저장
-        const tagData = {
-          id: serialNumber,
-          content: text,
-          timestamp: new Date().toISOString()
-        };
-        
-        setLastScanned(tagData);
-        setNfcStatus('success');
-        
-        // 태그 내용 처리 (URL이거나 ID일 수 있음)
-        processTagContent(text);
-        
-        // 스캔 성공 후 3초 뒤 다시 스캔 모드로 전환
-        setTimeout(() => {
-          setNfcStatus('scanning');
-        }, 3000);
-      } else {
-        throw new Error('Unsupported record type');
-      }
-    } catch (error) {
-      console.error('Error processing NFC message:', error);
-      setNfcStatus('error');
-      setErrorMessage('NFC 태그 정보를 처리할 수 없습니다.');
-      
-      setTimeout(() => {
-        setNfcStatus('scanning');
-        setErrorMessage('');
-      }, 3000);
-    }
-  };
-  
-  const processTagContent = (content) => {
-    // URL 형식 확인
-    if (content.startsWith('http')) {
-      // 태그가 URL이면 페이지 이동
-      window.location.href = content;
-    } else if (content.startsWith('exam:')) {
-      // exam:1 형식이면 검사 ID 추출하여 페이지 이동
-      const examId = content.split(':')[1];
-      window.location.href = `/exam/${examId}`;
-    } else {
-      // 기타 형식은 서버에 요청하여 처리
-      console.log('Tag content to be processed on server:', content);
-      // 서버 처리 로직 추가 예정
-    }
-  };
-  
-  const renderStatusIndicator = () => {
-    switch (nfcStatus) {
-      case 'scanning':
-        return (
-          <div className="nfc-indicator scanning">
-            <div className="scan-animation"></div>
-            <p>NFC 태그를 스캔해주세요</p>
+
+    startScanning();
+
+    return () => {
+      setScanning(false);
+    };
+  }, [navigate, onTagScanned]);
+
+  if (error) {
+    return (
+      <div className="mt-4 p-4 bg-red-50 rounded-lg">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
           </div>
-        );
-      
-      case 'success':
-        return (
-          <div className="nfc-indicator success">
-            <div className="success-icon">✓</div>
-            <p>태그 스캔 성공!</p>
-            {lastScanned && <p className="tag-info">태그 ID: {lastScanned.id.substring(0, 8)}...</p>}
+          <div className="ml-3">
+            <p className="text-sm text-red-700">{error}</p>
           </div>
-        );
-      
-      case 'error':
-        return (
-          <div className="nfc-indicator error">
-            <div className="error-icon">!</div>
-            <p>{errorMessage}</p>
-            <button onClick={startNFCScan} className="retry-button">
-              다시 시도
-            </button>
-          </div>
-        );
-      
-      default:
-        return null;
-    }
-  };
-  
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="nfc-reader-container">
-      {renderStatusIndicator()}
+    <div className="mt-6 text-center">
+      {scanning && (
+        <div className="space-y-4">
+          <div className="relative mx-auto w-24 h-24">
+            <div className="absolute inset-0 bg-primary-100 rounded-full animate-ping opacity-75"></div>
+            <div className="relative flex items-center justify-center w-24 h-24 bg-primary-100 rounded-full">
+              <svg className="w-12 h-12 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+              </svg>
+            </div>
+          </div>
+          <p className="text-sm text-gray-600">
+            NFC 태그를 스캔하고 있습니다...<br />
+            휴대폰을 태그에 가까이 대어주세요
+          </p>
+        </div>
+      )}
     </div>
   );
-};
-
-export default NFCReader;
+}

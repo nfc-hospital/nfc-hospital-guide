@@ -1,230 +1,129 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import '../styles/Login.css';
 
-const Login = () => {
+export default function Login() {
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [birthdate, setBirthdate] = useState('');
-  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
-  const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isAuthenticated } = useAuth();
   
+  // 이미 로그인된 경우 리다이렉트
   useEffect(() => {
-    // 페이지 타이틀 설정
-    document.title = '환자 인증 - 서울 대학 병원';
-    
-    // 이미 로그인되어 있으면 홈으로 리다이렉트
     if (isAuthenticated) {
-      navigate('/');
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
-  
-  const handlePhoneChange = (e) => {
-    // 숫자만 입력 가능하도록 필터링
-    const value = e.target.value.replace(/\D/g, '');
-    setPhoneNumber(value);
-  };
-  
-  const handleBirthdateChange = (e) => {
-    // 숫자만 입력 가능하도록 필터링
-    const value = e.target.value.replace(/\D/g, '');
-    setBirthdate(value);
-  };
-  
-  const handleVerificationCodeChange = (e) => {
-    // 숫자만 입력 가능하도록 필터링
-    const value = e.target.value.replace(/\D/g, '');
-    setVerificationCode(value);
-  };
-  
-  const requestVerificationCode = async (e) => {
+  }, [isAuthenticated, navigate, location]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (phoneNumber.length !== 11) {
-      setError('휴대폰 번호 11자리를 정확히 입력해주세요.');
-      return;
-    }
-    
-    if (birthdate.length !== 6) {
-      setError('생년월일 6자리를 정확히 입력해주세요.');
-      return;
-    }
-    
-    setLoading(true);
     setError('');
-    
+    setIsLoading(true);
+
     try {
-      // 실제 구현 시 API 호출로 대체
-      // const response = await fetch('/api/v1/auth/sms', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ phone: phoneNumber, birthdate })
-      // });
-      // const data = await response.json();
-      
-      // 인증 요청 성공 시뮬레이션
-      console.log('OTP 1234 to', phoneNumber);
-      setTimeout(() => {
-        setIsPhoneVerified(true);
-        setLoading(false);
-      }, 1000);
-    } catch (error) {
-      console.error('인증 요청 오류:', error);
-      setError('인증 요청 중 오류가 발생했습니다. 다시 시도해주세요.');
-      setLoading(false);
-    }
-  };
-  
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    
-    if (verificationCode.length !== 4) {
-      setError('인증번호 4자리를 정확히 입력해주세요.');
-      return;
-    }
-    
-    setLoading(true);
-    setError('');
-    
-    try {
-      // 실제 구현 시 API 호출로 대체
-      // const response = await fetch('/api/v1/auth/verify', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ phone: phoneNumber, otp: verificationCode })
-      // });
-      // const data = await response.json();
-      
-      // 로그인 성공 시뮬레이션
-      if (verificationCode === '1234') {
-        setTimeout(() => {
-          // 임시 사용자 데이터
-          const mockUser = {
-            id: 'user123',
-            name: '홍길동',
-            phoneNumber: phoneNumber,
-            birthdate: birthdate
-          };
-          
-          login(mockUser);
-          navigate('/');
-          setLoading(false);
-        }, 1000);
-      } else {
-        setError('인증번호가 일치하지 않습니다.');
-        setLoading(false);
+      // 테스트를 위해 간단한 유효성 검사
+      if (phoneNumber.length !== 4 || birthDate.length !== 6) {
+        throw new Error('전화번호 뒷자리 4자리와 생년월일 6자리를 정확히 입력해주세요.');
       }
-    } catch (error) {
-      console.error('로그인 오류:', error);
-      setError('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
-      setLoading(false);
+
+      await login(phoneNumber, birthDate);
+      const from = location.state?.from?.pathname || '/';
+      navigate(from, { replace: true });
+    } catch (err) {
+      setError(err.message || '로그인에 실패했습니다. 입력하신 정보를 확인해주세요.');
+    } finally {
+      setIsLoading(false);
     }
   };
-  
+
   return (
-    <div className="login-page">
-      <div className="login-container">
-        <div className="login-card">
-          <div className="hospital-logo">
-            <h1>서울 대학 병원</h1>
-          </div>
-          
-          <h2>환자 인증</h2>
-          
-          {!isPhoneVerified ? (
-            <form onSubmit={requestVerificationCode} className="auth-form">
-              <div className="form-group">
-                <label htmlFor="phoneNumber">휴대폰 번호</label>
-                <input
-                  id="phoneNumber"
-                  type="tel"
-                  placeholder="01012345678"
-                  value={phoneNumber}
-                  onChange={handlePhoneChange}
-                  maxLength={11}
-                  disabled={loading}
-                  required
-                />
-              </div>
-              
-              <div className="form-group">
-                <label htmlFor="birthdate">생년월일 6자리</label>
-                <input
-                  id="birthdate"
-                  type="text"
-                  placeholder="예: 900101"
-                  value={birthdate}
-                  onChange={handleBirthdateChange}
-                  maxLength={6}
-                  disabled={loading}
-                  required
-                />
-              </div>
-              
-              {error && <div className="error-message">{error}</div>}
-              
-              <button 
-                type="submit" 
-                className="auth-button"
-                disabled={loading}
-              >
-                {loading ? '처리 중...' : '인증번호 요청'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleLogin} className="auth-form">
-              <p className="phone-info">
-                {phoneNumber.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3')}
-                로 인증번호가 발송되었습니다.
-              </p>
-              
-              <div className="form-group">
-                <label htmlFor="verificationCode">인증번호 4자리</label>
-                <input
-                  id="verificationCode"
-                  type="text"
-                  placeholder="인증번호 입력"
-                  value={verificationCode}
-                  onChange={handleVerificationCodeChange}
-                  maxLength={4}
-                  disabled={loading}
-                  required
-                />
-              </div>
-              
-              {error && <div className="error-message">{error}</div>}
-              
-              <button 
-                type="submit" 
-                className="auth-button"
-                disabled={loading}
-              >
-                {loading ? '처리 중...' : '로그인'}
-              </button>
-              
-              <button 
-                type="button" 
-                className="resend-button"
-                onClick={requestVerificationCode}
-                disabled={loading}
-              >
-                인증번호 재발송
-              </button>
-            </form>
-          )}
-          
-          <div className="login-help">
-            <p>문제가 있으신가요? <button className="help-button">도움말</button></p>
-          </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            간편 로그인
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            전화번호와 생년월일로 로그인하세요
+          </p>
         </div>
+        
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <label htmlFor="phone-number" className="sr-only">
+                전화번호
+              </label>
+              <input
+                id="phone-number"
+                name="phoneNumber"
+                type="tel"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                placeholder="전화번호 (뒤 4자리)"
+                pattern="[0-9]{4}"
+                maxLength="4"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+            <div>
+              <label htmlFor="birth-date" className="sr-only">
+                생년월일
+              </label>
+              <input
+                id="birth-date"
+                name="birthDate"
+                type="text"
+                required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 focus:z-10 sm:text-sm"
+                placeholder="생년월일 (YYMMDD)"
+                pattern="[0-9]{6}"
+                maxLength="6"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                disabled={isLoading}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="rounded-md bg-red-50 p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">{error}</h3>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            >
+              {isLoading ? '로그인 중...' : '로그인'}
+            </button>
+          </div>
+
+          {/* 테스트용 안내 메시지 */}
+          <div className="text-center text-sm text-gray-500">
+            테스트용 계정: 전화번호 1234, 생년월일 990101
+          </div>
+        </form>
       </div>
     </div>
   );
-};
-
-export default Login;
+}

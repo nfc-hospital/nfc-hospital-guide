@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import '../styles/MapNavigator.css';
+import { useEffect, useState } from 'react';
 
 const MapNavigator = ({ location }) => {
   const [showFullMap, setShowFullMap] = useState(false);

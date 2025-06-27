@@ -1,25 +1,21 @@
 import { Outlet } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
-import NFCReader from '../NFCReader';
-import '../../styles/Layout.css';
+import NFCStatus from '../NFCStatus';
 
-const Layout = () => {
+export default function Layout() {
   const nfcSupported = 'NDEFReader' in window;
   
   return (
-    <div className="app-container">
+    <div className="min-h-screen flex flex-col">
       <Header />
-      
-      <main className="app-content">
+      <NFCStatus />
+      <main className="flex-grow">
         <Outlet />
       </main>
-      
       <Footer />
       
       {nfcSupported && <NFCReader />}
     </div>
   );
-};
-
-export default Layout;
+}
