@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Exam from './pages/Exam';
 import NotFound from './pages/NotFound';
+import PublicGuide from './components/PublicGuide';
 import PrivateRoute from './components/common/PrivateRoute';
 import './styles/global.css';
 
@@ -14,6 +15,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/public-guide" element={<PublicGuide />} />
           <Route element={<Layout />}>
             <Route path="/" element={
               <PrivateRoute>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="#f8fafc"/>
+  <g transform="translate(400,300)">
+    <rect x="-200" y="-100" width="400" height="200" fill="#e2e8f0" rx="10"/>
+    <text x="0" y="0" font-family="Arial" font-size="24" fill="#475569" text-anchor="middle" dominant-baseline="middle">
+      안내데스크에서 확인해주세요
+    </text>
+    <text x="0" y="40" font-family="Arial" font-size="18" fill="#64748b" text-anchor="middle" dominant-baseline="middle">
+      정확한 위치를 알려드리겠습니다
+    </text>
+  </g>
+</svg>

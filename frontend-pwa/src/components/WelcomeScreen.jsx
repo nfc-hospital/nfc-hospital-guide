@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Typography from './common/Typography';
 import Button from './common/Button';
 
@@ -50,6 +51,7 @@ const NFCGuideAnimation = () => (
 );
 
 const WelcomeScreen = () => {
+  const navigate = useNavigate();
   const [selectedLanguage, setSelectedLanguage] = useState('ko');
   
   const languages = [
