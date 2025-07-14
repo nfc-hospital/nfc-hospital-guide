@@ -1,0 +1,5 @@
+packages:
+  - 'frontend-pwa'
+  - 'admin-dashboard'
+  - 'backend'
+  - 'chatbot-server' 
