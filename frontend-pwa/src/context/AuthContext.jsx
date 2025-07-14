@@ -8,7 +8,8 @@ const MOCK_USER = {
   id: 'user123',
   name: '홍길동',
   phoneNumber: '1234',
-  birthDate: '990101'
+  birthDate: '990101',
+  loginType: 'simple' // 기본 로그인 타입
 };
 
 // AuthProvider 컴포넌트
@@ -27,19 +28,45 @@ export function AuthProvider({ children }) {
 
   const login = async (phoneNumber, birthDate) => {
     try {
+      // 테스트를 위해 간단한 유효성 검사
+      if (phoneNumber.length !== 4 || birthDate.length !== 6) {
+        throw new Error('전화번호 뒷자리 4자리와 생년월일 6자리를 정확히 입력해주세요.');
+      }
+
       // 테스트를 위해 항상 로그인 성공 처리
       const mockUser = {
         ...MOCK_USER,
         phoneNumber,
-        birthDate
+        birthDate,
+        loginType: 'simple'
       };
       
       setUser(mockUser);
       localStorage.setItem('user', JSON.stringify(mockUser));
       return true;
     } catch (error) {
-      console.error('Login error:', error);
-      throw new Error('로그인에 실패했습니다.');
+      console.error('Simple login error:', error);
+      throw new Error(error.message || '로그인에 실패했습니다.');
+    }
+  };
+
+  const loginWithKakao = async () => {
+    try {
+      console.log('카카오 로그인 시도 (시뮬레이션)...');
+      // 실제 카카오 SDK 연동 없이 시뮬레이션
+      const mockUser = {
+        ...MOCK_USER,
+        id: 'kakao_user_123',
+        name: '카카오 사용자',
+        loginType: 'kakao'
+      };
+
+      setUser(mockUser);
+      localStorage.setItem('user', JSON.stringify(mockUser));
+      return true;
+    } catch (error) {
+      console.error('Kakao login error:', error);
+      throw new Error('카카오 로그인에 실패했습니다.');
     }
   };
 
@@ -61,6 +88,7 @@ export function AuthProvider({ children }) {
     user,
     login,
     logout,
+    loginWithKakao,
     isAuthenticated: !!user
   };
 

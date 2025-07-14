@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import Layout from './components/common/Layout';
 import Home from './pages/Home';
 import Login from './pages/Login';
+import KakaoOAuth from './components/auth/KakaoOAuth';
 import Exam from './pages/Exam';
 import NotFound from './pages/NotFound';
 import PublicGuide from './components/PublicGuide';
@@ -15,6 +16,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/oauth/kakao" element={<KakaoOAuth />} />
           <Route path="/public-guide" element={<PublicGuide />} />
           <Route element={<Layout />}>
             <Route path="/" element={

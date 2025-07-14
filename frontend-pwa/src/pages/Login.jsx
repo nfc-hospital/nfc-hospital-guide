@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import KakaoButton from '../components/common/KakaoButton';
 
 export default function Login() {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -11,6 +12,10 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isAuthenticated } = useAuth();
+
+  const handleKakaoLoginClick = () => {
+    navigate('/oauth/kakao');
+  };
   
   // 이미 로그인된 경우 리다이렉트
   useEffect(() => {
@@ -31,7 +36,7 @@ export default function Login() {
         throw new Error('전화번호 뒷자리 4자리와 생년월일 6자리를 정확히 입력해주세요.');
       }
 
-      await login(phoneNumber, birthDate);
+      await login('simple', { phoneNumber, birthDate });
       const from = location.state?.from?.pathname || '/';
       navigate(from, { replace: true });
     } catch (err) {
@@ -44,6 +49,31 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
+        <div>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-text-primary">
+            로그인
+          </h2>
+        </div>
+
+        <div className="space-y-4">
+          <KakaoButton
+            onClick={handleKakaoLoginClick}
+            loading={isLoading}
+          />
+        </div>
+
+        {/* OR 구분선 */}
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300"></div>
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="px-2 bg-background text-text-secondary">
+              OR
+            </span>
+          </div>
+        </div>
+        
         <div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-text-primary">
             간편 로그인
