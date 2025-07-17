@@ -1,0 +1,23 @@
+ 
+# Django ?�로?�트 
+logs/ 
+media/ 
+staticfiles/ 
+db.sqlite3 
+.env 
+__pycache__/ 
+*.pyc 
+.coverage 
+htmlcov/ 
+ 
+# Django ?�로?�트 
+logs/ 
+media/ 
+staticfiles/ 
+db.sqlite3 
+.env 
+__pycache__/ 
+*.pyc 
+.coverage 
+htmlcov/ 
+venv/
