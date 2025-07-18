@@ -50,7 +50,7 @@ urlpatterns = [
     path('api/v1/auth/', include('authentication.urls')),      # 인증
     path('api/v1/nfc/', include('nfc.urls')),                  # NFC 태그
     path('api/v1/appointments/', include('appointments.urls')), # 예약/진료
-    path('api/v1/queue/', include('queue.urls')),              # 대기열 
+    path('api/v1/queue/', include('p_queue.urls')),              # 대기열 
     path('api/v1/admin/', include('admin_dashboard.urls')),    # 관리자
     
     # Phase 2 확장 기능 (나중에 활성화)

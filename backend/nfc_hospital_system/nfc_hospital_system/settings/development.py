@@ -1,5 +1,8 @@
 # backend/nfc_hospital_system/settings/development.py
+
 from .base import *
+from datetime import timedelta
+import debug_toolbar
 
 # 개발 환경 전용 설정
 DEBUG = True
@@ -34,42 +37,52 @@ CHANNEL_LAYERS = {
 # 이메일 백엔드 (개발용 - 콘솔 출력)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
-# 개발용 로깅 (더 상세하게)
-LOGGING['loggers']['django']['level'] = 'DEBUG'
-LOGGING['loggers']['authentication']['level'] = 'DEBUG'
-LOGGING['loggers']['nfc']['level'] = 'DEBUG'
-
 # 개발용 미들웨어 추가
-MIDDLEWARE += [
+MIDDLEWARE = [
     'debug_toolbar.middleware.DebugToolbarMiddleware',
-]
+] + MIDDLEWARE
 
 # Django Debug Toolbar (개발용)
-if DEBUG:
-    try:
-        import debug_toolbar
-        INSTALLED_APPS += ['debug_toolbar']
-        INTERNAL_IPS = ['127.0.0.1', 'localhost']
-    except ImportError:
-        pass
+INSTALLED_APPS += ['debug_toolbar']
+INTERNAL_IPS = ['127.0.0.1', 'localhost']
 
 # 개발용 정적 파일 서빙
-STATICFILES_DIRS += [
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
     BASE_DIR / 'dev_static',
 ]
 
 # 개발용 JWT 설정 (더 긴 토큰 수명)
-SIMPLE_JWT.update({
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # 개발용으로 24시간
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),  # 30일
-})
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+}
 
-# 개발용 보안 설정 완화
-SECURE_SSL_REDIRECT = False
-SECURE_HSTS_SECONDS = 0
+# 개발용 REST Framework 설정
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny', # 개발용 권한 완화
+    ],
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.MultiPartParser',
+        'rest_framework.parsers.FormParser',
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'EXCEPTION_HANDLER': 'nfc_hospital_system.utils.custom_exception_handler',
+}
 
 # API 문서 설정 (개발용)
-SPECTACULAR_SETTINGS.update({
+SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': True,
     'SWAGGER_UI_SETTINGS': {
         'deepLinking': True,
@@ -77,6 +90,6 @@ SPECTACULAR_SETTINGS.update({
         'displayOperationId': True,
     },
     'COMPONENT_SPLIT_REQUEST': True,
-})
+}
 
 print("🚀 개발 환경으로 Django 서버가 시작됩니다!")

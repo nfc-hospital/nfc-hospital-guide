@@ -1,0 +1,14 @@
+ 
+# Django 프로젝트 파일 
+logs/ 
+media/ 
+staticfiles/ 
+db.sqlite3 
+.env 
+__pycache__/ 
+*.pyc 
+.coverage 
+htmlcov/ 
+venv/ 
+.vscode/ 
+.idea/ 
