@@ -10,11 +10,18 @@ DEBUG = True
 # 커스텀 User 모델 설정
 AUTH_USER_MODEL = 'authentication.User'
 
-# 개발용 데이터베이스 (SQLite로 간단하게 시작)
+# 개발용 데이터베이스
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': config('DB_NAME', default='nfc_hospital_db'),
+        'USER': config('DB_USER', default='root'),
+        'PASSWORD': config('DB_PASSWORD', default=''),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='3306'),
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+        }
     }
 }
 

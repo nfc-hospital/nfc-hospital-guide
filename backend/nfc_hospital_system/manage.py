@@ -2,11 +2,13 @@
 """Django's command-line utility for administrative tasks."""
 import os
 import sys
-
+import pymysql
+pymysql.install_as_MySQLdb()
 
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'nfc_hospital_system.settings')
+    # production → development로 변경
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'nfc_hospital_system.settings.development')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
@@ -16,7 +18,6 @@ def main():
             "forget to activate a virtual environment?"
         ) from exc
     execute_from_command_line(sys.argv)
-
 
 if __name__ == '__main__':
     main()
