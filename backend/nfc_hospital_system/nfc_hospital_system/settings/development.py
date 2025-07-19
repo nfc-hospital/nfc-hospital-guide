@@ -7,6 +7,9 @@ import debug_toolbar
 # 개발 환경 전용 설정
 DEBUG = True
 
+# 커스텀 User 모델 설정
+AUTH_USER_MODEL = 'authentication.User'
+
 # 개발용 데이터베이스 (SQLite로 간단하게 시작)
 DATABASES = {
     'default': {
