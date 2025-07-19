@@ -31,10 +31,11 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    'users',
     'authentication',
     'nfc',
     'appointments',
-    'queue',
+    'p_queue',
     'admin_dashboard',
 ]
 
@@ -148,3 +149,5 @@ LOGGING = {
         },
     },
 }
+
+
