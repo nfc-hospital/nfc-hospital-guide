@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFC Hospital Guide - Development</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 600px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        p {
+            color: #666;
+            line-height: 1.6;
+        }
+        .link {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.75rem 1.5rem;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        .link:hover {
+            background-color: #0056b3;
+        }
+        .error {
+            background-color: #fee;
+            color: #c33;
+            padding: 1rem;
+            border-radius: 5px;
+            margin-top: 1rem;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 NFC Hospital Guide</h1>
+        <h2>개발 환경</h2>
+        <p>
+            React 앱이 아직 빌드되지 않았습니다.<br>
+            개발 서버를 시작하려면 다음 명령어를 실행하세요:
+        </p>
+        <div class="error">
+            <p><strong>React 개발 서버가 실행 중이 아닙니다!</strong></p>
+            <p>터미널에서 다음 명령어를 실행하세요:</p>
+            <code>cd frontend-pwa && npm run dev</code>
+        </div>
+        <p>
+            개발 서버가 실행 중이라면:
+        </p>
+        <a href="{{ react_dev_server }}" class="link">
+            React 개발 서버로 이동 ({{ react_dev_server }})
+        </a>
+        <hr style="margin: 2rem 0; border: none; border-top: 1px solid #eee;">
+        <p style="font-size: 0.9rem; color: #999;">
+            프로덕션 환경에서는 <code>npm run build</code>로 React 앱을 빌드하세요.
+        </p>
+    </div>
+    
+    <script>
+        // 자동으로 React 개발 서버로 리디렉션 시도
+        fetch('{{ react_dev_server }}')
+            .then(response => {
+                if (response.ok) {
+                    console.log('React dev server is running, redirecting...');
+                    window.location.href = '{{ react_dev_server }}';
+                }
+            })
+            .catch(error => {
+                console.log('React dev server is not running:', error);
+            });
+    </script>
+</body>
+</html>

@@ -16,11 +16,12 @@ Including another URLconf
 """
 # backend/nfc_hospital_system/urls.py
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from .utils import APIResponse
+from .views import ReactAppView
 
 # API 문서화
 def api_health_check(request):
@@ -83,3 +84,10 @@ if settings.DEBUG:
 # 404 에러 처리
 handler404 = 'nfc_hospital_system.views.custom_404'
 handler500 = 'nfc_hospital_system.views.custom_500'
+
+# React App 서빙 (모든 다른 경로는 React Router가 처리)
+# API와 admin 경로를 제외한 모든 요청을 React 앱으로 전달
+# 이것은 urlpatterns의 맨 마지막에 위치해야 함
+urlpatterns += [
+    re_path(r'^(?!api|admin|static|media|__debug__).*$', ReactAppView.as_view(), name='react-app'),
+]

@@ -26,7 +26,41 @@ DATABASES = {
 
 # 운영용 CORS 설정 (엄격하게)
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='').split(',')
+CORS_ALLOWED_ORIGINS = []
+
+# 환경 변수에서 허용된 도메인 읽기
+cors_origins = config('CORS_ALLOWED_ORIGINS', default='')
+if cors_origins:
+    CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(',')]
+
+# 운영 환경 기본 도메인 추가
+CORS_ALLOWED_ORIGINS.extend([
+    "https://hospital.example.com",           # 실제 도메인으로 변경 필요
+    "https://admin.hospital.example.com",     # 관리자 도메인
+    "https://api.hospital.example.com",       # API 도메인
+])
+
+# CloudFront 또는 CDN 사용 시
+if config('USE_CDN', default=False, cast=bool):
+    cdn_domain = config('CDN_DOMAIN', default='')
+    if cdn_domain:
+        CORS_ALLOWED_ORIGINS.append(f"https://{cdn_domain}")
+
+# 운영 환경 CORS 메서드 (필요한 것만)
+CORS_ALLOW_METHODS = [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+    'OPTIONS',
+]
+
+# 운영 환경에서는 정규표현식 패턴 사용 안함 (보안상)
+CORS_ALLOWED_ORIGIN_REGEXES = []
+
+# CORS 프리플라이트 캐시 시간 (운영에서는 더 길게)
+CORS_PREFLIGHT_MAX_AGE = 86400 * 7  # 7일
 
 # 운영용 Redis 캐시
 CACHES = {

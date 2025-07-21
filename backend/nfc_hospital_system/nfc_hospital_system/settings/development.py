@@ -26,8 +26,36 @@ DATABASES = {
 }
 
 # 개발 서버용 CORS 설정 (더 관대하게)
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False  # 개발에서도 특정 도메인만 허용하는 것이 좋음
 CORS_ALLOW_CREDENTIALS = True
+
+# 개발 환경에서 허용할 출처들
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",      # React Admin Dashboard
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",      # React PWA (Vite)
+    "http://127.0.0.1:5173",
+    "http://localhost:5000",      # Flask Chatbot Server
+    "http://127.0.0.1:5000",
+    "http://localhost:8000",      # Django 자체
+    "http://127.0.0.1:8000",
+]
+
+# 개발 환경에서 추가 CORS 설정
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+# WebSocket용 추가 설정
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+]
 
 # 개발용 캐시 (로컬 메모리)
 CACHES = {
@@ -61,6 +89,14 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
     BASE_DIR / 'dev_static',
 ]
+
+# React 개발 서버 프록시 설정 (개발 환경)
+# React 빌드 파일도 서빙 가능하도록 설정
+if REACT_BUILD_DIR.exists():
+    STATICFILES_DIRS.append(REACT_BUILD_DIR / 'assets')
+    
+# 개발 환경에서 React index.html 서빙
+TEMPLATES[0]['DIRS'].insert(0, REACT_BUILD_DIR)
 
 # 개발용 JWT 설정 (더 긴 토큰 수명)
 SIMPLE_JWT = {
@@ -102,4 +138,4 @@ SPECTACULAR_SETTINGS = {
     'COMPONENT_SPLIT_REQUEST': True,
 }
 
-print("🚀 개발 환경으로 Django 서버가 시작됩니다!")
+print("개발 환경으로 Django 서버가 시작됩니다!")

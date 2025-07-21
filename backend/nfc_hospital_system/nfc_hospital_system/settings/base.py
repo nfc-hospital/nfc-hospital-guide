@@ -95,11 +95,80 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# React 빌드 디렉토리 설정
+REACT_APP_DIR = BASE_DIR.parent.parent / 'frontend-pwa'
+REACT_BUILD_DIR = REACT_APP_DIR / 'dist'  # Vite는 dist 폴더에 빌드
+
+# Template 디렉토리에 React 빌드 추가
+TEMPLATES[0]['DIRS'].append(REACT_BUILD_DIR)
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# REST Framework 설정
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# JWT 설정
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+}
+
+# CORS 기본 설정
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = []  # 환경별로 설정
+CORS_ALLOW_ALL_ORIGINS = False  # 환경별로 설정
+
+# CORS 허용 헤더
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# CORS 노출 헤더
+CORS_EXPOSE_HEADERS = [
+    'content-type',
+    'x-total-count',
+]
+
+# 프리플라이트 캐시 시간 (초)
+CORS_PREFLIGHT_MAX_AGE = 86400  # 24시간
 
 LOGGING = {
     'version': 1,
@@ -144,6 +213,11 @@ LOGGING = {
         },
         'nfc': {
             'handlers': ['file', 'console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'corsheaders': {
+            'handlers': ['console'],
             'level': 'DEBUG',
             'propagate': False,
         },
