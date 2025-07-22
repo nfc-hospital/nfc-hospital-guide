@@ -8,7 +8,7 @@
     "backend",
     "chatbot-server"
   ],
-"scripts": {
+  "scripts": {
     "dev": "concurrently -n \"Django,React,Admin\" -c \"yellow,cyan,green\" \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\"",
     "dev:all": "concurrently -n \"Django,React,Admin,Chat\" -c \"yellow,cyan,green,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\" \"npm run dev:chatbot\"",
     "dev:frontend": "npx pnpm --filter frontend-pwa dev",
@@ -33,6 +33,7 @@
     "@types/node": "^20.11.24",
     "@typescript-eslint/eslint-plugin": "^7.1.0",
     "@typescript-eslint/parser": "^7.1.0",
+    "concurrently": "^9.2.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.33.2",
@@ -46,7 +47,6 @@
   },
   "dependencies": {
     "nodemon": "^3.1.10",
-    "concurrently": "^8.2.2",
     "openapi-typescript": "^6.7.5"
   }
 }
