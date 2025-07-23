@@ -10,6 +10,9 @@ DEBUG = True
 # 커스텀 User 모델 설정
 AUTH_USER_MODEL = 'authentication.User'
 
+print(f"DB_HOST: {config('DB_HOST', default='localhost')}")
+print(f"DB_NAME: {config('DB_NAME', default='nfc_hospital_db')}")
+print(f"DB_USER: {config('DB_USER', default='root')}")
 
 # 개발용 데이터베이스
 DATABASES = {
@@ -22,7 +25,13 @@ DATABASES = {
         'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
             'charset': 'utf8mb4',
-        }
+            'sql_mode': 'STRICT_TRANS_TABLES',
+            'connect_timeout': 20,
+            'read_timeout': 30,
+            'write_timeout': 30,
+            'autocommit': True,
+        },
+        'CONN_MAX_AGE': 0,  # 연결 풀링 비활성화
     }
 }
 
