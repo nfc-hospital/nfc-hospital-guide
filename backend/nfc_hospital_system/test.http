@@ -1,0 +1,16 @@
+### 간편 로그인 테스트
+POST http://localhost:8000/api/v1/auth/simple-login/
+Content-Type: application/json
+
+{
+  "phoneLast4": "1234",
+  "birthDate": "19990101"
+}
+
+### 카카오 로그인 테스트 (나중에 사용)
+POST http://localhost:8000/api/v1/auth/kakao/
+Content-Type: application/json
+
+{
+  "code": "인가코드_여기에_붙여넣기"
+}

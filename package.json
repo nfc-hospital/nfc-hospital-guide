@@ -13,7 +13,7 @@
     "dev:all": "concurrently -n \"Django,React,Admin,Chat\" -c \"yellow,cyan,green,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\" \"npm run dev:chatbot\"",
     "dev:frontend": "npx pnpm --filter frontend-pwa dev",
     "dev:admin": "npx pnpm --filter admin-dashboard dev",
-    "dev:backend": "cd backend/nfc_hospital_system && python manage.py runserver",
+    "dev:backend": "cd backend && .\\venv\\Scripts\\python.exe nfc_hospital_system\\manage.py runserver",
     "dev:chatbot": "npx pnpm --filter chatbot-server dev",
     "dev:db": "cd backend/nfc_hospital_system && python manage.py makemigrations && python manage.py migrate",
     "dev:setup": "npm run install:all && npm run dev:db && npm run create:dirs",

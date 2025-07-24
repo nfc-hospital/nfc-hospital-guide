@@ -161,3 +161,11 @@ SPECTACULAR_SETTINGS = {
 }
 
 print("개발 환경으로 Django 서버가 시작됩니다!")
+
+
+# =============
+# 카카오 OAuth 설정 (개발용)
+# =============
+KAKAO_CLIENT_ID = config('KAKAO_CLIENT_ID', default='temporary')
+KAKAO_CLIENT_SECRET = config('KAKAO_CLIENT_SECRET', default='temporary')  
+KAKAO_REDIRECT_URI = 'http://localhost:8000/api/v1/auth/kakao/callback'
