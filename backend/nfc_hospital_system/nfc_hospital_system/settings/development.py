@@ -10,6 +10,10 @@ DEBUG = True
 # 커스텀 User 모델 설정
 AUTH_USER_MODEL = 'authentication.User'
 
+print(f"DB_HOST: {config('DB_HOST', default='localhost')}")
+print(f"DB_NAME: {config('DB_NAME', default='nfc_hospital_db')}")
+print(f"DB_USER: {config('DB_USER', default='root')}")
+
 # 개발용 데이터베이스
 DATABASES = {
     'default': {
@@ -21,9 +25,27 @@ DATABASES = {
         'PORT': config('DB_PORT', default='3306'),
         'OPTIONS': {
             'charset': 'utf8mb4',
-        }
+            'sql_mode': 'STRICT_TRANS_TABLES',
+            'connect_timeout': 20,
+            'read_timeout': 30,
+            'write_timeout': 30,
+            'autocommit': True,
+        },
+        'CONN_MAX_AGE': 0,  # 연결 풀링 비활성화
     }
 }
+
+PASSWORD_HASHERS = [
+    'authentication.hashers.ScryptPasswordHasher', # <-- 새로 정의한 해셔를 가장 먼저 등록
+    'django.contrib.auth.hashers.PBKDF2PasswordHasher',
+    'django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher',
+    'django.contrib.auth.hashers.Argon2PasswordHasher',
+    'django.contrib.auth.hashers.BCryptSHA256PasswordHasher',
+    # Django 4.0+를 사용 중이고, 기본 Scrypt 해셔를 사용하지 않고
+    # 커스텀 파라미터로 직접 구현한 경우 위의 라인만 유지합니다.
+    # 만약 Django의 기본 Scrypt 해셔도 함께 사용하고 싶다면 아래 라인을 추가할 수 있습니다.
+    # 'django.contrib.auth.hashers.ScryptPasswordHasher',
+]
 
 # 개발 서버용 CORS 설정 (더 관대하게)
 CORS_ALLOW_ALL_ORIGINS = False  # 개발에서도 특정 도메인만 허용하는 것이 좋음

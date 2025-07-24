@@ -1,4 +1,4 @@
-# appointments ???œë¦¬?¼ë¼?´ì? 
 from rest_framework import serializers 
- 
-# TODO: ?œë¦¬?¼ë¼?´ì? ?´ë˜??ì¶”ê? 
+from .models import Exam, ExamPreparation
+
+

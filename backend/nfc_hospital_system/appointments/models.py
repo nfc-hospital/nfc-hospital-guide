@@ -212,6 +212,14 @@ class ExamPreparation(models.Model):
         verbose_name='필수 여부'
     )
 
+    icon = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        verbose_name='아이콘 이미지',
+        help_text='준비사항을 나타내는 아이콘 이미지 (예: URL 또는 파일 경로)'
+    )
+
     class Meta:
         db_table = 'exam_preparations'
         verbose_name = '검사 준비사항'

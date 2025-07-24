@@ -26,3 +26,17 @@ htmlcov/
 venv/ 
 .vscode/ 
 .idea/ 
+ 
+# Django ?„ë¡œ?íŠ¸ ?Œì¼ 
+logs/ 
+media/ 
+staticfiles/ 
+db.sqlite3 
+.env 
+__pycache__/ 
+*.pyc 
+.coverage 
+htmlcov/ 
+venv/ 
+.vscode/ 
+.idea/ 

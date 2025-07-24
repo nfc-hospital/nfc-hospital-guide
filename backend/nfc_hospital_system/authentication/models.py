@@ -62,11 +62,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name='이메일'
     )
 
-    pw_hash = models.TextField(
-        verbose_name='비밀번호 해시',
-        help_text='Scrypt 암호화',
-        blank=True  # 간편 로그인 사용자는 비밀번호가 없을 수 있음
-    )
+    # createsuperuser 시 비밀번호 에러 발생
+    # pw_hash = models.TextField(
+    #     verbose_name='비밀번호 해시',
+    #     help_text='Scrypt 암호화',
+    #     blank=True  # 간편 로그인 사용자는 비밀번호가 없을 수 있음
+    # )
 
     role = models.CharField(
         max_length=10,
@@ -153,46 +154,48 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self):
         return f"{self.name} ({self.get_role_display()})"
 
-    def set_password(self, raw_password):
-        """Scrypt를 사용한 비밀번호 해싱"""
-        import hashlib
-        import secrets
+    # createsuperuser 시 비밀번호 에러 발생
+    # def set_password(self, raw_password):
+    #     """Scrypt를 사용한 비밀번호 해싱"""
+    #     import hashlib
+    #     import secrets
 
-        # Django의 기본 set_password 대신 Scrypt 사용
-        salt = secrets.token_bytes(32)
-        pw_hash = hashlib.scrypt(
-            raw_password.encode('utf-8'),
-            salt=salt,
-            n=16384,
-            r=8,
-            p=1,
-            dklen=64
-        )
-        # salt와 hash를 함께 저장
-        self.pw_hash = salt.hex() + ':' + pw_hash.hex()
-        self.password = f"scrypt${salt.hex()}${pw_hash.hex()}"  # Django 호환성
+    #     # Django의 기본 set_password 대신 Scrypt 사용
+    #     salt = secrets.token_bytes(32)
+    #     pw_hash = hashlib.scrypt(
+    #         raw_password.encode('utf-8'),
+    #         salt=salt,
+    #         n=16384,
+    #         r=8,
+    #         p=1,
+    #         dklen=64
+    #     )
+    #     # salt와 hash를 함께 저장
+    #     self.pw_hash = salt.hex() + ':' + pw_hash.hex()
+    #     self.password = f"scrypt${salt.hex()}${pw_hash.hex()}"  # Django 호환성
 
-    def check_password(self, raw_password):
-        """Scrypt를 사용한 비밀번호 검증"""
-        if not self.pw_hash:
-            return False
+    # createsuperuser 시 비밀번호 에러 발생
+    # def check_password(self, raw_password):
+    #     """Scrypt를 사용한 비밀번호 검증"""
+    #     if not self.pw_hash:
+    #         return False
 
-        try:
-            import hashlib
-            salt_hex, hash_hex = self.pw_hash.split(':')
-            salt = bytes.fromhex(salt_hex)
+    #     try:
+    #         import hashlib
+    #         salt_hex, hash_hex = self.pw_hash.split(':')
+    #         salt = bytes.fromhex(salt_hex)
 
-            pw_hash = hashlib.scrypt(
-                raw_password.encode('utf-8'),
-                salt=salt,
-                n=16384,
-                r=8,
-                p=1,
-                dklen=64
-            )
-            return pw_hash.hex() == hash_hex
-        except:
-            return False
+    #         pw_hash = hashlib.scrypt(
+    #             raw_password.encode('utf-8'),
+    #             salt=salt,
+    #             n=16384,
+    #             r=8,
+    #             p=1,
+    #             dklen=64
+    #         )
+    #         return pw_hash.hex() == hash_hex
+    #     except:
+    #         return False
 
     @property
     def is_patient(self):

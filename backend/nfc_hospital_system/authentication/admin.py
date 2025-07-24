@@ -26,7 +26,7 @@ class UserAdmin(BaseUserAdmin):
 
     # 필드셋 정의 (기존 BaseUserAdmin의 fieldsets를 확장)
     fieldsets = (
-        (None, {'fields': ('email', 'pw_hash')}), # pw_hash는 읽기 전용으로 두거나 제외
+        (None, {'fields': ('email', 'password')}), # pw_hash는 읽기 전용으로 두거나 제외
         ('개인 정보', {'fields': ('name', 'phoneNumber', 'birthDate')}),
         ('역할 및 권한', {'fields': (
             'role', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'
@@ -39,20 +39,30 @@ class UserAdmin(BaseUserAdmin):
         ('로그인 정보', {'fields': ('lastLoginAt', 'created_at')}),
     )
 
+    # BaseUserAdmin의 add_fieldsets를 오버라이드하여 사용자 생성 시 필드 구성
+    # 사용자 생성 폼에서는 비밀번호를 직접 입력받아야 하므로 'password' 필드를 포함
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('email', 'password', 'name', 'phoneNumber', 'birthDate', 'role', 'is_staff', 'is_superuser', 'is_active'),
+        }),
+    )
+
     # password 필드는 AbstractBaseUser에서 관리하므로 pw_hash 필드는 읽기 전용으로 설정
     # 또는 set_password 메서드에 의해 내부적으로 관리되므로, admin에서 직접 수정은 권장되지 않음
     readonly_fields = (
-        'user_id', 'created_at', 'lastLoginAt', 'pw_hash'
+        'user_id', 'created_at', 'lastLoginAt', 'password'
     )
 
-    # 추가/변경 폼에서 'password' 필드 제거 (UserManager의 create_user/set_password 사용 유도)
-    # 실제 비밀번호 변경은 별도의 ChangePasswordForm을 사용
-    def get_form(self, request, obj=None, **kwargs):
-        form = super().get_form(request, obj, **kwargs)
-        # 비밀번호 해시 필드는 사용자가 직접 수정하지 않도록 기본 폼에서 제거
-        if 'pw_hash' in form.base_fields:
-            form.base_fields.pop('pw_hash')
-        return form
+    # AbstractBaseUser의 'password' 필드는 BaseUserAdmin에 의해 적절히 관리 되므로 제거
+    # # 추가/변경 폼에서 'password' 필드 제거 (UserManager의 create_user/set_password 사용 유도)
+    # # 실제 비밀번호 변경은 별도의 ChangePasswordForm을 사용
+    # def get_form(self, request, obj=None, **kwargs):
+    #     form = super().get_form(request, obj, **kwargs)
+    #     # 비밀번호 해시 필드는 사용자가 직접 수정하지 않도록 기본 폼에서 제거
+    #     if 'pw_hash' in form.base_fields:
+    #         form.base_fields.pop('pw_hash')
+    #     return form
 
     # 액션 추가 (사용자 활성화/비활성화, 역할 변경 등)
     actions = ['activate_users', 'deactivate_users', 'make_staff', 'make_patient']
