@@ -7,6 +7,11 @@ from rest_framework import status
 from django.conf import settings
 from nfc_hospital_system.utils import APIResponse
 from .models import User
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+import json
+
 
 # 조건부 import
 try:
@@ -134,7 +139,7 @@ def kakao_login(request):
         token_json = token_response.json()
         
         if 'access_token' not in token_json:
-            return APIResponse.error("카카오 토큰 요청 실패", code="AUTH_002")
+            return APIResponse.error(f"카카오 토큰 요청 실패: {token_json}", code="AUTH_002")
         
         # 2. 카카오 사용자 정보 요청
         user_url = "https://kapi.kakao.com/v2/user/me"
@@ -147,15 +152,36 @@ def kakao_login(request):
         kakao_id = str(user_json['id'])
         nickname = user_json.get('kakao_account', {}).get('profile', {}).get('nickname', f'user_{kakao_id}')
         
-        # kakao_id 필드가 없을 수 있으므로 안전한 방법 사용
+        # 안전한 사용자 찾기/생성
         try:
+            # 먼저 기존 카카오 사용자 찾기 (여러 방법으로 시도)
+            user = None
+            
+            # 방법 1: 이름으로 찾기
             user = User.objects.filter(name__startswith=f'카카오_{kakao_id}').first()
+            
+            # 방법 2: 이메일로 찾기
             if not user:
+                user = User.objects.filter(email=f'kakao_{kakao_id}@temp.com').first()
+            
+            # 방법 3: phoneNumber로 찾기
+            if not user:
+                user = User.objects.filter(phoneNumber=f'kakao_{kakao_id}').first()
+            
+            # 사용자가 없으면 새로 생성
+            if not user:
+                # 고유한 이메일 생성 (타임스탬프 추가)
+                import time
+                timestamp = int(time.time())
+                unique_email = f'kakao_{kakao_id}_{timestamp}@temp.com'
+                
                 user = User.objects.create(
                     name=f'카카오_{nickname}',
-                    phoneNumber=f'kakao_{kakao_id}',  # 임시 전화번호
-                    # 다른 필수 필드들도 기본값 설정
+                    phoneNumber=f'kakao_{kakao_id}',
+                    birthDate='19900101',
+                    email=unique_email,
                 )
+                
         except Exception as create_error:
             return APIResponse.error(f"카카오 사용자 생성 실패: {str(create_error)}", code="AUTH_006")
         
@@ -163,7 +189,6 @@ def kakao_login(request):
         try:
             import jwt
             from datetime import datetime, timedelta
-            from django.conf import settings
             
             # UUID를 문자열로 변환
             user_id_str = str(user.pk)  # UUID를 문자열로 변환
@@ -228,3 +253,182 @@ def logout(request):
             return APIResponse.success(message="로그아웃 성공")
     except Exception as e:
         return APIResponse.error(f"로그아웃 처리 중 오류: {str(e)}", code="AUTH_500")
+    
+
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def profile(request):
+    """사용자 프로필 조회 - 일반 Django 뷰"""
+    try:
+        # Authorization 헤더에서 토큰 추출
+        auth_header = request.META.get('HTTP_AUTHORIZATION')
+        
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return JsonResponse({
+                "success": False,
+                "error": {
+                    "code": "AUTH_401",
+                    "message": "인증 토큰이 필요합니다"
+                }
+            }, status=401)
+        
+        token = auth_header.split(' ')[1]
+        
+        try:
+            import jwt
+            from datetime import datetime
+            
+            # 커스텀 JWT 토큰 디코딩
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+            
+        except jwt.ExpiredSignatureError:
+            return JsonResponse({
+                "success": False,
+                "error": {
+                    "code": "AUTH_402", 
+                    "message": "토큰이 만료되었습니다"
+                }
+            }, status=401)
+        except jwt.InvalidTokenError as e:
+            return JsonResponse({
+                "success": False,
+                "error": {
+                    "code": "AUTH_403",
+                    "message": f"유효하지 않은 토큰입니다: {str(e)}"
+                }
+            }, status=401)
+        
+        if not user_id:
+            return JsonResponse({
+                "success": False,
+                "error": {
+                    "code": "AUTH_404",
+                    "message": "토큰에 사용자 정보가 없습니다"
+                }
+            }, status=400)
+        
+        # 사용자 정보 조회
+        try:
+            from uuid import UUID
+            user = User.objects.get(pk=UUID(user_id))
+        except User.DoesNotExist:
+            return JsonResponse({
+                "success": False,
+                "error": {
+                    "code": "AUTH_405",
+                    "message": "사용자를 찾을 수 없습니다"
+                }
+            }, status=404)
+        
+        return JsonResponse({
+            "success": True,
+            "data": {
+                "user": {
+                    "id": str(user.pk),
+                    "name": user.name,
+                    "phoneNumber": getattr(user, 'phoneNumber', ''),
+                }
+            },
+            "message": "프로필 조회 성공",
+            "timestamp": datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": {
+                "code": "AUTH_500",
+                "message": f"프로필 조회 중 오류: {str(e)}"
+            }
+        }, status=500)
+    
+
+
+# views.py에 추가할 테스트용 뷰
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def kakao_login_mock(request):
+    """카카오 로그인 Mock 테스트 (개발용)"""
+    try:
+        # 테스트용 사용자 생성
+        kakao_id = "test_kakao_123"
+        nickname = "테스트사용자"
+        
+        # 안전한 사용자 찾기/생성
+        try:
+            user = None
+            
+            # 방법 1: 이름으로 찾기
+            user = User.objects.filter(name__startswith=f'카카오_{kakao_id}').first()
+            
+            # 방법 2: 이메일로 찾기
+            if not user:
+                user = User.objects.filter(email=f'kakao_{kakao_id}@temp.com').first()
+            
+            # 방법 3: phoneNumber로 찾기
+            if not user:
+                user = User.objects.filter(phoneNumber=f'kakao_{kakao_id}').first()
+            
+            # 사용자가 없으면 새로 생성
+            if not user:
+                # 고유한 이메일 생성 (타임스탬프 추가)
+                import time
+                timestamp = int(time.time())
+                unique_email = f'kakao_{kakao_id}_{timestamp}@temp.com'
+                
+                user = User.objects.create(
+                    name=f'카카오_{nickname}',
+                    phoneNumber=f'kakao_{kakao_id}',
+                    birthDate='19900101',
+                    email=unique_email,
+                )
+                
+        except Exception as create_error:
+            return APIResponse.error(f"카카오 사용자 생성 실패: {str(create_error)}", code="AUTH_006")
+        
+        # JWT 토큰 생성
+        try:
+            import jwt
+            from datetime import datetime, timedelta
+            
+            # UUID를 문자열로 변환
+            user_id_str = str(user.pk)
+            
+            # 페이로드 생성
+            payload = {
+                'user_id': user_id_str,
+                'name': user.name,
+                'exp': datetime.utcnow() + timedelta(hours=1),
+                'iat': datetime.utcnow(),
+            }
+            
+            # JWT 토큰 생성
+            access_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
+            
+            # 리프레시 토큰 (7일)
+            refresh_payload = payload.copy()
+            refresh_payload['exp'] = datetime.utcnow() + timedelta(days=7)
+            refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
+            
+            tokens = {
+                'refresh': refresh_token,
+                'access': access_token,
+                'expires_in': 3600,
+            }
+        except Exception as token_error:
+            return APIResponse.error(f"토큰 생성 실패: {str(token_error)}", code="AUTH_007")
+        
+        return APIResponse.success({
+            "user": {
+                "id": str(user.pk),
+                "name": user.name,
+            },
+            "tokens": tokens
+        }, message="카카오 로그인 Mock 테스트 성공")
+        
+    except Exception as e:
+        return APIResponse.error(f"카카오 로그인 Mock 테스트 중 오류: {str(e)}", code="AUTH_500")

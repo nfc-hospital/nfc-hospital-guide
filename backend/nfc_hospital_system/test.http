@@ -7,10 +7,48 @@ Content-Type: application/json
   "birthDate": "19990101"
 }
 
+
 ### 카카오 로그인 테스트 (나중에 사용)
 POST http://localhost:8000/api/v1/auth/kakao/
 Content-Type: application/json
 
+#code는 유효시간 10분
+#https://kauth.kakao.com/oauth/authorize?client_id=d1cdb167fabb69dd9025158d43e4431d&redirect_uri=http://localhost:8000/api/v1/auth/kakao/callback&response_type=code
+#에 접속해서 code= 뒤의 내용 복붙하기
 {
-  "code": "인가코드_여기에_붙여넣기"
+  "code": "koULp876jXAWSFlDDDMnZ3_z-qMh-WquvPOd-G_fh35sznf3ooNOqQAAAAQKDR-XAAABmEa_gIm2xj-RG-1vuA"
+} 
+
+
+
+### 로그아웃 테스트
+POST http://localhost:8000/api/v1/auth/logout/
+Content-Type: application/json
+
+{}
+
+
+
+###--------------------------------------------------
+### 1. 간편 로그인으로 토큰 받기
+POST http://localhost:8000/api/v1/auth/simple-login/
+Content-Type: application/json
+
+{
+  "phoneLast4": "1234",
+  "birthDate": "19990101"
 }
+
+### 2. 받은 토큰으로 프로필 조회 (토큰을 위에서 복사해서 붙여넣기)
+GET http://localhost:8000/api/v1/auth/profile/
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYjlmNzZjMmUtY2U4ZS00NzRhLTgxOWYtMjgyMzRjMWI2YzQ3IiwibmFtZSI6Ilx1ZDY1OFx1Yzc5MDEyMzQiLCJleHAiOjE3NTM1MzE5OTcsImlhdCI6MTc1MzUyODM5N30.95Crb8yMTnimTC2JCR9pc8G-nJSGlhJip_vDKh2du10
+###---------------------------------------------------
+
+
+
+
+### 카카오 로그인 Mock 테스트
+POST http://localhost:8000/api/v1/auth/kakao-mock/
+Content-Type: application/json
+
+{}
