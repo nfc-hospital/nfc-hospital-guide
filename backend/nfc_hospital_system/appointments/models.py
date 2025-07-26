@@ -41,6 +41,40 @@ class Exam(models.Model):
         help_text='분 단위'
     )
 
+    # 위치 정보 필드 추가
+    building = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='건물명',
+        help_text='검사가 진행되는 건물명 (예: 본관, 별관)'
+    )
+
+    floor = models.CharField( # 층수는 'B1', '1F' 등 문자열이 될 수 있으므로 CharField
+        max_length=50,
+        blank=True,
+        null=True,
+        verbose_name='층수',
+        help_text='검사가 진행되는 층수'
+    )
+
+    room = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='호실명',
+        help_text='검사가 진행되는 상세 호실 (예: 101호)'
+    )
+
+    # category 필드 추가
+    category = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='검사 분류',
+        help_text='예: "imaging", "blood", "urine", "cardiac"'
+    )
+
     # 활성 상태
     is_active = models.BooleanField(
         default=True,
@@ -67,6 +101,8 @@ class Exam(models.Model):
         indexes = [
             models.Index(fields=['department']),
             models.Index(fields=['is_active']),
+            models.Index(fields=['building', 'floor', 'room']), 
+            models.Index(fields=['category']), 
         ]
 
     def __str__(self):

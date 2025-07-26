@@ -50,7 +50,8 @@ urlpatterns = [
     # API v1 엔드포인트들 (API 명세서 기준)
     path('api/v1/auth/', include('authentication.urls')),      # 인증
     path('api/v1/nfc/', include('nfc.urls')),                  # NFC 태그
-    path('api/v1/appointments/', include('appointments.urls')), # 예약/진료
+    # path('api/v1/appointments/', include('appointments.urls')), # 예약/진료
+    path('api/v1/', include('appointments.urls')),
     path('api/v1/queue/', include('p_queue.urls')),              # 대기열 
     path('api/v1/admin/', include('admin_dashboard.urls')),    # 관리자
     

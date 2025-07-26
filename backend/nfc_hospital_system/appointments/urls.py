@@ -1,7 +1,10 @@
-# appointments ??URL ?¤ì • 
-from django.urls import path 
-from . import views 
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import ExamViewSet
  
+router = DefaultRouter()
+router.register(r'exams', ExamViewSet)
+
 urlpatterns = [ 
-    # TODO: URL ?¨í„´ ì¶”ê? 
+    path('', include(router.urls)),
 ] 
