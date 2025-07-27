@@ -10,16 +10,32 @@ from django.db import transaction
 import logging
 
 from .models import NFCTag, TagLog, NFCTagExam
+from appointments.models import Exam
 from .serializers import (
     NFCTagSerializer, NFCTagDetailSerializer, NFCScanRequestSerializer,
-    NFCScanResponseSerializer, TagLogSerializer, NFCTagExamSerializer,
-    NFCTagExamMappingRequestSerializer, AdminNFCTagCreateSerializer,
+    NFCScanResponseSerializer, TagLogSerializer, 
+    NFCTagExamDetailSerializer, 
+    NFCTagExamMappingRequestSerializer,
+    AdminNFCTagCreateSerializer,
     AdminNFCTagUpdateSerializer
 )
+from appointments.serializers import ExamSerializer 
+
 from nfc_hospital_system.utils import APIResponse
 from authentication.models import User
 
 logger = logging.getLogger(__name__)
+
+# 공통 헬퍼 함수
+def _check_admin_permission(request):
+    """관리자 권한 확인 헬퍼 함수"""
+    try:
+        admin_user = User.objects.get(user=request.user)
+        if admin_user.role not in ['super', 'deft']:
+            return False, "관리자 권한이 필요합니다."
+        return True, None
+    except User.DoesNotExist:
+        return False, "관리자 권한이 필요합니다."
 
 # 환자용 API
 @api_view(['POST'])
@@ -147,6 +163,7 @@ def get_tag_info(request, tag_id):
         )
 
 # 관리자용 API
+
 class AdminNFCTagViewSet(ModelViewSet):
     """
     관리자용 NFC 태그 관리 ViewSet
@@ -353,7 +370,7 @@ def create_tag_exam_mapping(request):
             exam_room=exam_room
         )
         
-        response_serializer = NFCTagExamSerializer(mapping)
+        response_serializer = NFCTagExamDetailSerializer(mapping)
         
         logger.info(f"Tag-exam mapping created - Admin: {request.user.user_id}, Tag: {tag.code}, Exam: {exam_id}")
         
@@ -380,17 +397,10 @@ def admin_tag_list(request):
     """
     try:
         # 관리자 권한 확인
-        try:
-            admin_user = User.objects.get(user=request.user)
-            if admin_user.role not in ['super', 'dept', 'staff']:
-                return APIResponse.error(
-                    message="관리자 권한이 필요합니다.",
-                    code="FORBIDDEN",
-                    status_code=status.HTTP_403_FORBIDDEN
-                )
-        except User.DoesNotExist:
+        is_admin, error_msg = _check_admin_permission(request)
+        if not is_admin:
             return APIResponse.error(
-                message="관리자 권한이 필요합니다.",
+                message=error_msg,
                 code="FORBIDDEN",
                 status_code=status.HTTP_403_FORBIDDEN
             )
@@ -433,3 +443,137 @@ def admin_tag_list(request):
             code="TAG_LIST_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+    
+# 검사-태그 매핑 API
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def nfc_tag_exam_mapping_create(request):
+    """
+    API 명세: POST /tags/mapping
+    NFC 태그와 검사 매핑 생성
+    """
+    is_admin, error_msg = _check_admin_permission(request)
+    if not is_admin:
+        return APIResponse.error(
+            message=error_msg,
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+
+    try:
+        serializer = NFCTagExamMappingCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return APIResponse.error(
+                message="유효하지 않은 매핑 정보입니다.",
+                details=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        tag_instance = serializer.validated_data['tag']
+        exam_instance = serializer.validated_data['exam']
+
+        # 매핑 생성
+        mapping = serializer.save() # NFCTagExamMappingCreateSerializer의 create 메서드 호출
+
+        response_serializer = NFCTagExamDetailSerializer(mapping)
+        
+        logger.info(f"Tag-exam mapping created - Admin: {request.user.user_id}, Tag: {tag_instance.code}, Exam: {exam_instance.exam_id}")
+        
+        return APIResponse.success(
+            data=response_serializer.data,
+            message="태그-검사 연결이 성공적으로 생성되었습니다.",
+            status_code=status.HTTP_201_CREATED
+        )
+        
+    except Exception as e:
+        logger.error(f"Tag-exam mapping creation error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="태그-검사 연결 중 오류가 발생했습니다.",
+            code="MAPPING_CREATE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_tag_exams_list(request, tag_id):
+    """
+    API 명세: GET /tags/{tagId}/exams
+    특정 NFC 태그와 연결된 검사 목록 조회
+    """
+    try:
+        tag = get_object_or_404(NFCTag, tag_id=tag_id, is_active=True)
+        
+        # 해당 태그에 연결된 활성화된 NFCTagExam 매핑들 조회
+        active_mappings = tag.exam_associations.filter(is_active=True).select_related('exam')
+        
+        # NFCTagExam 객체에서 실제 Exam 객체들을 추출
+        exams = [mapping.exam for mapping in active_mappings]
+        
+        # ExamSerializer를 사용하여 검사 정보 직렬화
+        serializer = ExamSerializer(exams, many=True)
+        
+        return APIResponse.success(
+            data=serializer.data,
+            message=f"태그 '{tag.code}'에 연결된 검사 목록을 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except NFCTag.DoesNotExist:
+        return APIResponse.error(
+            message="존재하지 않거나 비활성화된 NFC 태그입니다.",
+            code="TAG_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Get tag exams list error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="태그 연결 검사 목록 조회 중 오류가 발생했습니다.",
+            code="EXAM_LIST_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['DELETE'])
+@permission_classes([permissions.IsAuthenticated])
+def delete_tag_exam_mapping(request, mapping_id):
+    """
+    API 명세: DELETE /tags/mapping/{mappingId}
+    """
+    is_admin, error_msg = _check_admin_permission(request)
+    if not is_admin:
+        return APIResponse.error(
+            message=error_msg,
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+
+    try:
+        # mapping_id (NFCTagExam의 PK)로 매핑 객체 조회
+        mapping_instance = get_object_or_404(NFCTagExam, id=mapping_id)
+        
+        # 매핑 비활성화
+        mapping_instance.is_active = False
+        mapping_instance.save(update_fields=['is_active'])
+        
+        logger.info(f"Tag-exam mapping deactivated - Admin: {request.user.user_id}, Mapping ID: {mapping_id}")
+        
+        return APIResponse.success(
+            message="태그-검사 매핑이 성공적으로 비활성화되었습니다.",
+            status_code=status.HTTP_200_OK 
+        )
+        
+    except NFCTagExam.DoesNotExist:
+        return APIResponse.error(
+            message="해당 매핑을 찾을 수 없습니다.",
+            code="MAPPING_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Tag-exam mapping deletion error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="태그-검사 매핑 비활성화 중 오류가 발생했습니다.",
+            code="MAPPING_DELETE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# 기존의 create_tag_exam_mapping 함수는 위에 nfc_tag_exam_mapping_create로 대체되었습니다.

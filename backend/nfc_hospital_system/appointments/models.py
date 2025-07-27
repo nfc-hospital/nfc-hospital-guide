@@ -219,6 +219,17 @@ class ExamPreparation(models.Model):
     각 검사별로 필요한 준비사항 안내
     """
 
+    # 준비사항 타입 선택지를 정의합니다.
+    PREP_TYPE_CHOICES = [
+        ('general', '일반 준비'),
+        ('fasting', '금식'),
+        ('medication', '약물 관련'),
+        ('bladder', '방광 관련'),
+        ('dress_code', '복장'),
+        ('documents', '서류'),
+        ('other', '기타'),
+    ]
+
     prep_id = models.AutoField(
         primary_key=True,
         verbose_name='준비사항 ID'
@@ -231,6 +242,15 @@ class ExamPreparation(models.Model):
         verbose_name='검사',
         to_field='exam_id',
         db_column="exam_id"
+    )
+
+    # type 필드 추가
+    type = models.CharField(
+        max_length=50,
+        choices=PREP_TYPE_CHOICES,
+        default='general', # 기본값 설정
+        verbose_name='준비사항 타입',
+        help_text='예: 금식, 약물, 복장 등 준비사항의 종류'
     )
 
     title = models.CharField(
@@ -263,11 +283,12 @@ class ExamPreparation(models.Model):
         ordering = ['exam', '-is_required', 'title']
         indexes = [
             models.Index(fields=['exam', 'is_required']),
+            models.Index(fields=['exam', 'type']),
         ]
 
     def __str__(self):
         required = "필수" if self.is_required else "선택"
-        return f"{self.exam.title} - {self.title} ({required})"
+        return f"{self.exam.title} - {self.get_type_display()} - {self.title} ({required})"
 
 
 class AppointmentHistory(models.Model):

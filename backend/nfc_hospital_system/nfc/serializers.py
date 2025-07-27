@@ -2,6 +2,7 @@ from rest_framework import serializers
 from .models import NFCTag, TagLog, NFCTagExam
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from appointments.serializers import ExamSerializer
 
 User = get_user_model()
 
@@ -51,7 +52,7 @@ class NFCTagDetailSerializer(NFCTagSerializer):
     def get_exam_associations(self, obj):
         active_exams = obj.exam_associations.filter(is_active=True)
         return [{
-            'exam_id': exam.exam_id,
+            'exam_id': exam.exam.exam_id,
             'exam_name': exam.exam_name,
             'exam_room': exam.exam_room
         } for exam in active_exams]
@@ -98,11 +99,12 @@ class NFCScanResponseSerializer(serializers.Serializer):
         tag = obj['tag_info']
         exams = tag.exam_associations.filter(is_active=True)
         if exams.exists():
-            exam = exams.first()
+            exam_mapping = exams.first()
             return {
-                "exam_name": exam.exam_name,
-                "exam_room": exam.exam_room,
-                "instructions": f"{exam.exam_name} 검사를 위해 {exam.exam_room}로 이동해주세요",
+                "exam_id": exam_mapping.exam.exam_id,
+                "exam_name": exam_mapping.exam_name,
+                "exam_room": exam_mapping.exam_room,
+                "instructions": f"{exam_mapping.exam_name} 검사를 위해 {exam_mapping.exam_room}로 이동해주세요",
                 "estimated_time": "10-15분"
             }
         return {}
@@ -133,18 +135,20 @@ class TagLogSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['log_id', 'timestamp']
 
-class NFCTagExamSerializer(serializers.ModelSerializer):
+# NFCTagExam 관련 Serializers
+
+class NFCTagExamDetailSerializer(serializers.ModelSerializer):
     """
     NFC 태그-검사 연결 직렬화
     """
-    tag_code = serializers.CharField(source='tag.code', read_only=True)
-    tag_location = serializers.CharField(source='tag.get_location_display', read_only=True)
+    tag = NFCTagSerializer(read_only=True) 
+    exam = ExamSerializer(read_only=True)   
     
     class Meta:
         model = NFCTagExam
         fields = [
-            'id', 'tag', 'tag_code', 'tag_location', 'exam_id', 
-            'exam_name', 'exam_room', 'is_active', 'created_at'
+            'id', 'tag', 'exam', 'exam_name', 
+            'exam_room', 'is_active', 'created_at'
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -152,17 +156,43 @@ class NFCTagExamMappingRequestSerializer(serializers.Serializer):
     """
     태그-검사 매핑 요청 직렬화
     """
-    tag_id = serializers.UUIDField(help_text="NFC 태그 ID")
-    exam_id = serializers.CharField(max_length=50, help_text="검사 ID")
-    exam_name = serializers.CharField(max_length=100, help_text="검사명")
-    exam_room = serializers.CharField(max_length=100, help_text="검사실")
-    
-    def validate_tag_id(self, value):
+    tag_id = serializers.UUIDField(help_text="매핑할 NFC 태그의 ID")
+    exam_id = serializers.CharField(max_length=50, help_text="매핑할 검사의 ID (Exam 모델의 exam_id)")
+    exam_name = serializers.CharField(max_length=100, help_text="매핑 시점의 검사명")
+    exam_room = serializers.CharField(max_length=100, help_text="매핑 시점의 검사실")
+    is_active = serializers.BooleanField(default=True)
+
+    def validate(self, data):
+        # 실제 NFCTag 객체 존재 여부 검증
         try:
-            NFCTag.objects.get(tag_id=value, is_active=True)
-            return value
+            tag = NFCTag.objects.get(tag_id=data['tag_id'], is_active=True)
         except NFCTag.DoesNotExist:
-            raise serializers.ValidationError("존재하지 않거나 비활성화된 태그입니다.")
+            raise serializers.ValidationError({"tag_id": "존재하지 않거나 비활성화된 태그입니다."})
+
+        from appointments.models import Exam 
+        try:
+            exam = Exam.objects.get(exam_id=data['exam_id'])
+        except Exam.DoesNotExist:
+            raise serializers.ValidationError({"exam_id": "해당 검사 ID를 가진 검사를 찾을 수 없습니다."})
+
+        # 이미 동일한 태그-검사 매핑이 있는지 확인 (unique_together를 따름)
+        if NFCTagExam.objects.filter(tag=tag, exam=exam).exists():
+            raise serializers.ValidationError("해당 태그와 검사는 이미 매핑되어 있습니다.")
+
+        data['tag'] = tag
+        data['exam'] = exam
+        return data
+
+    def create(self, validated_data):
+        # NFCTagExam 인스턴스 생성
+        return NFCTagExam.objects.create(
+            tag=validated_data['tag'],
+            exam=validated_data['exam'], # ForeignKey 필드에 Exam 객체 할당
+            exam_name=validated_data.get('exam_name'),
+            exam_room=validated_data.get('exam_room'),
+            is_active=validated_data.get('is_active', True)
+        )
+
 
 # 관리자용 시리얼라이저들
 class AdminNFCTagCreateSerializer(serializers.ModelSerializer):

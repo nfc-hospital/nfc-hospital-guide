@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from appointments.models import Exam
 import uuid
 
 User = get_user_model()
@@ -246,10 +247,15 @@ class NFCTagExam(models.Model):
         db_column="tag_id"
     )
 
-    exam_id = models.CharField(
-        max_length=50,
-        verbose_name='검사 ID',
-        help_text='검사실 또는 검사 종류 식별자'
+    exam = models.ForeignKey(
+        Exam,
+        on_delete=models.CASCADE,
+        related_name='nfc_tag_associations',
+        verbose_name='검사',
+        to_field='exam_id', 
+        db_column='exam_id',
+        null=True, # 임시로 null 허용 
+        blank=True,
     )
 
     # 추가 정보
@@ -279,11 +285,11 @@ class NFCTagExam(models.Model):
         db_table = 'nfc_tag_exams'
         verbose_name = 'NFC 태그-검사 연결'
         verbose_name_plural = 'NFC 태그-검사 연결 목록'
-        unique_together = [['tag', 'exam_id']]
+        unique_together = [['tag', 'exam']]
         indexes = [
-            models.Index(fields=['exam_id']),
+            models.Index(fields=['exam']),
             models.Index(fields=['is_active']),
         ]
 
     def __str__(self):
-        return f"{self.tag.code} - {self.exam_name}"
+        return f"{self.tag.code} - {self.exam.title}"

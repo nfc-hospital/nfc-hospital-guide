@@ -13,9 +13,13 @@ urlpatterns = [
     path('nfc/scan/', views.nfc_scan, name='nfc-scan'),
     path('nfc/tags/<str:tag_id>/', views.get_tag_info, name='tag-info'),
     
-    # 관리자용 API
-    path('admin/nfc/tag-exam-mapping/', views.create_tag_exam_mapping, name='tag-exam-mapping'),
+    # 관리자용 API (기존 유지)
     path('admin/nfc/tags/list/', views.admin_tag_list, name='admin-tag-list'),
+    
+    # 검사-태그 매핑 API (새로 추가되거나 수정된 부분)
+    path('admin/nfc/tag-exam-mapping/', views.nfc_tag_exam_mapping_create, name='nfc_tag_exam_mapping_create'), # POST
+    path('tags/<uuid:tag_id>/exams', views.get_tag_exams_list, name='get_tag_exams_list'), # GET
+    path('tags/mapping/<int:mapping_id>', views.delete_tag_exam_mapping, name='delete_tag_exam_mapping'), # DELETE
     
     # ViewSet URLs
     path('', include(router.urls)),
