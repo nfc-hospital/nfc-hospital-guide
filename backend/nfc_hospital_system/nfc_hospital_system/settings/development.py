@@ -87,12 +87,27 @@ CACHES = {
     }
 }
 
+
+
 # Django Channels (개발용 - 메모리 기반)
 CHANNEL_LAYERS = {
     'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer'
+        'BACKEND': 'channels.layers.InMemoryChannelLayer'  # 개발용 (Redis 없이 테스트)
     }
 }
+
+# 만약 Redis를 설치했다면 아래 설정으로 변경 가능
+# CHANNEL_LAYERS = {
+#     'default': {
+#         'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#         'CONFIG': {
+#             "hosts": [('127.0.0.1', 6379)],
+#         },
+#     },
+# }
+
+
+
 
 # 이메일 백엔드 (개발용 - 콘솔 출력)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -169,3 +184,27 @@ print("개발 환경으로 Django 서버가 시작됩니다!")
 KAKAO_CLIENT_ID = config('KAKAO_CLIENT_ID', default='temporary')
 KAKAO_CLIENT_SECRET = config('KAKAO_CLIENT_SECRET', default='temporary')  
 KAKAO_REDIRECT_URI = 'http://localhost:8000/api/v1/auth/kakao/callback'
+
+
+
+# WebSocket을 위한 ALLOWED_HOSTS 확장
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
+
+# WebSocket을 위한 CORS 설정 추가
+CORS_ALLOW_ALL_ORIGINS = True  # 개발용으로 임시 변경
+
+# WebSocket을 위한 추가 헤더 허용
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'sec-websocket-key',      # WebSocket용 추가
+    'sec-websocket-protocol', # WebSocket용 추가
+    'sec-websocket-version',  # WebSocket용 추가
+]

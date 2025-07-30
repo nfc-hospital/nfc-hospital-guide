@@ -41,7 +41,7 @@ Content-Type: application/json
 
 ### 2. 받은 토큰으로 프로필 조회 (토큰을 위에서 복사해서 붙여넣기)
 GET http://localhost:8000/api/v1/auth/profile/
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYjlmNzZjMmUtY2U4ZS00NzRhLTgxOWYtMjgyMzRjMWI2YzQ3IiwibmFtZSI6Ilx1ZDY1OFx1Yzc5MDEyMzQiLCJleHAiOjE3NTM1MzE5OTcsImlhdCI6MTc1MzUyODM5N30.95Crb8yMTnimTC2JCR9pc8G-nJSGlhJip_vDKh2du10
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiYjlmNzZjMmUtY2U4ZS00NzRhLTgxOWYtMjgyMzRjMWI2YzQ3IiwibmFtZSI6Ilx1ZDY1OFx1Yzc5MDEyMzQiLCJleHAiOjE3NTM1Mzk0OTUsImlhdCI6MTc1MzUzNTg5NX0.y_dwRfSmeiTeTHqbZaKgLq-IgXp9eq9egGL2dnZ44mU
 ###---------------------------------------------------
 
 

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket 대기열 테스트</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #messages { 
+            border: 1px solid #ccc; 
+            height: 300px; 
+            overflow-y: auto; 
+            padding: 10px; 
+            margin: 10px 0;
+            background-color: #f9f9f9;
+        }
+        .message { 
+            margin: 5px 0; 
+            padding: 5px;
+            border-left: 3px solid #007bff;
+            background-color: white;
+        }
+        .error { border-left-color: #dc3545; }
+        .success { border-left-color: #28a745; }
+        input[type="text"] { 
+            width: 300px; 
+            padding: 8px; 
+            margin: 5px;
+        }
+        button { 
+            padding: 8px 15px; 
+            margin: 5px;
+            cursor: pointer;
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🏥 NFC 병원 대기열 WebSocket 테스트</h1>
+    
+    <div id="status" class="status disconnected">연결 대기 중...</div>
+    
+    <div>
+        <label>대기열 ID: </label>
+        <input type="text" id="queueId" value="test123" placeholder="대기열 ID 입력">
+        <button onclick="connect()">연결</button>
+        <button onclick="disconnect()">연결 해제</button>
+    </div>
+    
+    <div>
+        <input type="text" id="messageInput" placeholder="메시지 입력" disabled>
+        <button onclick="sendMessage()" disabled id="sendBtn">메시지 전송</button>
+        <button onclick="sendPing()" disabled id="pingBtn">Ping 전송</button>
+    </div>
+    
+    <div id="messages"></div>
+    
+    <div>
+        <h3>📋 테스트 가이드</h3>
+        <ul>
+            <li>1. 대기열 ID를 입력하고 "연결" 버튼 클릭</li>
+            <li>2. 연결 성공 메시지 확인</li>
+            <li>3. "Ping 전송"으로 연결 테스트</li>
+            <li>4. 메시지 입력하고 전송해보기</li>
+            <li>5. 다른 브라우저 탭에서 같은 대기열 ID로 접속해서 실시간 업데이트 확인</li>
+        </ul>
+    </div>
+
+   
+    <div>
+        <button onclick="requestStatus()" disabled id="statusBtn">대기열 상태 요청</button>
+        <button onclick="sendJoinNotification()" disabled id="joinBtn">참가 알림 전송</button>
+        <button onclick="testMultipleMessages()" disabled id="multiBtn">다중 메시지 테스트</button>
+    </div>
+
+    <script>
+        let socket = null;
+        const messagesDiv = document.getElementById('messages');
+        const statusDiv = document.getElementById('status');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const pingBtn = document.getElementById('pingBtn');
+
+        function addMessage(message, type = 'info') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = `
+                <strong>[${new Date().toLocaleTimeString()}]</strong> ${message}
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            if (connected) {
+                statusDiv.textContent = '✅ WebSocket 연결됨';
+                statusDiv.className = 'status connected';
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                pingBtn.disabled = false;
+                document.getElementById('statusBtn').disabled = false;
+                document.getElementById('joinBtn').disabled = false;
+                document.getElementById('multiBtn').disabled = false;
+            } else {
+                statusDiv.textContent = '❌ WebSocket 연결 해제됨';
+                statusDiv.className = 'status disconnected';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+                pingBtn.disabled = true;
+                document.getElementById('statusBtn').disabled = true;
+                document.getElementById('joinBtn').disabled = true;
+                document.getElementById('multiBtn').disabled = true;
+            }
+        }
+
+        
+        function connect() {
+            const queueId = document.getElementById('queueId').value.trim();
+            if (!queueId) {
+                addMessage('대기열 ID를 입력해주세요.', 'error');
+                return;
+            }
+
+            if (socket) {
+                socket.close();
+            }
+
+            const wsUrl = `ws://localhost:8000/ws/queue/${queueId}/`;
+            addMessage(`WebSocket 연결 시도: ${wsUrl}`, 'info');
+            
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = function(e) {
+                addMessage('WebSocket 연결 성공! 🎉', 'success');
+                updateStatus(true);
+            };
+
+            socket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                addMessage(`수신: ${JSON.stringify(data, null, 2)}`, 'success');
+            };
+
+            socket.onclose = function(e) {
+                addMessage(`WebSocket 연결 해제 (코드: ${e.code})`, 'error');
+                updateStatus(false);
+            };
+
+            socket.onerror = function(e) {
+                addMessage('WebSocket 오류 발생', 'error');
+                updateStatus(false);
+            };
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || !socket) return;
+
+            const data = {
+                type: 'chat',
+                message: message
+            };
+
+            socket.send(JSON.stringify(data));
+            addMessage(`전송: ${message}`, 'info');
+            messageInput.value = '';
+        }
+
+        function sendPing() {
+            if (!socket) return;
+            
+            const data = { type: 'ping' };
+            socket.send(JSON.stringify(data));
+            addMessage('Ping 전송 📡', 'info');
+        }
+
+        function requestStatus() {
+            if (!socket) return;
+            
+            const data = { type: 'queue_status_request' };
+            socket.send(JSON.stringify(data));
+            addMessage('대기열 상태 요청 전송 📊', 'info');
+        }
+
+        function sendJoinNotification() {
+            if (!socket) return;
+            
+            const data = { type: 'join_notification' };
+            socket.send(JSON.stringify(data));
+            addMessage('참가 알림 전송 👋', 'info');
+        }
+
+        function testMultipleMessages() {
+            if (!socket) return;
+            
+            // 여러 메시지 연속 전송 테스트
+            setTimeout(() => sendPing(), 100);
+            setTimeout(() => requestStatus(), 200);
+            setTimeout(() => {
+                const data = { type: 'chat', message: 'WebSocket 멀티 테스트 완료!' };
+                socket.send(JSON.stringify(data));
+            }, 300);
+            
+            addMessage('다중 메시지 테스트 시작 🔄', 'info');
+        }
+
+
+        // Enter 키로 메시지 전송
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // 페이지 로드 시 초기 상태
+        updateStatus(false);
+    </script>
+</body>
+</html>
