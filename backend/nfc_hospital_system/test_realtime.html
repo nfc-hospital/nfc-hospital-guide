@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🏥 실시간 대기열 데이터 테스트</title>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .panel { 
+            background: white; 
+            padding: 20px; 
+            margin: 10px 0; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .messages { 
+            height: 300px; 
+            overflow-y: auto; 
+            border: 1px solid #ddd; 
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        .message { 
+            margin: 5px 0; 
+            padding: 8px;
+            border-left: 3px solid #007bff;
+            background-color: white;
+            border-radius: 4px;
+        }
+        .real-time { border-left-color: #28a745; }
+        .error { border-left-color: #dc3545; }
+        .api-test { border-left-color: #ffc107; }
+        button { 
+            padding: 10px 15px; 
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        .test-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+        .queue-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .queue-card {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 NFC 병원 실시간 대기열 시스템 테스트</h1>
+        
+        <div class="panel">
+            <h3>📡 WebSocket 연결 상태</h3>
+            <div id="status" class="status disconnected">연결 대기 중...</div>
+            
+            <div>
+                <label>대기열 ID: </label>
+                <input type="text" id="queueId" value="test123" placeholder="대기열 ID 입력">
+                <button onclick="loadRealQueueId()">실제 ID 로드</button>
+                <button onclick="connect()">연결</button>
+                <button onclick="disconnect()">연결 해제</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>🧪 실시간 데이터 테스트</h3>
+            <div class="test-buttons">
+                <button onclick="testQueueUpdate('waiting')" id="waitingBtn" disabled>대기 상태로 변경</button>
+                <button onclick="testQueueUpdate('called')" id="calledBtn" disabled>호출 상태로 변경</button>
+                <button onclick="testQueueUpdate('in_progress')" id="progressBtn" disabled>진행중으로 변경</button>
+                <button onclick="testQueueUpdate('completed')" id="completedBtn" disabled>완료로 변경</button>
+                <button onclick="getCurrentQueueData()" id="dataBtn" disabled>현재 대기열 조회</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>📊 현재 대기열 정보</h3>
+            <div class="queue-info" id="queueInfo">
+                <div class="queue-card">
+                    <h4>총 대기 인원</h4>
+                    <div id="totalCount">-</div>
+                </div>
+                <div class="queue-card">
+                    <h4>현재 처리 중</h4>
+                    <div id="processingCount">-</div>
+                </div>
+                <div class="queue-card">
+                    <h4>평균 대기시간</h4>
+                    <div id="avgWaitTime">-</div>
+                </div>
+                <div class="queue-card">
+                    <h4>마지막 업데이트</h4>
+                    <div id="lastUpdate">-</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>📝 실시간 로그</h3>
+            <div class="messages" id="messages"></div>
+            <button onclick="clearMessages()">로그 지우기</button>
+        </div>
+
+        <div class="panel">
+            <h3>📋 테스트 가이드</h3>
+            <ol>
+                <li><strong>WebSocket 연결:</strong> 대기열 ID 입력 후 "연결" 클릭</li>
+                <li><strong>상태 변경 테스트:</strong> 버튼들을 클릭해서 실제 DB 데이터 변경</li>
+                <li><strong>실시간 확인:</strong> 다른 브라우저 탭에서 같은 페이지 열고 동시 확인</li>
+                <li><strong>Django Admin:</strong> <a href="http://localhost:8000/admin/" target="_blank">관리자 페이지</a>에서 직접 데이터 수정해보기</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        const messagesDiv = document.getElementById('messages');
+        const statusDiv = document.getElementById('status');
+
+        function addMessage(message, type = 'info') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.innerHTML = `
+                <strong>[${new Date().toLocaleTimeString()}]</strong> ${message}
+            `;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            const buttons = ['waitingBtn', 'calledBtn', 'progressBtn', 'completedBtn', 'dataBtn'];
+            
+            if (connected) {
+                statusDiv.textContent = '✅ WebSocket 연결됨 - 실시간 업데이트 활성화';
+                statusDiv.className = 'status connected';
+                buttons.forEach(id => document.getElementById(id).disabled = false);
+            } else {
+                statusDiv.textContent = '❌ WebSocket 연결 해제됨';
+                statusDiv.className = 'status disconnected';
+                buttons.forEach(id => document.getElementById(id).disabled = true);
+            }
+        }
+
+        function connect() {
+            const queueId = document.getElementById('queueId').value.trim();
+            if (!queueId) {
+                addMessage('❌ 대기열 ID를 입력해주세요.', 'error');
+                return;
+            }
+
+            if (socket) {
+                socket.close();
+            }
+
+            const wsUrl = `ws://localhost:8000/ws/queue/${queueId}/`;
+            addMessage(`🔄 WebSocket 연결 시도: ${wsUrl}`, 'info');
+            
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = function(e) {
+                addMessage('🎉 WebSocket 연결 성공! 실시간 업데이트가 활성화되었습니다.', 'real-time');
+                updateStatus(true);
+            };
+
+            socket.onmessage = function(e) {
+                const data = JSON.parse(e.data);
+                
+                if (data.type === 'queue_status_update') {
+                    addMessage(`🔔 실시간 대기열 업데이트: ${JSON.stringify(data.data, null, 2)}`, 'real-time');
+                    updateQueueInfo(data.data);
+                } else if (data.type === 'personal_notification') {
+                    addMessage(`📢 개인 알림: ${data.data.message}`, 'real-time');
+                } else if (data.type === 'log_update') {
+                    addMessage(`📄 로그 업데이트: ${data.data.message}`, 'real-time');
+                } else {
+                    addMessage(`📨 수신: ${JSON.stringify(data, null, 2)}`, 'info');
+                }
+            };
+
+            socket.onclose = function(e) {
+                addMessage(`❌ WebSocket 연결 해제 (코드: ${e.code})`, 'error');
+                updateStatus(false);
+            };
+
+            socket.onerror = function(e) {
+                addMessage('💥 WebSocket 오류 발생', 'error');
+                updateStatus(false);
+            };
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.close();
+                socket = null;
+            }
+        }
+
+        function testQueueUpdate(newState) {
+            addMessage(`🧪 API 테스트: 대기열 상태를 '${newState}'로 변경 요청`, 'api-test');
+            
+            fetch('http://localhost:8000/api/v1/queue/test-update/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    'state': newState
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addMessage(`✅ API 성공: ${data.message}`, 'api-test');
+                } else {
+                    addMessage(`❌ API 실패: ${data.error || '알 수 없는 오류'}`, 'error');
+                }
+            })
+            .catch(error => {
+                addMessage(`💥 API 오류: ${error.message}`, 'error');
+            });
+        }
+
+        function getCurrentQueueData() {
+            addMessage('📊 현재 대기열 데이터 조회 중...', 'api-test');
+            
+            fetch('http://localhost:8000/api/v1/queue/', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                addMessage(`📊 현재 대기열 데이터: ${JSON.stringify(data, null, 2)}`, 'api-test');
+                if (data.results) {
+                    updateQueueInfo({total_count: data.results.length});
+                }
+            })
+            .catch(error => {
+                addMessage(`💥 데이터 조회 오류: ${error.message}`, 'error');
+            });
+        }
+
+        function updateQueueInfo(data) {
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            
+            if (data.total_count !== undefined) {
+                document.getElementById('totalCount').textContent = data.total_count;
+            }
+            if (data.processing_count !== undefined) {
+                document.getElementById('processingCount').textContent = data.processing_count;
+            }
+            if (data.avg_wait_time !== undefined) {
+                document.getElementById('avgWaitTime').textContent = data.avg_wait_time + '분';
+            }
+        }
+
+        function clearMessages() {
+            messagesDiv.innerHTML = '';
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        async function loadRealQueueId() {
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/queue/');
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    const realQueueId = data.results[0].queue_id;
+                    document.getElementById('queueId').value = realQueueId;
+                    addMessage(`✅ 실제 Queue ID 자동 로드: ${realQueueId}`, 'info');
+                    return realQueueId;
+                } else {
+                    addMessage('❌ 실제 Queue 데이터가 없습니다.', 'error');
+                    return null;
+                }
+            } catch (error) {
+                addMessage(`❌ Queue ID 로드 실패: ${error.message}`, 'error');
+                return null;
+            }
+        }
+
+        // 페이지 로드 시 자동으로 실제 Queue ID 로드
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                loadRealQueueId();
+            }, 1000);
+        });
+
+        // 페이지 로드 시 초기 상태
+        updateStatus(false);
+        addMessage('💡 실시간 대기열 테스트 페이지가 로드되었습니다. 연결 버튼을 클릭하세요!', 'info');
+    </script>
+</body>
+</html>

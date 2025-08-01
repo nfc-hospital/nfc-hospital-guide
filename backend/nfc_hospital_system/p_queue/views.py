@@ -1,4 +1,5 @@
 from rest_framework.generics import UpdateAPIView
+from rest_framework.decorators import api_view
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -123,3 +124,42 @@ class QueueStatusUpdateView(UpdateAPIView):
         
         return Response({'status': 'success', 'message': f'상태가 {old_state}에서 {new_state}로 변경되었습니다.'})
     
+@api_view(['POST'])
+def test_queue_update(request):
+    """대기열 상태 업데이트 테스트 API"""
+    try:
+        queue_id = request.data.get('queue_id')
+        new_state = request.data.get('state', 'waiting')
+        
+        if queue_id:
+            # 특정 Queue 업데이트
+            queue = Queue.objects.get(queue_id=queue_id)
+        else:
+            # 첫 번째 Queue 업데이트
+            queue = Queue.objects.first()
+            
+        if not queue:
+            return Response({'error': '대기열을 찾을 수 없습니다.'}, status=404)
+            
+        old_state = queue.state
+        queue.state = new_state
+        
+        if new_state == 'called':
+            from django.utils import timezone
+            queue.called_at = timezone.now()
+            
+        queue.save()  # 이때 signal이 발동되어 WebSocket 알림 전송
+        
+        return Response({
+            'success': True,
+            'message': f'대기열 {queue.queue_number}번 상태를 {old_state} → {new_state}로 변경했습니다.',
+            'queue_id': str(queue.queue_id),
+            'old_state': old_state,
+            'new_state': queue.state,
+            'queue_number': queue.queue_number
+        })
+        
+    except Queue.DoesNotExist:
+        return Response({'error': '해당 대기열을 찾을 수 없습니다.'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)

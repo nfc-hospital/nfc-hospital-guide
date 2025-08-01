@@ -8,7 +8,7 @@ from p_queue.consumers import QueueConsumer
 # WebSocket URL 패턴 
 websocket_urlpatterns = [
     # ✅ 환자 대기열 실시간 업데이트 (활성화!)
-    re_path(r'ws/queue/(?P<queue_id>\w+)/$', QueueConsumer.as_asgi()),
+    re_path(r'ws/queue/(?P<queue_id>[\w-]+)/$', QueueConsumer.as_asgi()),
     
     # 나머지는 아직 Consumer가 없으므로 주석 유지
     # 관리자 대시보드 실시간 업데이트

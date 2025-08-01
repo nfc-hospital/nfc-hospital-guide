@@ -10,7 +10,7 @@ except ImportError as e:
     QueueConsumer = None
 
 websocket_urlpatterns = [
-    re_path(r'ws/queue/(?P<queue_id>\w+)/$', QueueConsumer.as_asgi()) if QueueConsumer else None,
+    re_path(r'ws/queue/(?P<queue_id>[\w-]+)/$', QueueConsumer.as_asgi()),
 ]
 
 # None 제거

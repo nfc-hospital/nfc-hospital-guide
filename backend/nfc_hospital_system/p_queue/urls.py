@@ -17,4 +17,6 @@ urlpatterns = [
     # 상태 변경 API
     # URL: /api/v1/queue/{queueId}/
     path('<uuid:pk>/', views.QueueStatusUpdateView.as_view(), name='queue-status-update'),
+
+    path('test-update/', views.test_queue_update, name='test-queue-update'),
 ]

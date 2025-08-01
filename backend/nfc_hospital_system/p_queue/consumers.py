@@ -1,4 +1,4 @@
-# p_queue/consumers.py - 고급 기능 복구
+# p_queue/consumers.py - 완전한 버전 (기존 + 신규 기능)
 import json
 import logging
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -14,6 +14,7 @@ class QueueConsumer(AsyncWebsocketConsumer):
     대기열 실시간 업데이트를 위한 WebSocket Consumer
     """
     
+    # p_queue/consumers.py의 connect 메서드만 수정
     async def connect(self):
         """WebSocket 연결 시 호출"""
         try:
@@ -30,25 +31,28 @@ class QueueConsumer(AsyncWebsocketConsumer):
             await self.accept()
             print("WebSocket 연결 수락됨")
             
-            # 그룹에 참가
+            # 그룹에 참가 (간단하게)
             await self.channel_layer.group_add(
                 self.room_group_name,
                 self.channel_name
             )
             print("그룹 참가 완료")
             
-            # 연결 성공 메시지 전송 (더 상세한 정보)
+            # 연결 성공 메시지 전송
             await self.send(text_data=json.dumps({
                 'type': 'connection_established',
                 'message': f'대기열 {self.queue_id}에 연결되었습니다.',
                 'queue_id': self.queue_id,
+                'room_group_name': self.room_group_name,
                 'channel_layer': str(self.channel_layer.__class__.__name__),
                 'timestamp': datetime.now().isoformat(),
                 'features': [
                     'real_time_updates',
                     'queue_notifications', 
                     'multi_client_support',
-                    'ping_pong_test'
+                    'ping_pong_test',
+                    'database_integration',
+                    'signal_based_updates'
                 ]
             }))
             
@@ -64,11 +68,23 @@ class QueueConsumer(AsyncWebsocketConsumer):
         """WebSocket 연결 해제 시 호출"""
         try:
             print(f"=== WebSocket 연결 해제: code={close_code} ===")
-            # 그룹에서 나가기
+            # 모든 그룹에서 나가기
             await self.channel_layer.group_discard(
                 self.room_group_name,
                 self.channel_name
             )
+            
+            # 관리자 그룹에서도 나가기
+            if self.queue_id == 'admin':
+                await self.channel_layer.group_discard(
+                    'admin_dashboard',
+                    self.channel_name
+                )
+                await self.channel_layer.group_discard(
+                    'admin_logs',
+                    self.channel_name
+                )
+                
             logger.info(f"WebSocket 연결 해제됨: queue_id={self.queue_id}, code={close_code}")
         except Exception as e:
             print(f"=== WebSocket 연결 해제 오류: {str(e)} ===")
@@ -106,12 +122,12 @@ class QueueConsumer(AsyncWebsocketConsumer):
                 )
                 
             elif message_type == 'queue_status_request':
-                # 대기열 상태 요청 처리
+                # 대기열 상태 요청 처리 (실제 DB 데이터 조회)
+                queue_data = await self.get_queue_status()
                 await self.send(text_data=json.dumps({
                     'type': 'queue_status_response',
                     'queue_id': self.queue_id,
-                    'status': 'active',
-                    'connected_clients': 1,  # 실제로는 그룹 멤버 수 계산 필요
+                    'data': queue_data,
                     'timestamp': datetime.now().isoformat()
                 }))
                 
@@ -126,11 +142,44 @@ class QueueConsumer(AsyncWebsocketConsumer):
                     }
                 )
                 
+            elif message_type == 'subscribe_patient':
+                # 특정 환자 알림 구독
+                user_id = text_data_json.get('user_id')
+                if user_id:
+                    await self.channel_layer.group_add(
+                        f'patient_{user_id}',
+                        self.channel_name
+                    )
+                    await self.send(text_data=json.dumps({
+                        'type': 'subscription_success',
+                        'message': f'환자 {user_id} 알림을 구독했습니다.',
+                        'subscription_type': 'patient',
+                        'target_id': user_id
+                    }))
+                    
+            elif message_type == 'subscribe_exam':
+                # 특정 검사 알림 구독
+                exam_id = text_data_json.get('exam_id')
+                if exam_id:
+                    await self.channel_layer.group_add(
+                        f'exam_{exam_id}',
+                        self.channel_name
+                    )
+                    await self.send(text_data=json.dumps({
+                        'type': 'subscription_success',
+                        'message': f'검사 {exam_id} 알림을 구독했습니다.',
+                        'subscription_type': 'exam',
+                        'target_id': exam_id
+                    }))
+                
             else:
                 await self.send(text_data=json.dumps({
                     'type': 'error',
                     'message': f'알 수 없는 메시지 타입: {message_type}',
-                    'supported_types': ['ping', 'chat', 'queue_status_request', 'join_notification']
+                    'supported_types': [
+                        'ping', 'chat', 'queue_status_request', 'join_notification',
+                        'subscribe_patient', 'subscribe_exam'
+                    ]
                 }))
                 
         except json.JSONDecodeError:
@@ -145,6 +194,7 @@ class QueueConsumer(AsyncWebsocketConsumer):
                 'message': '메시지 처리 중 오류가 발생했습니다.'
             }))
 
+    # === 기존 메서드들 ===
     async def queue_message(self, event):
         """그룹으로부터 받은 메시지를 클라이언트에 전송"""
         message = event['message']
@@ -168,14 +218,13 @@ class QueueConsumer(AsyncWebsocketConsumer):
         }))
 
     async def queue_update(self, event):
-        """대기열 상태 업데이트 메시지 전송"""
+        """대기열 상태 업데이트 메시지 전송 (기존 + 개선)"""
         await self.send(text_data=json.dumps({
             'type': 'queue_status_update',
-            'data': event,
+            'data': event.get('data', event),  # data 키가 있으면 사용, 없으면 전체 event 사용
             'timestamp': datetime.now().isoformat()
         }))
 
-    # 미래 확장을 위한 메서드들
     async def patient_called(self, event):
         """환자 호출 알림"""
         await self.send(text_data=json.dumps({
@@ -191,3 +240,104 @@ class QueueConsumer(AsyncWebsocketConsumer):
             'data': event,
             'timestamp': datetime.now().isoformat()
         }))
+
+    # === 5단계에서 추가된 새로운 메서드들 ===
+    async def queue_status_update(self, event):
+        """Signal에서 전송된 대기열 상태 업데이트를 클라이언트에 전송"""
+        print(f"🔔 Consumer에서 알림 전송: {event['data']}")
+        
+        await self.send(text_data=json.dumps({
+            'type': 'queue_status_update',
+            'data': event['data'],
+            'timestamp': datetime.now().isoformat()
+        }))
+        
+        print("✅ 클라이언트로 알림 전송 완료")
+
+    async def personal_notification(self, event):
+        """개인 알림 전송 (signals.py에서 호출)"""
+        await self.send(text_data=json.dumps({
+            'type': 'personal_notification',
+            'data': event['data'],
+            'timestamp': datetime.now().isoformat()
+        }))
+
+    async def log_update(self, event):
+        """로그 업데이트 알림 (signals.py에서 호출)"""
+        await self.send(text_data=json.dumps({
+            'type': 'log_update',
+            'data': event['data'],
+            'timestamp': datetime.now().isoformat()
+        }))
+
+    # === 데이터베이스 연동 헬퍼 메서드들 ===
+    @database_sync_to_async
+    def get_queue_status(self):
+        """실제 DB에서 대기열 상태 조회"""
+        try:
+            from .models import Queue
+            
+            if self.queue_id == 'admin':
+                # 관리자용 전체 대기열 현황
+                queues = Queue.objects.all().order_by('queue_number')
+                return {
+                    'total_queues': queues.count(),
+                    'waiting': queues.filter(state='waiting').count(),
+                    'called': queues.filter(state='called').count(),
+                    'in_progress': queues.filter(state='in_progress').count(),
+                    'completed': queues.filter(state='completed').count(),
+                    'cancelled': queues.filter(state='cancelled').count(),
+                    'recent_queues': [
+                        {
+                            'queue_id': str(q.queue_id),
+                            'queue_number': q.queue_number,
+                            'state': q.state,
+                            'estimated_wait_time': q.estimated_wait_time,
+                            'priority': q.priority
+                        } for q in queues[:10]
+                    ]
+                }
+            else:
+                # 특정 대기열 정보
+                try:
+                    queue = Queue.objects.get(queue_id=self.queue_id)
+                    return {
+                        'queue_id': str(queue.queue_id),
+                        'queue_number': queue.queue_number,
+                        'state': queue.state,
+                        'estimated_wait_time': queue.estimated_wait_time,
+                        'priority': queue.priority,
+                        'called_at': queue.called_at.isoformat() if queue.called_at else None,
+                        'created_at': queue.created_at.isoformat(),
+                        'updated_at': queue.updated_at.isoformat()
+                    }
+                except Queue.DoesNotExist:
+                    return {
+                        'error': f'대기열 {self.queue_id}를 찾을 수 없습니다.',
+                        'queue_id': self.queue_id
+                    }
+                    
+        except Exception as e:
+            return {
+                'error': f'데이터베이스 오류: {str(e)}',
+                'queue_id': self.queue_id
+            }
+
+    @database_sync_to_async
+    def get_user_queues(self, user_id):
+        """특정 사용자의 모든 대기열 조회"""
+        try:
+            from .models import Queue
+            queues = Queue.objects.filter(user_id=user_id).order_by('-created_at')
+            return [
+                {
+                    'queue_id': str(q.queue_id),
+                    'queue_number': q.queue_number,
+                    'state': q.state,
+                    'estimated_wait_time': q.estimated_wait_time,
+                    'created_at': q.created_at.isoformat()
+                } for q in queues
+            ]
+        except Exception as e:
+            logger.error(f"사용자 대기열 조회 오류: {str(e)}")
+            return []
