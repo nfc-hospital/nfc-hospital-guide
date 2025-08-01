@@ -72,7 +72,8 @@ class Queue(models.Model):
 
     estimated_wait_time = models.IntegerField(
         verbose_name='예상 대기 시간',
-        help_text='분 단위'
+        help_text='분 단위',
+        default=0,
     )
 
     priority = models.CharField(
@@ -257,7 +258,9 @@ class QueueStatusLog(models.Model):
 
     previous_state = models.CharField(
         max_length=20,
-        verbose_name='이전 상태'
+        null=True,
+        blank=True,
+        verbose_name='이전 상태',
     )
 
     new_state = models.CharField(
@@ -268,7 +271,7 @@ class QueueStatusLog(models.Model):
     previous_number = models.IntegerField(
         null=True,
         blank=True,
-        verbose_name='이전 대기번호'
+        verbose_name='이전 대기번호',
     )
 
     new_number = models.IntegerField(

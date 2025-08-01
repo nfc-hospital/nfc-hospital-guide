@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import Exam, Appointment, ExamPreparation, AppointmentHistory
 from django.utils import timezone # For actions that update timestamps
-
+import uuid
 
 # ExamPreparation을 Exam Admin에 인라인으로 추가
 class ExamPreparationInline(admin.TabularInline):
@@ -52,6 +52,7 @@ class ExamAdmin(admin.ModelAdmin):
 
     # 검사 ID 자동 생성 (선택 사항: 필요한 경우)
     def save_model(self, request, obj, form, change):
+
         if not obj.exam_id:
             # 예시: 'EXAM-' + 타임스탬프 또는 UUID 앞부분
             obj.exam_id = f"EXAM-{timezone.now().strftime('%Y%m%d%H%M%S')}"
@@ -75,7 +76,7 @@ class AppointmentAdmin(admin.ModelAdmin):
         'appointment_id', 'user__username', 'user__name',
         'exam__title', 'exam__department'
     )
-    raw_id_fields = ('user', 'exam') # ForeignKey 필드에 대해 검색 가능한 입력 필드 제공
+    autocomplete_fields = ('user', 'exam') # ForeignKey 필드에 대해 검색 가능한 입력 필드 제공
     date_hierarchy = 'scheduled_at' # 예약 시간 기준으로 날짜별 탐색
     ordering = ('-scheduled_at',)
 
@@ -131,9 +132,11 @@ class AppointmentAdmin(admin.ModelAdmin):
 
     # Appointment ID 자동 생성 (선택 사항: 필요한 경우)
     def save_model(self, request, obj, form, change):
+
         if not obj.appointment_id:
             # 예시: 'APP-' + 타임스탬프 또는 UUID 앞부분
             obj.appointment_id = f"APP-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:4].upper()}"
+        
         super().save_model(request, obj, form, change)
 
 
