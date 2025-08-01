@@ -25,20 +25,24 @@ export default function Login() {
     }
   }, [isAuthenticated, navigate, location]);
 
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
 
     try {
-      // 테스트를 위해 간단한 유효성 검사
+      // 유효성 검사
       if (phoneNumber.length !== 4 || birthDate.length !== 6) {
         throw new Error('전화번호 뒷자리 4자리와 생년월일 6자리를 정확히 입력해주세요.');
       }
 
-      await login('simple', { phoneNumber, birthDate });
+      // ✅ 새로운 AuthContext에 맞게 수정
+      await login(phoneNumber, birthDate);
+      
       const from = location.state?.from?.pathname || '/';
       navigate(from, { replace: true });
+      
     } catch (err) {
       setError(err.message || '로그인에 실패했습니다. 입력하신 정보를 확인해주세요.');
     } finally {

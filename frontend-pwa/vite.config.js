@@ -33,17 +33,17 @@ export default defineConfig({
     })
   ],
   server: {
-    port: 3000,
+    port: 5173, // Vite 기본 포트 (3000에서 충돌 방지)
     open: true,
     proxy: {
+      // HTTP API → Django runserver (포트 8000)
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
-        ws: true,
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
-            console.log('proxy error', err);
+            console.log('API proxy error', err);
           });
           proxy.on('proxyReq', (proxyReq, req, _res) => {
             console.log('Sending Request to the Target:', req.method, req.url);
@@ -53,21 +53,18 @@ export default defineConfig({
           });
         },
       },
-      '/ws': {
-        target: 'ws://localhost:8000',
-        ws: true,
-        changeOrigin: true
-      },
+      // Django Admin
       '/admin': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true
       },
+      // Static files
       '/static': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true
       },
       '/media': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true
       }
     }

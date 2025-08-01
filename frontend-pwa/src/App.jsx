@@ -8,6 +8,7 @@ import Exam from './pages/Exam';
 import NotFound from './pages/NotFound';
 import PublicGuide from './components/PublicGuide';
 import PrivateRoute from './components/common/PrivateRoute';
+import WebSocketTest from './components/WebSocketTest'; 
 import './styles/global.css';
 
 function App() {
@@ -32,6 +33,34 @@ function App() {
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
+        
+        {/* WebSocket 테스트 컴포넌트 */}
+        {process.env.NODE_ENV === 'development' && (
+          <div style={{ 
+            position: 'fixed', 
+            top: '10px', 
+            right: '10px', 
+            zIndex: 9999,
+            backgroundColor: 'white',
+            border: '2px solid #007bff',
+            borderRadius: '8px',
+            padding: '8px'
+          }}>
+            <details>
+              <summary style={{ 
+                cursor: 'pointer', 
+                fontWeight: 'bold',
+                color: '#007bff',
+                padding: '4px'
+              }}>
+                🧪 WebSocket 테스트
+              </summary>
+              <div style={{ marginTop: '10px' }}>
+                <WebSocketTest />
+              </div>
+            </details>
+          </div>
+        )}
       </Router>
     </AuthProvider>
   );

@@ -1,85 +1,216 @@
+// frontend-pwa/src/context/AuthContext.jsx - 완전 수정 버전
 import { createContext, useContext, useState, useEffect } from 'react';
 
 // 인증 컨텍스트 생성
 const AuthContext = createContext(null);
-
-// 테스트용 임시 사용자 데이터
-const MOCK_USER = {
-  id: 'user123',
-  name: '홍길동',
-  phoneNumber: '1234',
-  birthDate: '990101',
-  loginType: 'simple' // 기본 로그인 타입
-};
 
 // AuthProvider 컴포넌트
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // 로컬 스토리지에서 사용자 정보 불러오기
+  // 로컬 스토리지에서 사용자 정보 및 토큰 불러오기
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
+    const storedToken = localStorage.getItem('accessToken');
+    
+    if (storedUser && storedToken) {
       setUser(JSON.parse(storedUser));
     }
     setLoading(false);
   }, []);
 
+  // 간편 로그인 (실제 API 호출)
   const login = async (phoneNumber, birthDate) => {
     try {
-      // 테스트를 위해 간단한 유효성 검사
+      console.log('🔐 실제 간편 로그인 API 호출...');
+      
       if (phoneNumber.length !== 4 || birthDate.length !== 6) {
         throw new Error('전화번호 뒷자리 4자리와 생년월일 6자리를 정확히 입력해주세요.');
       }
 
-      // 테스트를 위해 항상 로그인 성공 처리
-      const mockUser = {
-        ...MOCK_USER,
-        phoneNumber,
-        birthDate,
-        loginType: 'simple'
+      // 🔧 YYMMDD → YYYY-MM-DD 변환
+      const convertBirthDate = (yymmdd) => {
+        const yy = yymmdd.substring(0, 2);
+        const mm = yymmdd.substring(2, 4);
+        const dd = yymmdd.substring(4, 6);
+        
+        // YY를 YYYY로 변환 (예: 99 → 1999, 01 → 2001)
+        // 50 이상이면 19XX, 50 미만이면 20XX로 가정
+        const yyyy = parseInt(yy) >= 50 ? `19${yy}` : `20${yy}`;
+        
+        return `${yyyy}-${mm}-${dd}`;
       };
+
+      const formattedBirthDate = convertBirthDate(birthDate);
+      console.log(`📅 날짜 변환: ${birthDate} → ${formattedBirthDate}`);
+
+      const requestData = {
+        phoneLast4: phoneNumber,
+        birthDate: formattedBirthDate
+      };
+
+      console.log('🚀 API 요청 데이터:', requestData);
+
+      const response = await fetch('/api/v1/auth/simple-login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      console.log('📨 API 응답 상태:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.log('❌ 에러 응답:', errorData);
+        throw new Error(errorData.error?.message || errorData.message || `HTTP ${response.status}: 로그인에 실패했습니다.`);
+      }
+
+      const data = await response.json();
+      console.log('✅ 로그인 API 응답:', data);
+
+      // 🔧 올바른 응답 구조에서 토큰 추출
+      if (data.success && data.data && data.data.tokens) {
+        const accessToken = data.data.tokens.access;
+        const refreshToken = data.data.tokens.refresh;
+        const userData = data.data.user;
+        
+        console.log('✅ 토큰 추출 성공');
+        console.log('- Access Token:', accessToken.substring(0, 20) + '...');
+        console.log('- User Data:', userData);
+        
+        // 토큰과 사용자 정보 저장
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', refreshToken);
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        setUser(userData);
+        console.log('✅ JWT 토큰 및 사용자 정보 저장 완료');
+        return true;
+      } else {
+        console.log('❌ 예상하지 못한 응답 구조:', data);
+        throw new Error('서버 응답에서 토큰을 찾을 수 없습니다.');
+      }
       
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      return true;
     } catch (error) {
-      console.error('Simple login error:', error);
+      console.error('❌ 간편 로그인 오류:', error);
       throw new Error(error.message || '로그인에 실패했습니다.');
     }
   };
 
-  const loginWithKakao = async () => {
+  // 카카오 로그인 (실제 API 호출)
+  const loginWithKakao = async (kakaoAuthCode) => {
     try {
-      console.log('카카오 로그인 시도 (시뮬레이션)...');
-      // 실제 카카오 SDK 연동 없이 시뮬레이션
-      const mockUser = {
-        ...MOCK_USER,
-        id: 'kakao_user_123',
-        name: '카카오 사용자',
-        loginType: 'kakao'
-      };
+      console.log('🔐 실제 카카오 로그인 API 호출...');
 
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
-      return true;
+      const response = await fetch('/api/v1/auth/kakao/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: kakaoAuthCode
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || '카카오 로그인에 실패했습니다.');
+      }
+
+      const data = await response.json();
+      console.log('✅ 카카오 로그인 API 응답:', data);
+
+      // 카카오 로그인도 동일한 구조 처리
+      if (data.success && data.data && data.data.tokens) {
+        const accessToken = data.data.tokens.access;
+        const refreshToken = data.data.tokens.refresh;
+        const userData = data.data.user;
+        
+        localStorage.setItem('accessToken', accessToken);
+        localStorage.setItem('refreshToken', refreshToken);
+        localStorage.setItem('user', JSON.stringify(userData));
+        
+        setUser(userData);
+        console.log('✅ JWT 토큰 및 사용자 정보 저장 완료');
+        return true;
+      } else {
+        throw new Error('서버 응답에서 토큰을 찾을 수 없습니다.');
+      }
+
     } catch (error) {
-      console.error('Kakao login error:', error);
-      throw new Error('카카오 로그인에 실패했습니다.');
+      console.error('❌ 카카오 로그인 오류:', error);
+      throw new Error(error.message || '카카오 로그인에 실패했습니다.');
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('user');
+  // 로그아웃
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        // 백엔드에 로그아웃 요청
+        await fetch('/api/v1/auth/logout/', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        });
+      }
+    } catch (error) {
+      console.error('로그아웃 API 오류:', error);
+    } finally {
+      // 로컬 데이터 정리
+      setUser(null);
+      localStorage.removeItem('user');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      console.log('✅ 로그아웃 및 토큰 정리 완료');
+    }
+  };
+
+  // 토큰 갱신
+  const refreshToken = async () => {
+    try {
+      const refresh = localStorage.getItem('refreshToken');
+      if (!refresh) {
+        throw new Error('Refresh token이 없습니다.');
+      }
+
+      const response = await fetch('/api/v1/auth/token/refresh/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh: refresh
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('토큰 갱신에 실패했습니다.');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('accessToken', data.access);
+      console.log('✅ 토큰 갱신 완료');
+      return data.access;
+
+    } catch (error) {
+      console.error('❌ 토큰 갱신 오류:', error);
+      logout(); // 갱신 실패 시 로그아웃
+      return null;
+    }
   };
 
   // 로딩 중일 때 표시할 컴포넌트
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
       </div>
     );
   }
@@ -89,6 +220,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     loginWithKakao,
+    refreshToken,
     isAuthenticated: !!user
   };
 
