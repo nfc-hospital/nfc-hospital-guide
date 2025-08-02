@@ -29,6 +29,21 @@ class QueueJoinView(APIView):
             # priority는 기본값 'normal'로 설정, 필요에 따라 변경
             new_queue = Queue.create_from_appointment(appointment)
             
+            # 대기열 생성 후 앞선 대기자 수를 다시 계산
+            ahead_count = Queue.objects.filter(
+                exam=new_queue.exam,
+                state='waiting',
+                queue_number__lt=new_queue.queue_number
+            ).count()
+
+            # Exam 모델에서 평균 소요 시간과 버퍼 시간 로드
+            average_time_per_exam = new_queue.exam.average_duration
+            buffer_time = new_queue.exam.buffer_time
+
+            # 예상 대기 시간 계산 후 저장
+            new_queue.estimated_wait_time = (ahead_count * average_time_per_exam) + buffer_time
+            new_queue.save()
+
             serializer = QueueSerializer(new_queue)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -45,16 +60,65 @@ class MyPositionView(APIView):
             # 현재 사용자의 대기열 정보 조회
             queue_item = Queue.objects.get(user=user, state__in=['waiting', 'called'])
 
-            # 앞선 대기자 수 계산
-            ahead_count = Queue.objects.filter(
-                exam=queue_item.exam,
-                state='waiting',
-                queue_number__lt=queue_item.queue_number
-            ).count()
+            my_priority = queue_item.priority
+            ahead_count = 0
+            
+            # emergency => 즉시 처리
+            if my_priority == 'emergency':
+                ahead_count = 0
+            else:
+                # 내 앞에 있는 emergency 환자 수 더하기
+                ahead_emergency_count = Queue.objects.filter(
+                    exam=queue_item.exam,
+                    state='waiting',
+                    priority='emergency'
+                ).count()
+                ahead_count += ahead_emergency_count
+                
+                if my_priority == 'urgent':
+                    # 내 앞에 있는 urgent 환자 수 더하기
+                    ahead_urgent_count = Queue.objects.filter(
+                        exam=queue_item.exam,
+                        state='waiting',
+                        priority='urgent',
+                        queue_number__lt=queue_item.queue_number
+                    ).count()
+                    ahead_count += ahead_urgent_count
+                    
+                    # 1 urgent : 2 normal 규칙에 따라 내 앞에 있는 normal 환자 수 계산
+                    # 앞선 normal 환자 수의 절반을 더하는 방식으로 구현
+                    ahead_normal_count = Queue.objects.filter(
+                        exam=queue_item.exam,
+                        state='waiting',
+                        priority='normal'
+                    ).count()
+                    
+                    # urgent 환자 1명 당 normal 2명 처리 후 다시 urgent 1명 처리
+                    ahead_count += (ahead_normal_count // 2)
+
+                elif my_priority == 'normal':
+                    # 내 앞에 있는 urgent 환자 수 더하기
+                    ahead_urgent_count = Queue.objects.filter(
+                        exam=queue_item.exam,
+                        state='waiting',
+                        priority='urgent'
+                    ).count()
+                    
+                    # 내 앞에 있는 normal 환자 수 더하기
+                    ahead_normal_count = Queue.objects.filter(
+                        exam=queue_item.exam,
+                        state='waiting',
+                        priority='normal',
+                        queue_number__lt=queue_item.queue_number
+                    ).count()
+                    ahead_count += ahead_urgent_count + ahead_normal_count
+            
+            # 예상 대기 시간 계산
+            estimated_wait_time = (ahead_count * queue_item.exam.average_duration) + queue_item.exam.buffer_time
 
             data = {
                 'queue_number': queue_item.queue_number,
-                'estimated_wait_time': queue_item.estimated_wait_time,
+                'estimated_wait_time': estimated_wait_time,
                 'state': queue_item.state,
                 'aheadCount': ahead_count,
             }

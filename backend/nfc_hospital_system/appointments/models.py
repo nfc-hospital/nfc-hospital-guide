@@ -36,9 +36,16 @@ class Exam(models.Model):
         help_text='예: 영상의학과, 진단검사의학과'
     )
 
-    duration = models.IntegerField(
-        verbose_name='예상 소요 시간',
-        help_text='분 단위'
+    average_duration = models.IntegerField(
+        verbose_name='평균 소요 시간',
+        help_text='실제 검사 데이터 기반의 평균 소요 시간 (분 단위)',
+        default=30 
+    )
+
+    buffer_time = models.IntegerField(
+        verbose_name='버퍼 시간',
+        help_text='검사 준비, 환자 이동 등을 위한 추가 시간 (분 단위)',
+        default=5 
     )
 
     # 위치 정보 필드 추가
@@ -196,7 +203,7 @@ class Appointment(models.Model):
     def get_expected_end_time(self):
         """예상 종료 시간 계산"""
         from datetime import timedelta
-        return self.scheduled_at + timedelta(minutes=self.exam.duration)
+        return self.scheduled_at + timedelta(minutes=self.exam.average_duration)
 
     @classmethod
     def get_todays_appointments(cls, user=None):

@@ -22,7 +22,7 @@ class ExamAdmin(admin.ModelAdmin):
     Django 관리자 페이지에서 Exam 모델을 관리합니다.
     """
     list_display = (
-        'exam_id', 'title', 'department', 'duration', 'is_active',
+        'exam_id', 'title', 'department', 'average_duration', 'buffer_time', 'is_active',
         'created_at', 'updated_at'
     )
     list_filter = (
@@ -34,7 +34,7 @@ class ExamAdmin(admin.ModelAdmin):
     # 폼에서 필드 그룹화 및 정리
     fieldsets = (
         (None, {
-            'fields': ('exam_id', 'title', 'description', 'department', 'duration')
+            'fields': ('exam_id', 'title', 'description', 'department', 'average_duration', 'buffer_time')
         }),
         ('상태', {
             'fields': ('is_active',),
