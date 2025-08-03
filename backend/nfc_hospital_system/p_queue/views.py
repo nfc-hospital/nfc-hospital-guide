@@ -1,14 +1,24 @@
 from rest_framework.generics import UpdateAPIView
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, permissions
 from django.shortcuts import get_object_or_404
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Count, Avg, Max, Min, Q, Sum
+from django.utils import timezone
+from datetime import datetime, timedelta
+from django.http import StreamingHttpResponse
+import json
+import time
+import logging
 from .models import Queue, QueueStatusLog
 from .serializers import QueueSerializer, MyPositionSerializer, QueueStatusUpdateSerializer
 from appointments.models import Appointment, Exam
+from authentication.models import User
+from nfc_hospital_system.utils import APIResponse
+
+logger = logging.getLogger(__name__)
 
 class QueueJoinView(APIView):
     """
@@ -227,3 +237,523 @@ def test_queue_update(request):
         return Response({'error': '해당 대기열을 찾을 수 없습니다.'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+# 대기열 모니터링 추가 API
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def queue_realtime_sse(request):
+    """
+    실시간 대기열 조회 (SSE) - GET /admin/queue/realtime
+    
+    Server-Sent Events를 사용한 실시간 대기열 업데이트
+    """
+    # 권한 확인 (Staff 이상)
+    try:
+        admin_user = User.objects.get(user=request.user)
+        if admin_user.role not in ['super', 'dept', 'staff']:
+            return Response({'error': '권한이 부족합니다.'}, status=status.HTTP_403_FORBIDDEN)
+    except User.DoesNotExist:
+        return Response({'error': '권한이 부족합니다.'}, status=status.HTTP_403_FORBIDDEN)
+    
+    def event_stream():
+        while True:
+            try:
+                # 현재 대기열 상태 조회
+                queue_stats = Queue.objects.filter(
+                    state__in=['waiting', 'called', 'in_progress']
+                ).aggregate(
+                    total_waiting=Count('queue_id', filter=Q(state='waiting')),
+                    total_called=Count('queue_id', filter=Q(state='called')),
+                    total_in_progress=Count('queue_id', filter=Q(state='in_progress')),
+                    avg_wait_time=Avg('estimated_wait_time', filter=Q(state='waiting'))
+                )
+                
+                # 부서별 대기열 현황
+                dept_queues = []
+                for exam in Exam.objects.filter(is_active=True):
+                    dept_stat = Queue.objects.filter(
+                        exam=exam,
+                        state__in=['waiting', 'called']
+                    ).aggregate(
+                        waiting_count=Count('queue_id', filter=Q(state='waiting')),
+                        called_count=Count('queue_id', filter=Q(state='called')),
+                        avg_wait=Avg('estimated_wait_time')
+                    )
+                    
+                    dept_queues.append({
+                        'examId': exam.exam_id,
+                        'examName': exam.exam_name,
+                        'department': exam.department,
+                        'waitingCount': dept_stat['waiting_count'],
+                        'calledCount': dept_stat['called_count'],
+                        'avgWaitTime': dept_stat['avg_wait'] or 0
+                    })
+                
+                # 최근 호출된 환자
+                recent_called = Queue.objects.filter(
+                    state='called',
+                    called_at__isnull=False
+                ).order_by('-called_at')[:5]
+                
+                recent_called_list = [{
+                    'queueNumber': q.queue_number,
+                    'examName': q.exam.exam_name,
+                    'calledAt': q.called_at.isoformat() if q.called_at else None
+                } for q in recent_called]
+                
+                # SSE 데이터 형식
+                data = {
+                    'timestamp': timezone.now().isoformat(),
+                    'summary': {
+                        'totalWaiting': queue_stats['total_waiting'],
+                        'totalCalled': queue_stats['total_called'],
+                        'totalInProgress': queue_stats['total_in_progress'],
+                        'avgWaitTime': round(queue_stats['avg_wait_time'] or 0, 2)
+                    },
+                    'departments': dept_queues,
+                    'recentCalled': recent_called_list
+                }
+                
+                yield f"data: {json.dumps(data)}\n\n"
+                time.sleep(3)  # 3초 간격
+                
+            except Exception as e:
+                logger.error(f"SSE streaming error: {str(e)}")
+                yield f"data: {{\"error\": \"{str(e)}\"}}\n\n"
+                break
+    
+    response = StreamingHttpResponse(
+        event_stream(),
+        content_type='text/event-stream'
+    )
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'
+    return response
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def queue_by_department(request):
+    """
+    부서별 대기 현황 - GET /admin/queue/by-department
+    """
+    # 권한 확인 (Staff 이상)
+    try:
+        admin_user = User.objects.get(user=request.user)
+        if admin_user.role not in ['super', 'dept', 'staff']:
+            return APIResponse.error(
+                message="권한이 부족합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+    except User.DoesNotExist:
+        return APIResponse.error(
+            message="권한이 부족합니다.",
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        department = request.GET.get('department')
+        date = request.GET.get('date', timezone.now().date().isoformat())
+        
+        # 부서별 통계
+        query = Queue.objects.filter(
+            joined_at__date=date
+        )
+        
+        if department:
+            query = query.filter(exam__department=department)
+        
+        dept_stats = []
+        departments = Exam.objects.values_list('department', flat=True).distinct()
+        
+        for dept in departments:
+            if department and dept != department:
+                continue
+                
+            dept_queues = query.filter(exam__department=dept)
+            
+            # 시간대별 분석
+            hourly_stats = []
+            for hour in range(8, 18):  # 8시부터 18시까지
+                hour_queues = dept_queues.filter(
+                    joined_at__hour=hour
+                )
+                
+                hourly_stats.append({
+                    'hour': hour,
+                    'count': hour_queues.count(),
+                    'avgWaitTime': hour_queues.aggregate(
+                        avg=Avg('estimated_wait_time')
+                    )['avg'] or 0
+                })
+            
+            # 현재 대기 상태
+            current_stats = dept_queues.aggregate(
+                total=Count('queue_id'),
+                waiting=Count('queue_id', filter=Q(state='waiting')),
+                called=Count('queue_id', filter=Q(state='called')),
+                in_progress=Count('queue_id', filter=Q(state='in_progress')),
+                completed=Count('queue_id', filter=Q(state='completed')),
+                cancelled=Count('queue_id', filter=Q(state='cancelled')),
+                avg_wait=Avg('estimated_wait_time'),
+                max_wait=Max('estimated_wait_time'),
+                min_wait=Min('estimated_wait_time')
+            )
+            
+            # 우선순위별 분석
+            priority_stats = dept_queues.values('priority').annotate(
+                count=Count('queue_id'),
+                avg_wait=Avg('estimated_wait_time')
+            )
+            
+            dept_stats.append({
+                'department': dept,
+                'date': date,
+                'currentStats': current_stats,
+                'hourlyStats': hourly_stats,
+                'priorityBreakdown': list(priority_stats),
+                'peakHour': max(hourly_stats, key=lambda x: x['count'])['hour'] if hourly_stats else None
+            })
+        
+        return APIResponse.success(
+            data=dept_stats,
+            message="부서별 대기 현황을 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Department queue stats error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="부서별 대기 현황 조회 중 오류가 발생했습니다.",
+            code="DEPT_QUEUE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['PUT'])
+@permission_classes([permissions.IsAuthenticated])
+def update_alert_settings(request):
+    """
+    지연 알림 설정 - PUT /admin/queue/alert-settings
+    """
+    # 권한 확인 (Dept-Admin 이상)
+    try:
+        admin_user = User.objects.get(user=request.user)
+        if admin_user.role not in ['super', 'dept']:
+            return APIResponse.error(
+                message="부서 관리자 이상의 권한이 필요합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+    except User.DoesNotExist:
+        return APIResponse.error(
+            message="권한이 부족합니다.",
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        delay_threshold = request.data.get('delayThreshold', 30)  # 기본 30분
+        exam_id = request.data.get('examId')
+        enable_alerts = request.data.get('enableAlerts', True)
+        
+        # 검사 별 알림 설정 저장 (실제로는 별도 모델이 필요하지만 간단히 구현)
+        if exam_id:
+            exam = get_object_or_404(Exam, exam_id=exam_id)
+            # 임시로 buffer_time을 알림 임계값으로 사용
+            exam.buffer_time = delay_threshold
+            exam.save()
+            
+            message = f"{exam.exam_name} 검사의 지연 알림 설정이 업데이트되었습니다."
+        else:
+            # 전체 설정 업데이트
+            Exam.objects.update(buffer_time=delay_threshold)
+            message = "전체 검사의 지연 알림 설정이 업데이트되었습니다."
+        
+        return APIResponse.success(
+            data={
+                'delayThreshold': delay_threshold,
+                'examId': exam_id,
+                'enableAlerts': enable_alerts
+            },
+            message=message,
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Alert settings update error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="알림 설정 업데이트 중 오류가 발생했습니다.",
+            code="ALERT_SETTINGS_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def call_patient(request):
+    """
+    환자 호출 - POST /medical/queue/call-patient
+    """
+    # 권한 확인 (Medical 이상)
+    try:
+        admin_user = User.objects.get(user=request.user)
+        if admin_user.role not in ['super', 'dept', 'staff']:
+            return APIResponse.error(
+                message="의료진 권한이 필요합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+    except User.DoesNotExist:
+        return APIResponse.error(
+            message="권한이 부족합니다.",
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        queue_id = request.data.get('queueId')
+        exam_room = request.data.get('examRoom')
+        
+        queue = get_object_or_404(Queue, queue_id=queue_id)
+        
+        # 호출 처리
+        with transaction.atomic():
+            old_state = queue.state
+            queue.call_patient()
+            
+            # 호출 로그 기록
+            QueueStatusLog.objects.create(
+                queue=queue,
+                previous_state=old_state,
+                new_state='called',
+                changed_by=request.user,
+                reason=f'검사실: {exam_room}' if exam_room else '호출'
+            )
+            
+            # TODO: 실제 푸시 알림 발송 (FCM/WebSocket)
+            # 여기서는 WebSocket 시그널이 자동으로 처리됨
+            
+        return APIResponse.success(
+            data={
+                'queueId': str(queue.queue_id),
+                'queueNumber': queue.queue_number,
+                'state': queue.state,
+                'examRoom': exam_room
+            },
+            message=f"{queue.queue_number}번 환자를 호출했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Patient call error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="환자 호출 중 오류가 발생했습니다.",
+            code="CALL_PATIENT_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def missing_patients(request):
+    """
+    누락 환자 감지 - GET /medical/queue/missing-patients
+    """
+    # 권한 확인 (Medical 이상)
+    try:
+        admin_user = User.objects.get(user=request.user)
+        if admin_user.role not in ['super', 'dept', 'staff']:
+            return APIResponse.error(
+                message="의료진 권한이 필요합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+    except User.DoesNotExist:
+        return APIResponse.error(
+            message="권한이 부족합니다.",
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        # 호출된 지 10분 이상 지난 환자 찾기
+        missing_threshold = timezone.now() - timedelta(minutes=10)
+        
+        missing_queues = Queue.objects.filter(
+            state='called',
+            called_at__lt=missing_threshold
+        ).select_related('user', 'exam').order_by('called_at')
+        
+        missing_list = []
+        for queue in missing_queues:
+            missing_duration = timezone.now() - queue.called_at
+            missing_list.append({
+                'queueId': str(queue.queue_id),
+                'queueNumber': queue.queue_number,
+                'patientName': queue.user.get_full_name() if hasattr(queue.user, 'get_full_name') else queue.user.username,
+                'examName': queue.exam.exam_name,
+                'calledAt': queue.called_at.isoformat(),
+                'missingDuration': int(missing_duration.total_seconds() / 60),  # 분 단위
+                'priority': queue.priority,
+                'contactInfo': queue.user.phone if hasattr(queue.user, 'phone') else None
+            })
+        
+        # 통계
+        stats = {
+            'totalMissing': len(missing_list),
+            'byPriority': {
+                'emergency': len([m for m in missing_list if m['priority'] == 'emergency']),
+                'urgent': len([m for m in missing_list if m['priority'] == 'urgent']),
+                'normal': len([m for m in missing_list if m['priority'] == 'normal'])
+            },
+            'averageMissingTime': sum(m['missingDuration'] for m in missing_list) / len(missing_list) if missing_list else 0
+        }
+        
+        return APIResponse.success(
+            data={
+                'missingPatients': missing_list,
+                'statistics': stats
+            },
+            message="누락 환자 목록을 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Missing patients detection error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="누락 환자 감지 중 오류가 발생했습니다.",
+            code="MISSING_PATIENTS_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def queue_performance_metrics(request):
+    """
+    대기열 성능 메트릭 - GET /admin/queue/metrics
+    """
+    # 권한 확인 (Dept-Admin 이상)
+    try:
+        admin_user = User.objects.get(user=request.user)
+        if admin_user.role not in ['super', 'dept']:
+            return APIResponse.error(
+                message="부서 관리자 이상의 권한이 필요합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+    except User.DoesNotExist:
+        return APIResponse.error(
+            message="권한이 부족합니다.",
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        # 쿼리 파라미터
+        start_date = request.GET.get('startDate', (timezone.now() - timedelta(days=7)).date().isoformat())
+        end_date = request.GET.get('endDate', timezone.now().date().isoformat())
+        department = request.GET.get('department')
+        
+        # 기간 필터링
+        queues = Queue.objects.filter(
+            joined_at__date__range=[start_date, end_date]
+        )
+        
+        if department:
+            queues = queues.filter(exam__department=department)
+        
+        # 기본 메트릭
+        basic_metrics = queues.aggregate(
+            total_patients=Count('queue_id'),
+            completed_patients=Count('queue_id', filter=Q(state='completed')),
+            cancelled_patients=Count('queue_id', filter=Q(state='cancelled')),
+            avg_wait_time=Avg('estimated_wait_time'),
+            max_wait_time=Max('estimated_wait_time'),
+            min_wait_time=Min('estimated_wait_time')
+        )
+        
+        # 실제 대기 시간 vs 예상 대기 시간 분석
+        completed_queues = queues.filter(state='completed', completed_at__isnull=False)
+        wait_time_accuracy = []
+        
+        for q in completed_queues:
+            if q.called_at and q.joined_at:
+                actual_wait = (q.called_at - q.joined_at).total_seconds() / 60
+                estimated_wait = q.estimated_wait_time or 0
+                if estimated_wait > 0:
+                    accuracy = 100 - abs((actual_wait - estimated_wait) / estimated_wait * 100)
+                    wait_time_accuracy.append(max(0, accuracy))
+        
+        avg_accuracy = sum(wait_time_accuracy) / len(wait_time_accuracy) if wait_time_accuracy else 0
+        
+        # 처리 시간 분석
+        processing_times = []
+        for q in completed_queues:
+            if q.started_at and q.completed_at:
+                processing_time = (q.completed_at - q.started_at).total_seconds() / 60
+                processing_times.append(processing_time)
+        
+        # 시간대별 효율성
+        hourly_efficiency = []
+        for hour in range(8, 18):
+            hour_queues = queues.filter(joined_at__hour=hour)
+            completed = hour_queues.filter(state='completed').count()
+            total = hour_queues.count()
+            
+            hourly_efficiency.append({
+                'hour': hour,
+                'totalPatients': total,
+                'completedPatients': completed,
+                'completionRate': (completed / total * 100) if total > 0 else 0,
+                'avgWaitTime': hour_queues.aggregate(
+                    avg=Avg('estimated_wait_time')
+                )['avg'] or 0
+            })
+        
+        # 요일별 패턴
+        daily_patterns = []
+        for date in range(7):
+            target_date = timezone.now().date() - timedelta(days=date)
+            day_queues = queues.filter(joined_at__date=target_date)
+            
+            daily_patterns.append({
+                'date': target_date.isoformat(),
+                'dayOfWeek': target_date.strftime('%A'),
+                'totalPatients': day_queues.count(),
+                'avgWaitTime': day_queues.aggregate(
+                    avg=Avg('estimated_wait_time')
+                )['avg'] or 0,
+                'peakHour': day_queues.extra(
+                    select={'hour': "EXTRACT(hour FROM joined_at)"}
+                ).values('hour').annotate(
+                    count=Count('queue_id')
+                ).order_by('-count').first()
+            })
+        
+        return APIResponse.success(
+            data={
+                'basicMetrics': basic_metrics,
+                'waitTimeAccuracy': round(avg_accuracy, 2),
+                'processingTime': {
+                    'average': round(sum(processing_times) / len(processing_times), 2) if processing_times else 0,
+                    'max': round(max(processing_times), 2) if processing_times else 0,
+                    'min': round(min(processing_times), 2) if processing_times else 0
+                },
+                'hourlyEfficiency': hourly_efficiency,
+                'dailyPatterns': daily_patterns,
+                'period': {
+                    'startDate': start_date,
+                    'endDate': end_date
+                }
+            },
+            message="대기열 성능 메트릭을 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Queue performance metrics error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="대기열 성능 메트릭 조회 중 오류가 발생했습니다.",
+            code="METRICS_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

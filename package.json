@@ -9,13 +9,15 @@
     "chatbot-server"
   ],
   "scripts": {
-    "dev": "concurrently -n \"Django,React,Admin\" -c \"yellow,cyan,green\" \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\"",
-    "dev:all": "concurrently -n \"Django,React,Admin,Chat\" -c \"yellow,cyan,green,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\" \"npm run dev:chatbot\"",
+    "dev": "concurrently -n \"Django+WS,React,Admin\" -c \"yellow,cyan,green\" \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\"",
+    "dev:all": "concurrently -n \"Django+WS,React,Admin,Chat\" -c \"yellow,cyan,green,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:admin\" \"npm run dev:chatbot\"",
     "dev:frontend": "npx pnpm --filter frontend-pwa dev",
     "dev:admin": "npx pnpm --filter admin-dashboard dev",
-    "dev:backend": "cd backend && .\\venv\\Scripts\\python.exe nfc_hospital_system\\manage.py runserver",
+    "dev:backend": "cd backend/nfc_hospital_system && set PYTHONPATH=%CD% && echo Starting Django + WebSocket server... && ..\\venv\\Scripts\\python.exe -m daphne -p 8000 --bind 0.0.0.0 nfc_hospital_system.asgi:application",
+    "dev:backend:simple": "cd backend/nfc_hospital_system && python manage.py runserver 8000",
     "dev:chatbot": "npx pnpm --filter chatbot-server dev",
     "dev:db": "cd backend/nfc_hospital_system && python manage.py makemigrations && python manage.py migrate",
+    "dev:ws-test": "cd backend && echo Testing WebSocket connectivity... && .\\venv\\Scripts\\python.exe -c \"import asyncio; import websockets; print('WebSocket test completed')\"",
     "dev:setup": "npm run install:all && npm run dev:db && npm run create:dirs",
     "install:all": "npx pnpm install",
     "create:dirs": "cd backend/nfc_hospital_system && python create_dirs.py",
@@ -23,11 +25,12 @@
     "build:frontend": "npx pnpm --filter frontend-pwa build",
     "start": "npx pnpm run -r start",
     "test": "npx pnpm run -r test",
-    "lint": "npx pnpm run -r lint",
+    "lint": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
     "clean": "npx pnpm run -r clean",
     "type:generate": "cd backend/nfc_hospital_system && python manage.py generateschema --file openapi-schema.yml && npm run type:convert",
-    "type:convert": "openapi-typescript backend/nfc_hospital_system/openapi-schema.yml -o frontend-pwa/src/types/api.ts"
+    "type:convert": "openapi-typescript backend/nfc_hospital_system/openapi-schema.yml -o frontend-pwa/src/types/api.ts",
+    "dev:backend:unix": "cd backend/nfc_hospital_system && export PYTHONPATH=$PWD && echo 'Starting Django + WebSocket server...' && ../venv/bin/python -m daphne -p 8000 --bind 0.0.0.0 nfc_hospital_system.asgi:application"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",

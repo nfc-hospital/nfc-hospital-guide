@@ -23,6 +23,8 @@ from appointments.serializers import ExamSerializer
 
 from nfc_hospital_system.utils import APIResponse
 from authentication.models import User
+from datetime import datetime, timedelta
+from django.db.models import Count, Q, Avg, Max, Min
 
 logger = logging.getLogger(__name__)
 
@@ -577,3 +579,382 @@ def delete_tag_exam_mapping(request, mapping_id):
         )
 
 # 기존의 create_tag_exam_mapping 함수는 위에 nfc_tag_exam_mapping_create로 대체되었습니다.
+
+# 태그 관리 추가 API
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def bulk_tag_operation(request):
+    """
+    대량 태그 작업 API - POST /admin/nfc/tags/bulk
+    
+    다중 태그 일괄 등록/수정/활성화/비활성화
+    """
+    is_admin, error_msg = _check_admin_permission(request)
+    if not is_admin:
+        return APIResponse.error(
+            message=error_msg,
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        operation = request.data.get('operation')  # create, update, activate, deactivate
+        tag_ids = request.data.get('tag_ids', [])
+        tag_data = request.data.get('tag_data', {})
+        
+        if operation not in ['create', 'update', 'activate', 'deactivate']:
+            return APIResponse.error(
+                message="유효하지 않은 작업입니다.",
+                code="INVALID_OPERATION",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        results = {'success': [], 'failed': []}
+        
+        with transaction.atomic():
+            if operation == 'create':
+                # 대량 태그 생성
+                tags_to_create = request.data.get('tags', [])
+                for tag_info in tags_to_create:
+                    try:
+                        serializer = AdminNFCTagCreateSerializer(data=tag_info)
+                        if serializer.is_valid():
+                            tag = serializer.save()
+                            results['success'].append({
+                                'tag_id': str(tag.tag_id),
+                                'code': tag.code
+                            })
+                        else:
+                            results['failed'].append({
+                                'data': tag_info,
+                                'errors': serializer.errors
+                            })
+                    except Exception as e:
+                        results['failed'].append({
+                            'data': tag_info,
+                            'error': str(e)
+                        })
+            
+            elif operation in ['activate', 'deactivate']:
+                # 대량 활성화/비활성화
+                is_active = operation == 'activate'
+                updated = NFCTag.objects.filter(tag_id__in=tag_ids).update(
+                    is_active=is_active,
+                    modified_at=timezone.now()
+                )
+                results['success'] = {
+                    'updated_count': updated,
+                    'operation': operation
+                }
+            
+            elif operation == 'update':
+                # 대량 업데이트
+                for tag_id in tag_ids:
+                    try:
+                        tag = NFCTag.objects.get(tag_id=tag_id)
+                        serializer = AdminNFCTagUpdateSerializer(
+                            tag, data=tag_data, partial=True
+                        )
+                        if serializer.is_valid():
+                            serializer.save()
+                            results['success'].append(tag_id)
+                        else:
+                            results['failed'].append({
+                                'tag_id': tag_id,
+                                'errors': serializer.errors
+                            })
+                    except NFCTag.DoesNotExist:
+                        results['failed'].append({
+                            'tag_id': tag_id,
+                            'error': '태그를 찾을 수 없습니다.'
+                        })
+        
+        logger.info(f"Bulk tag operation - Admin: {request.user.user_id}, Operation: {operation}")
+        
+        return APIResponse.success(
+            data=results,
+            message=f"대량 태그 {operation} 작업이 완료되었습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Bulk tag operation error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="대량 태그 작업 중 오류가 발생했습니다.",
+            code="BULK_OPERATION_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def tag_usage_statistics(request):
+    """
+    태그 사용 통계 API - GET /admin/nfc/tags/statistics
+    
+    태그별 스캔 횟수, 오류율, 마지막 사용 시간 등
+    """
+    is_admin, error_msg = _check_admin_permission(request)
+    if not is_admin:
+        return APIResponse.error(
+            message=error_msg,
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        # 쿼리 파라미터
+        start_date = request.GET.get('startDate')
+        end_date = request.GET.get('endDate')
+        tag_id = request.GET.get('tagId')
+        location = request.GET.get('location')
+        
+        # 기본 쿼리셋
+        tags_query = NFCTag.objects.filter(is_active=True)
+        logs_query = TagLog.objects.all()
+        
+        # 날짜 필터링
+        if start_date:
+            start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            logs_query = logs_query.filter(timestamp__gte=start_date)
+        if end_date:
+            end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            logs_query = logs_query.filter(timestamp__lte=end_date)
+        
+        # 특정 태그 필터링
+        if tag_id:
+            tags_query = tags_query.filter(tag_id=tag_id)
+            logs_query = logs_query.filter(tag__tag_id=tag_id)
+        
+        # 위치 필터링
+        if location:
+            tags_query = tags_query.filter(location=location)
+        
+        # 태그별 통계 집계
+        tag_stats = []
+        for tag in tags_query:
+            tag_logs = logs_query.filter(tag=tag)
+            total_scans = tag_logs.count()
+            error_scans = tag_logs.filter(action_type='error').count()
+            
+            stats = {
+                'tagId': str(tag.tag_id),
+                'code': tag.code,
+                'location': tag.get_location_display(),
+                'totalScans': total_scans,
+                'errorRate': (error_scans / total_scans * 100) if total_scans > 0 else 0,
+                'lastScanTime': tag.last_scan_time.isoformat() if tag.last_scan_time else None,
+                'averageScansPerDay': 0,
+                'peakHour': None
+            }
+            
+            # 일평균 스캔 계산
+            if total_scans > 0 and start_date and end_date:
+                days_diff = (end_date - start_date).days or 1
+                stats['averageScansPerDay'] = round(total_scans / days_diff, 2)
+            
+            # 피크 시간대 계산
+            hourly_scans = tag_logs.extra(
+                select={'hour': "EXTRACT(hour FROM timestamp)"}
+            ).values('hour').annotate(count=Count('log_id')).order_by('-count').first()
+            
+            if hourly_scans:
+                stats['peakHour'] = int(hourly_scans['hour'])
+            
+            tag_stats.append(stats)
+        
+        # 전체 통계
+        overall_stats = {
+            'totalTags': tags_query.count(),
+            'totalScans': logs_query.count(),
+            'averageErrorRate': tag_stats and sum(t['errorRate'] for t in tag_stats) / len(tag_stats) or 0,
+            'mostUsedTags': sorted(tag_stats, key=lambda x: x['totalScans'], reverse=True)[:5],
+            'leastUsedTags': sorted(tag_stats, key=lambda x: x['totalScans'])[:5]
+        }
+        
+        return APIResponse.success(
+            data={
+                'statistics': tag_stats,
+                'summary': overall_stats
+            },
+            message="태그 사용 통계를 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Tag usage statistics error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="태그 사용 통계 조회 중 오류가 발생했습니다.",
+            code="STATISTICS_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def tag_status_monitoring(request):
+    """
+    태그 상태 모니터링 API - GET /admin/tags/status
+    
+    실시간 태그 상태 및 이상 징후 감지
+    """
+    is_admin, error_msg = _check_admin_permission(request)
+    if not is_admin:
+        return APIResponse.error(
+            message=error_msg,
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        # 임계값 설정
+        inactive_threshold = timezone.now() - timedelta(days=7)  # 7일간 미사용
+        high_error_threshold = 10  # 오류율 10% 이상
+        
+        # 문제 태그 감지
+        all_tags = NFCTag.objects.filter(is_active=True)
+        problem_tags = []
+        healthy_tags = []
+        
+        for tag in all_tags:
+            recent_logs = TagLog.objects.filter(
+                tag=tag,
+                timestamp__gte=timezone.now() - timedelta(days=7)
+            )
+            total_recent = recent_logs.count()
+            error_recent = recent_logs.filter(action_type='error').count()
+            
+            tag_status = {
+                'tagId': str(tag.tag_id),
+                'code': tag.code,
+                'location': tag.get_location_display(),
+                'status': 'healthy',
+                'issues': []
+            }
+            
+            # 장기간 미사용 체크
+            if not tag.last_scan_time or tag.last_scan_time < inactive_threshold:
+                tag_status['status'] = 'warning'
+                tag_status['issues'].append({
+                    'type': 'inactive',
+                    'message': '7일 이상 사용되지 않음',
+                    'severity': 'medium'
+                })
+            
+            # 높은 오류율 체크
+            if total_recent > 0:
+                error_rate = (error_recent / total_recent) * 100
+                if error_rate >= high_error_threshold:
+                    tag_status['status'] = 'error'
+                    tag_status['issues'].append({
+                        'type': 'high_error_rate',
+                        'message': f'오류율 {error_rate:.1f}%',
+                        'severity': 'high'
+                    })
+            
+            # 배터리 수명 체크 (추후 하드웨어 연동 시 구현)
+            # if tag.battery_level and tag.battery_level < 20:
+            #     tag_status['issues'].append({
+            #         'type': 'low_battery',
+            #         'message': f'배터리 {tag.battery_level}%',
+            #         'severity': 'medium'
+            #     })
+            
+            if tag_status['issues']:
+                problem_tags.append(tag_status)
+            else:
+                healthy_tags.append(tag_status)
+        
+        # 요약 정보
+        summary = {
+            'totalTags': all_tags.count(),
+            'healthyCount': len(healthy_tags),
+            'warningCount': len([t for t in problem_tags if t['status'] == 'warning']),
+            'errorCount': len([t for t in problem_tags if t['status'] == 'error']),
+            'lastCheckTime': timezone.now().isoformat()
+        }
+        
+        return APIResponse.success(
+            data={
+                'summary': summary,
+                'problemTags': problem_tags,
+                'healthyTags': healthy_tags[:10]  # 건강한 태그는 10개만 표시
+            },
+            message="태그 상태 모니터링 정보를 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Tag status monitoring error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="태그 상태 모니터링 중 오류가 발생했습니다.",
+            code="MONITORING_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def tag_assignment_history(request, tag_id):
+    """
+    태그 할당 이력 조회 API - GET /admin/nfc/tags/{tagId}/history
+    
+    특정 태그의 검사 매핑 변경 이력
+    """
+    is_admin, error_msg = _check_admin_permission(request)
+    if not is_admin:
+        return APIResponse.error(
+            message=error_msg,
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        tag = get_object_or_404(NFCTag, tag_id=tag_id)
+        
+        # 현재 및 과거 매핑 조회
+        all_mappings = NFCTagExam.objects.filter(tag=tag).order_by('-created_at')
+        
+        history = []
+        for mapping in all_mappings:
+            history.append({
+                'mappingId': mapping.id,
+                'examId': mapping.exam_id,
+                'examName': mapping.exam_name,
+                'examRoom': mapping.exam_room,
+                'isActive': mapping.is_active,
+                'createdAt': mapping.created_at.isoformat(),
+                'deactivatedAt': mapping.modified_at.isoformat() if not mapping.is_active else None
+            })
+        
+        # 스캔 로그 요약
+        scan_summary = TagLog.objects.filter(tag=tag).aggregate(
+            totalScans=Count('log_id'),
+            firstScan=Min('timestamp'),
+            lastScan=Max('timestamp')
+        )
+        
+        return APIResponse.success(
+            data={
+                'tag': {
+                    'tagId': str(tag.tag_id),
+                    'code': tag.code,
+                    'location': tag.get_location_display(),
+                    'createdAt': tag.created_at.isoformat()
+                },
+                'mappingHistory': history,
+                'scanSummary': {
+                    'totalScans': scan_summary['totalScans'],
+                    'firstScan': scan_summary['firstScan'].isoformat() if scan_summary['firstScan'] else None,
+                    'lastScan': scan_summary['lastScan'].isoformat() if scan_summary['lastScan'] else None
+                }
+            },
+            message="태그 할당 이력을 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Tag assignment history error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="태그 할당 이력 조회 중 오류가 발생했습니다.",
+            code="HISTORY_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

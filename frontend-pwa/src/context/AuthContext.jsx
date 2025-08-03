@@ -1,5 +1,7 @@
 // frontend-pwa/src/context/AuthContext.jsx - 완전 수정 버전
 import { createContext, useContext, useState, useEffect } from 'react';
+import { getCSRFToken, debugCSRFToken } from '../utils/csrf';
+import { authAPI } from '../api/client';
 
 // 인증 컨텍스트 생성
 const AuthContext = createContext(null);
@@ -24,6 +26,22 @@ export function AuthProvider({ children }) {
   const login = async (phoneNumber, birthDate) => {
     try {
       console.log('🔐 실제 간편 로그인 API 호출...');
+      
+      // 먼저 CSRF 토큰 확인
+      let csrfToken = getCSRFToken();
+      if (!csrfToken) {
+        console.log('🔄 CSRF 토큰 없음, 새로 가져오는 중...');
+        try {
+          await fetch('/api/v1/auth/csrf-token/', {
+            method: 'GET',
+            credentials: 'include'
+          });
+          csrfToken = getCSRFToken();
+          console.log('✅ CSRF 토큰 획득:', csrfToken ? '성공' : '실패');
+        } catch (error) {
+          console.warn('⚠️ CSRF 토큰 가져오기 실패:', error);
+        }
+      }
       
       if (phoneNumber.length !== 4 || birthDate.length !== 6) {
         throw new Error('전화번호 뒷자리 4자리와 생년월일 6자리를 정확히 입력해주세요.');
@@ -52,23 +70,8 @@ export function AuthProvider({ children }) {
 
       console.log('🚀 API 요청 데이터:', requestData);
 
-      const response = await fetch('/api/v1/auth/simple-login/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData)
-      });
-
-      console.log('📨 API 응답 상태:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.log('❌ 에러 응답:', errorData);
-        throw new Error(errorData.error?.message || errorData.message || `HTTP ${response.status}: 로그인에 실패했습니다.`);
-      }
-
-      const data = await response.json();
+      // axios 인터셉터를 통해 CSRF 토큰이 자동으로 추가됨
+      const data = await authAPI.login(requestData);
       console.log('✅ 로그인 API 응답:', data);
 
       // 🔧 올바른 응답 구조에서 토큰 추출

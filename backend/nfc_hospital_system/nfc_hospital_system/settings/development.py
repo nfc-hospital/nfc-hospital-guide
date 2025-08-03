@@ -55,13 +55,31 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",      # React Admin Dashboard
     "http://127.0.0.1:3000",
-    "http://localhost:5173",      # React PWA (Vite)
+    "http://localhost:5173",      # React PWA (Vite) - 1
     "http://127.0.0.1:5173",
     "http://localhost:5000",      # Flask Chatbot Server
     "http://127.0.0.1:5000",
     "http://localhost:8000",      # Django 자체
     "http://127.0.0.1:8000",
+    "http://localhost:5174",      # React PWA (Vite) - 2
+    "http://127.0.0.1:5174",
 ]
+
+# CSRF_TRUSTED_ORIGINS 설정 추가
+# Django의 CSRF 보호가 신뢰할 수 있는 Origin을 명시합니다.
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://localhost:5174', 
+    'http://127.0.0.1:5174', 
+]
+
 
 # 개발 환경에서 추가 CORS 설정
 CORS_ALLOW_METHODS = [

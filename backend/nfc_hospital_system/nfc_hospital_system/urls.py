@@ -55,11 +55,11 @@ urlpatterns = [
     path('api/v1/queue/', include('p_queue.urls')),              # 대기열 
     path('api/v1/admin/', include('admin_dashboard.urls')),    # 관리자
     
-    # Phase 2 확장 기능 (나중에 활성화)
+    # Phase 2 확장 기능
     # path('api/v1/chatbot/', include('chatbot.urls')),         # AI 챗봇
     # path('api/v1/navigation/', include('navigation.urls')),   # 경로 안내
     # path('api/v1/ai/', include('ai_models.urls')),            # AI 모델
-    # path('api/v1/analytics/', include('analytics.urls')),     # 분석
+    path('api/v1/analytics/', include('analytics.urls')),        # 분석 (활성화됨)
     
     # Phase 3 완성 기능 (나중에 활성화)
     # path('api/v1/integration/', include('integrations.urls')), # 외부 연동

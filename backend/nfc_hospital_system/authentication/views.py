@@ -11,6 +11,9 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 import json
+from rest_framework.views import APIView
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 
 
 # 조건부 import
@@ -344,6 +347,17 @@ def profile(request):
                 "message": f"프로필 조회 중 오류: {str(e)}"
             }
         }, status=500)
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class CSRFTokenView(APIView):
+    """
+    CSRF 토큰을 쿠키로 설정하는 엔드포인트.
+    이 뷰는 GET 요청에 대해 아무것도 반환하지 않아도 Django가 csrftoken 쿠키를 설정합니다.
+    """
+    permission_classes = [] # 모든 사용자가 접근 가능하도록 설정
+
+    def get(self, request):
+        return Response({"detail": "CSRF cookie set"})
     
 
 

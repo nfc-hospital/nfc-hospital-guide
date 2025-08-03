@@ -11,7 +11,7 @@ class NFCTagExamInline(admin.TabularInline):
     """
     model = NFCTagExam
     extra = 1  # 기본으로 보여줄 빈 폼의 개수
-    fields = ('exam_id', 'exam_name', 'exam_room', 'is_active')
+    fields = ('exam', 'exam_name', 'exam_room', 'is_active')
 
 
 

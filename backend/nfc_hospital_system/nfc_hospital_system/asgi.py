@@ -12,7 +12,7 @@ try:
     from channels.auth import AuthMiddlewareStack
     from . import routing
     
-    print("✅ Channels import 성공")
+    print("Channels import success")
     
     application = ProtocolTypeRouter({
         "http": django_asgi_app,
@@ -20,9 +20,9 @@ try:
             URLRouter(routing.websocket_urlpatterns)
         ),
     })
-    print("✅ ASGI application 설정 완료")
+    print("ASGI application setup complete")
     
 except ImportError as e:
-    print(f"❌ Channels import 실패: {e}")
+    print(f"Channels import failed: {e}")
     # Channels 없이 기본 ASGI만 사용
     application = django_asgi_app

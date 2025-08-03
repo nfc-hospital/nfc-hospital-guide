@@ -244,7 +244,7 @@ class QueueConsumer(AsyncWebsocketConsumer):
     # === 5단계에서 추가된 새로운 메서드들 ===
     async def queue_status_update(self, event):
         """Signal에서 전송된 대기열 상태 업데이트를 클라이언트에 전송"""
-        print(f"🔔 Consumer에서 알림 전송: {event['data']}")
+        print(f"Consumer notification sent: {event['data']}")
         
         await self.send(text_data=json.dumps({
             'type': 'queue_status_update',
@@ -252,7 +252,7 @@ class QueueConsumer(AsyncWebsocketConsumer):
             'timestamp': datetime.now().isoformat()
         }))
         
-        print("✅ 클라이언트로 알림 전송 완료")
+        print("Client notification sent successfully")
 
     async def personal_notification(self, event):
         """개인 알림 전송 (signals.py에서 호출)"""

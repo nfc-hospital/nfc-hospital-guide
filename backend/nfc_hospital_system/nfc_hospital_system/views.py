@@ -6,6 +6,7 @@ from django.views.generic import TemplateView
 from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
+from django.middleware.csrf import get_token
 import os
 
 
@@ -32,7 +33,7 @@ class ReactAppView(TemplateView):
                 if settings.DEBUG:
                     # 개발 환경에서는 React 개발 서버로 프록시
                     return render(request, 'react_dev.html', {
-                        'react_dev_server': 'http://localhost:5173'
+                        'react_dev_server': 'http://localhost:5174'
                     })
                 else:
                     return JsonResponse({
@@ -78,3 +79,4 @@ def custom_500(request):
             "<h1>500 - 서버 오류</h1><p>서버 오류가 발생했습니다.</p>",
             status=500
         )
+

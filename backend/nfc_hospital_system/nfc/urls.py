@@ -21,6 +21,12 @@ urlpatterns = [
     path('tags/<uuid:tag_id>/exams', views.get_tag_exams_list, name='get_tag_exams_list'), # GET
     path('tags/mapping/<int:mapping_id>', views.delete_tag_exam_mapping, name='delete_tag_exam_mapping'), # DELETE
     
+    # 추가된 태그 관리 API
+    path('admin/nfc/tags/bulk/', views.bulk_tag_operation, name='bulk-tag-operation'),
+    path('admin/nfc/tags/statistics/', views.tag_usage_statistics, name='tag-usage-statistics'),
+    path('admin/tags/status/', views.tag_status_monitoring, name='tag-status-monitoring'),
+    path('admin/nfc/tags/<uuid:tag_id>/history/', views.tag_assignment_history, name='tag-assignment-history'),
+    
     # ViewSet URLs
     path('', include(router.urls)),
 ]
