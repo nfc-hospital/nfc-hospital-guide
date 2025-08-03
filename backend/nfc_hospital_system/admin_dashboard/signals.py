@@ -48,7 +48,7 @@ def queue_status_notification(sender, instance, created, **kwargs):
                         "queue_id": str(instance.queue_id),
                         "queue_number": instance.queue_number,
                         "state": instance.state,
-                        "exam_name": instance.exam.exam_name if instance.exam else "Unknown",
+                        "exam_name": instance.exam.title if instance.exam else "Unknown",
                         "priority": instance.priority,
                         "created": created
                     }
@@ -65,7 +65,7 @@ def queue_status_notification(sender, instance, created, **kwargs):
                         "state": instance.state,
                         "queue_number": instance.queue_number,
                         "estimated_wait_time": instance.estimated_wait_time,
-                        "exam_name": instance.exam.exam_name if instance.exam else "Unknown"
+                        "exam_name": instance.exam.title if instance.exam else "Unknown"
                     }
                 }
             )

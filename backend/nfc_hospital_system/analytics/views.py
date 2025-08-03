@@ -1,9 +1,11 @@
+# analytics/views.py
+
 from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status, permissions
-from django.db.models import Count, Avg, Max, Min, Q, Sum, F
-from django.db.models.functions import TruncHour, TruncDate, ExtractHour, ExtractWeekDay
+from django.db.models import Count, Avg, Max, Min, Q, Sum, F, ExpressionWrapper, fields
+from django.db.models.functions import TruncHour, TruncDate, ExtractHour, ExtractWeekDay, Extract
 from django.utils import timezone
 from datetime import datetime, timedelta
 import json
@@ -34,7 +36,7 @@ except ImportError:
     PDF_AVAILABLE = False
 
 from nfc_hospital_system.utils import APIResponse
-from authentication.models import User
+from authentication.models import User # 이 User는 커스텀 User 모델입니다.
 from nfc.models import NFCTag, TagLog
 from p_queue.models import Queue, QueueStatusLog
 from appointments.models import Appointment, Exam
@@ -45,13 +47,19 @@ logger = logging.getLogger(__name__)
 # 권한 확인 헬퍼 함수
 def _check_analytics_permission(request):
     """분석/통계 권한 확인 - Dept-Admin 이상"""
-    try:
-        admin_user = User.objects.get(user=request.user)
-        if admin_user.role not in ['super', 'dept']:
-            return False, "부서 관리자 이상의 권한이 필요합니다."
-        return True, None
-    except User.DoesNotExist:
-        return False, "권한이 부족합니다."
+    # request.user는 이미 인증된 User 객체 (또는 AnonymousUser)입니다.
+    # User 모델을 다시 쿼리할 필요 없이 request.user 객체의 role을 바로 확인합니다.
+    if not request.user.is_authenticated:
+        return False, "로그인이 필요합니다."
+    
+    # request.user는 authentication.models.User 인스턴스라고 가정
+    # admin_user = User.objects.get(user=request.user) # 이 줄이 문제였습니다. 제거하거나 주석 처리합니다.
+    
+    # 직접 request.user.role을 확인합니다.
+    if request.user.role not in ['super', 'dept']:
+        return False, "부서 관리자 이상의 권한이 필요합니다."
+    
+    return True, None
 
 # 통계 데이터 API
 
@@ -88,11 +96,20 @@ def patient_flow_analysis(request):
         
         # 가장 많이 방문한 위치
         popular_locations = tag_logs.values(
-            'tag__location'
+            'tag__building', 'tag__floor', 'tag__room'
         ).annotate(
             visit_count=Count('log_id'),
             unique_visitors=Count('user', distinct=True)
         ).order_by('-visit_count')[:10]
+        
+        # 위치 정보를 문자열로 조합
+        popular_locations_formatted = []
+        for loc in popular_locations:
+            popular_locations_formatted.append({
+                'location': f"{loc['tag__building']} {loc['tag__floor']}층 {loc['tag__room']}",
+                'visit_count': loc['visit_count'],
+                'unique_visitors': loc['unique_visitors']
+            })
         
         # 위치별 평균 체류 시간 (다음 스캔까지의 시간)
         location_durations = {}
@@ -148,7 +165,7 @@ def patient_flow_analysis(request):
         
         # 병목 구간 식별 (같은 위치에서 짧은 시간 내 여러 스캔)
         bottlenecks = []
-        location_scans = tag_logs.values('tag__location').annotate(
+        location_scans = tag_logs.values('tag__building', 'tag__floor', 'tag__room').annotate(
             total_scans=Count('log_id'),
             unique_users=Count('user', distinct=True),
             scans_per_user=F('total_scans') / F('unique_users')
@@ -156,7 +173,7 @@ def patient_flow_analysis(request):
         
         for loc in location_scans:
             bottlenecks.append({
-                'location': loc['tag__location'],
+                'location': f"{loc['tag__building']} {loc['tag__floor']}층 {loc['tag__room']}",
                 'totalScans': loc['total_scans'],
                 'uniqueUsers': loc['unique_users'],
                 'avgScansPerUser': round(loc['scans_per_user'], 2),
@@ -173,7 +190,7 @@ def patient_flow_analysis(request):
                         'end': end_date.isoformat()
                     }
                 },
-                'popularLocations': list(popular_locations),
+                'popularLocations': popular_locations_formatted,
                 'locationDurations': avg_durations,
                 'flowPatterns': flow_patterns[:20],  # 최대 20개 패턴만 반환
                 'hourlyTraffic': list(hourly_traffic),
@@ -219,8 +236,9 @@ def waiting_time_statistics(request):
         end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
         
         # 대기열 데이터 필터링
+        # `joined_at` 필드 대신 `created_at` 필드를 사용
         queues = Queue.objects.filter(
-            joined_at__range=[start_date, end_date]
+            created_at__range=[start_date, end_date]
         )
         
         if department:
@@ -242,8 +260,9 @@ def waiting_time_statistics(request):
         
         wait_time_comparison = []
         for q in completed_queues:
-            if q.called_at and q.joined_at:
-                actual_wait = (q.called_at - q.joined_at).total_seconds() / 60
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
+            if q.called_at and q.created_at:
+                actual_wait = (q.called_at - q.created_at).total_seconds() / 60
                 estimated_wait = q.estimated_wait_time or 0
                 wait_time_comparison.append({
                     'actual': round(actual_wait, 2),
@@ -254,29 +273,33 @@ def waiting_time_statistics(request):
         
         # 시간대별 트렌드
         if granularity == 'hourly':
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
             time_trends = queues.annotate(
-                period=ExtractHour('joined_at')
+                period=ExtractHour('created_at')
             ).values('period').annotate(
                 avg_wait=Avg('estimated_wait_time'),
                 patient_count=Count('queue_id')
             ).order_by('period')
         elif granularity == 'weekly':
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
             time_trends = queues.annotate(
-                period=ExtractWeekDay('joined_at')
+                period=ExtractWeekDay('created_at')
             ).values('period').annotate(
                 avg_wait=Avg('estimated_wait_time'),
                 patient_count=Count('queue_id')
             ).order_by('period')
         elif granularity == 'monthly':
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
             time_trends = queues.annotate(
-                period=TruncDate('joined_at')
+                period=TruncDate('created_at')
             ).values('period').annotate(
                 avg_wait=Avg('estimated_wait_time'),
                 patient_count=Count('queue_id')
             ).order_by('period')
         else:  # daily
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
             time_trends = queues.annotate(
-                period=TruncDate('joined_at')
+                period=TruncDate('created_at')
             ).values('period').annotate(
                 avg_wait=Avg('estimated_wait_time'),
                 patient_count=Count('queue_id')
@@ -361,9 +384,10 @@ def congestion_heatmap(request):
         heatmap_data = []
         
         # 각 위치별로 시간대별 혼잡도 계산
-        locations = NFCTag.objects.values_list('location', flat=True).distinct()
+        locations = NFCTag.objects.values('building', 'floor', 'room').distinct()
         
-        for location in locations:
+        for loc in locations:
+            location = f"{loc['building']} {loc['floor']}층 {loc['room']}"
             location_data = {
                 'location': location,
                 'hourlyData': []
@@ -372,7 +396,9 @@ def congestion_heatmap(request):
             for hour in range(24):
                 # 해당 시간대의 스캔 수 계산
                 scans = TagLog.objects.filter(
-                    tag__location=location,
+                    tag__building=loc['building'],
+                    tag__floor=loc['floor'],
+                    tag__room=loc['room'],
                     timestamp__range=[start_date, end_date],
                     timestamp__hour=hour
                 ).count()
@@ -419,15 +445,24 @@ def congestion_heatmap(request):
             timestamp__range=[start_date, end_date]
         ).annotate(
             hour=ExtractHour('timestamp')
-        ).values('hour', 'tag__location').annotate(
+        ).values('hour', 'tag__building', 'tag__floor', 'tag__room').annotate(
             scan_count=Count('log_id')
         ).order_by('-scan_count')[:10]
+        
+        # 위치 정보를 문자열로 조합
+        peak_times_formatted = []
+        for pt in peak_times:
+            peak_times_formatted.append({
+                'hour': pt['hour'],
+                'location': f"{pt['tag__building']} {pt['tag__floor']}층 {pt['tag__room']}",
+                'scan_count': pt['scan_count']
+            })
         
         return APIResponse.success(
             data={
                 'heatmapData': heatmap_data,
                 'weekdayPatterns': weekday_patterns,
-                'peakTimes': list(peak_times),
+                'peakTimes': peak_times_formatted,
                 'legend': {
                     0: '매우 한산',
                     1: '한산',
@@ -494,7 +529,7 @@ def nfc_usage_analytics(request):
                 'totalScans': logs.count(),
                 'uniqueUsers': logs.values('user').distinct().count(),
                 'errorCount': logs.filter(action_type='error').count(),
-                'lastScanTime': tag.last_scan_time.isoformat() if tag.last_scan_time else None
+                'lastScanTime': tag.last_scanned_at.isoformat() if tag.last_scanned_at else None
             }
             
             # 사용률 계산 (일평균 스캔 수)
@@ -515,11 +550,21 @@ def nfc_usage_analytics(request):
         # 위치별 집계
         location_stats = TagLog.objects.filter(
             timestamp__range=[start_date, end_date]
-        ).values('tag__location').annotate(
+        ).values('tag__building', 'tag__floor', 'tag__room').annotate(
             total_scans=Count('log_id'),
             unique_users=Count('user', distinct=True),
             avg_daily_scans=Count('log_id') / days_diff
         )
+        
+        # 위치 정보를 문자열로 조합
+        location_stats_formatted = []
+        for stat in location_stats:
+            location_stats_formatted.append({
+                'location': f"{stat['tag__building']} {stat['tag__floor']}층 {stat['tag__room']}",
+                'total_scans': stat['total_scans'],
+                'unique_users': stat['unique_users'],
+                'avg_daily_scans': stat['avg_daily_scans']
+            })
         
         # 시간대별 사용 패턴
         hourly_usage = TagLog.objects.filter(
@@ -533,13 +578,13 @@ def nfc_usage_analytics(request):
         # 미사용 태그 감지
         unused_tags = []
         for tag in NFCTag.objects.filter(is_active=True):
-            if not tag.last_scan_time or tag.last_scan_time < timezone.now() - timedelta(days=7):
+            if not tag.last_scanned_at or tag.last_scanned_at < timezone.now() - timedelta(days=7):
                 unused_tags.append({
                     'tagId': str(tag.tag_id),
                     'code': tag.code,
                     'location': tag.get_location_display(),
-                    'lastScanTime': tag.last_scan_time.isoformat() if tag.last_scan_time else None,
-                    'daysSinceLastScan': (timezone.now() - tag.last_scan_time).days if tag.last_scan_time else None
+                    'lastScanTime': tag.last_scanned_at.isoformat() if tag.last_scanned_at else None,
+                    'daysSinceLastScan': (timezone.now() - tag.last_scanned_at).days if tag.last_scanned_at else None
                 })
         
         return APIResponse.success(
@@ -556,7 +601,7 @@ def nfc_usage_analytics(request):
                     'bottom10': tag_usage_sorted[-10:] if len(tag_usage_sorted) > 10 else [],
                     'all': tag_usage_sorted
                 },
-                'locationStats': list(location_stats),
+                'locationStats': location_stats_formatted,
                 'hourlyPattern': list(hourly_usage),
                 'unusedTags': unused_tags,
                 'period': {
@@ -598,9 +643,11 @@ def identify_bottlenecks(request):
         
         # 대기시간 기준 병목 구간
         long_wait_exams = Exam.objects.annotate(
-            avg_wait=Avg('queue__estimated_wait_time'),
-            total_patients=Count('queue'),
-            completion_rate=Count('queue', filter=Q(queue__state='completed')) * 100.0 / Count('queue')
+            # 'queue' 대신 'queues' 사용
+            avg_wait=Avg('queues__estimated_wait_time'),
+            total_patients=Count('queues'),
+            # 'queue' 대신 'queues' 사용
+            completion_rate=Count('queues', filter=Q(queues__state='completed')) * 100.0 / Count('queues')
         ).filter(
             avg_wait__gt=30  # 평균 대기시간 30분 초과
         ).order_by('-avg_wait')
@@ -609,7 +656,8 @@ def identify_bottlenecks(request):
         for exam in long_wait_exams:
             wait_bottlenecks.append({
                 'examId': exam.exam_id,
-                'examName': exam.exam_name,
+                # 'exam_name' 대신 'title' 사용 (Exam 모델에 exam_name 필드가 없으므로)
+                'examName': exam.title, 
                 'department': exam.department,
                 'avgWaitTime': round(exam.avg_wait or 0, 2),
                 'totalPatients': exam.total_patients,
@@ -618,21 +666,49 @@ def identify_bottlenecks(request):
             })
         
         # 반복 스캔 기준 병목 구간
-        repeat_scan_locations = TagLog.objects.values(
-            'tag__location', 'user'
+        # 먼저 사용자별 스캔 횟수를 계산
+        user_scans = TagLog.objects.values(
+            'tag__building', 'tag__floor', 'tag__room', 'user'
         ).annotate(
             scan_count=Count('log_id')
         ).filter(
             scan_count__gt=3  # 같은 사용자가 같은 위치에서 3회 이상 스캔
-        ).values('tag__location').annotate(
-            total_repeat_users=Count('user', distinct=True),
-            avg_scans_per_user=Avg('scan_count')
-        ).order_by('-total_repeat_users')
+        )
+        
+        # 위치별로 집계
+        repeat_scan_locations = []
+        location_data = {}
+        
+        for scan in user_scans:
+            # 위치를 문자열로 조합
+            location = f"{scan['tag__building']} {scan['tag__floor']}층 {scan['tag__room']}"
+            if location not in location_data:
+                location_data[location] = {
+                    'users': set(),
+                    'scan_counts': []
+                }
+            location_data[location]['users'].add(scan['user'])
+            location_data[location]['scan_counts'].append(scan['scan_count'])
+        
+        for location, data in location_data.items():
+            if data['scan_counts']:
+                repeat_scan_locations.append({
+                    'location': location,
+                    'total_repeat_users': len(data['users']),
+                    'avg_scans_per_user': sum(data['scan_counts']) / len(data['scan_counts'])
+                })
+        
+        # 정렬
+        repeat_scan_locations = sorted(
+            repeat_scan_locations, 
+            key=lambda x: x['total_repeat_users'], 
+            reverse=True
+        )
         
         scan_bottlenecks = []
         for loc in repeat_scan_locations:
             scan_bottlenecks.append({
-                'location': loc['tag__location'],
+                'location': loc['location'],
                 'affectedUsers': loc['total_repeat_users'],
                 'avgScansPerUser': round(loc['avg_scans_per_user'] or 0, 2),
                 'severity': 'high' if loc['avg_scans_per_user'] > 5 else 'medium'
@@ -642,8 +718,9 @@ def identify_bottlenecks(request):
         hourly_bottlenecks = []
         for hour in range(8, 18):  # 업무시간 8-18시
             hour_queues = Queue.objects.filter(
-                joined_at__hour=hour,
-                joined_at__gte=timezone.now() - timedelta(days=7)
+                # `joined_at` 필드 대신 `created_at` 필드를 사용
+                created_at__hour=hour,
+                created_at__gte=timezone.now() - timedelta(days=7)
             )
             
             avg_wait = hour_queues.aggregate(avg=Avg('estimated_wait_time'))['avg'] or 0
@@ -662,10 +739,13 @@ def identify_bottlenecks(request):
         slow_transitions = Queue.objects.filter(
             state='called',
             called_at__lt=timezone.now() - timedelta(minutes=15)
-        ).values('exam__exam_name').annotate(
+        ).values('exam__title').annotate( # 'exam__exam_name' 대신 'exam__title' 사용
             count=Count('queue_id'),
             avg_delay=Avg(
-                (timezone.now() - F('called_at')).total_seconds() / 60
+                ExpressionWrapper(
+                    Extract(timezone.now() - F('called_at'), 'epoch') / 60.0,
+                    output_field=fields.FloatField()
+                )
             )
         )
         
@@ -673,7 +753,7 @@ def identify_bottlenecks(request):
             if trans['count'] > 0:
                 process_bottlenecks.append({
                     'type': 'call_to_progress_delay',
-                    'examName': trans['exam__exam_name'],
+                    'examName': trans['exam__title'], # 'exam__exam_name' 대신 'exam__title' 사용
                     'affectedCount': trans['count'],
                     'avgDelay': round(trans['avg_delay'] or 0, 2),
                     'severity': 'high'
@@ -770,8 +850,9 @@ def custom_report(request):
         
         # 요청된 메트릭별 데이터 수집
         if 'waitTime' in metrics:
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
             wait_stats = Queue.objects.filter(
-                joined_at__range=[start_date, end_date]
+                created_at__range=[start_date, end_date]
             )
             if departments:
                 wait_stats = wait_stats.filter(exam__department__in=departments)
@@ -780,7 +861,8 @@ def custom_report(request):
                 'average': wait_stats.aggregate(avg=Avg('estimated_wait_time'))['avg'] or 0,
                 'max': wait_stats.aggregate(max=Max('estimated_wait_time'))['max'] or 0,
                 'trend': list(wait_stats.annotate(
-                    date=TruncDate('joined_at')
+                    # `joined_at` 필드 대신 `created_at` 필드를 사용
+                    date=TruncDate('created_at')
                 ).values('date').annotate(
                     avg_wait=Avg('estimated_wait_time')
                 ).order_by('date'))
@@ -791,23 +873,35 @@ def custom_report(request):
                 timestamp__range=[start_date, end_date]
             )
             
+            popular_locations = flow_data.values(
+                'tag__building', 'tag__floor', 'tag__room'
+            ).annotate(
+                count=Count('log_id')
+            ).order_by('-count')[:10]
+            
+            # 위치 정보를 문자열로 조합
+            popular_locations_formatted = []
+            for loc in popular_locations:
+                popular_locations_formatted.append({
+                    'location': f"{loc['tag__building']} {loc['tag__floor']}층 {loc['tag__room']}",
+                    'count': loc['count']
+                })
+            
             report_data['data']['patientFlow'] = {
                 'totalScans': flow_data.count(),
                 'uniquePatients': flow_data.values('user').distinct().count(),
-                'popularLocations': list(flow_data.values(
-                    'tag__location'
-                ).annotate(
-                    count=Count('log_id')
-                ).order_by('-count')[:10])
+                'popularLocations': popular_locations_formatted
             }
         
         if 'efficiency' in metrics:
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
             completed = Queue.objects.filter(
-                joined_at__range=[start_date, end_date],
+                created_at__range=[start_date, end_date],
                 state='completed'
             ).count()
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
             total = Queue.objects.filter(
-                joined_at__range=[start_date, end_date]
+                created_at__range=[start_date, end_date]
             ).count()
             
             report_data['data']['efficiency'] = {
@@ -912,8 +1006,9 @@ def _get_export_data(data_type, start_date, end_date):
     if data_type == 'queue':
         headers = ['Queue ID', 'Queue Number', 'Patient', 'Exam', 'State', 'Priority', 'Wait Time', 'Joined At']
         
+        # `joined_at` 필드 대신 `created_at` 필드를 사용
         queues = Queue.objects.filter(
-            joined_at__range=[start_date, end_date]
+            created_at__range=[start_date, end_date]
         ).select_related('user', 'exam')
         
         data = []
@@ -922,11 +1017,13 @@ def _get_export_data(data_type, start_date, end_date):
                 str(q.queue_id),
                 q.queue_number,
                 q.user.username if q.user else 'N/A',
-                q.exam.exam_name if q.exam else 'N/A',
+                # `exam_name` 대신 `title` 사용
+                q.exam.title if q.exam else 'N/A', 
                 q.state,
                 q.priority,
                 q.estimated_wait_time or 0,
-                q.joined_at.strftime('%Y-%m-%d %H:%M:%S')
+                # `joined_at` 필드 대신 `created_at` 필드를 사용
+                q.created_at.strftime('%Y-%m-%d %H:%M:%S')
             ])
     
     elif data_type == 'nfc':
@@ -947,7 +1044,7 @@ def _get_export_data(data_type, start_date, end_date):
                 tag.get_location_display(),
                 'Yes' if tag.is_active else 'No',
                 scan_count,
-                tag.last_scan_time.strftime('%Y-%m-%d %H:%M:%S') if tag.last_scan_time else 'Never'
+                tag.last_scanned_at.strftime('%Y-%m-%d %H:%M:%S') if tag.last_scanned_at else 'Never'
             ])
     
     elif data_type == 'analytics':
@@ -957,8 +1054,9 @@ def _get_export_data(data_type, start_date, end_date):
         for date in range((end_date - start_date).days + 1):
             target_date = start_date + timedelta(days=date)
             
+            # `joined_at` 필드 대신 `created_at` 필드를 사용
             day_stats = Queue.objects.filter(
-                joined_at__date=target_date.date()
+                created_at__date=target_date.date()
             ).aggregate(
                 total=Count('queue_id'),
                 avg_wait=Avg('estimated_wait_time'),

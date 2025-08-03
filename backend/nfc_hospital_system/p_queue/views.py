@@ -249,13 +249,10 @@ def queue_realtime_sse(request):
     Server-Sent Events를 사용한 실시간 대기열 업데이트
     """
     # 권한 확인 (Staff 이상)
-    try:
-        admin_user = User.objects.get(user=request.user)
-        if admin_user.role not in ['super', 'dept', 'staff']:
-            return Response({'error': '권한이 부족합니다.'}, status=status.HTTP_403_FORBIDDEN)
-    except User.DoesNotExist:
+    admin_user = request.user
+    if admin_user.role not in ['super', 'dept', 'staff']:
         return Response({'error': '권한이 부족합니다.'}, status=status.HTTP_403_FORBIDDEN)
-    
+
     def event_stream():
         while True:
             try:
@@ -283,7 +280,7 @@ def queue_realtime_sse(request):
                     
                     dept_queues.append({
                         'examId': exam.exam_id,
-                        'examName': exam.exam_name,
+                        'examName': exam.title,
                         'department': exam.department,
                         'waitingCount': dept_stat['waiting_count'],
                         'calledCount': dept_stat['called_count'],
@@ -298,7 +295,7 @@ def queue_realtime_sse(request):
                 
                 recent_called_list = [{
                     'queueNumber': q.queue_number,
-                    'examName': q.exam.exam_name,
+                    'examName': q.exam.title,
                     'calledAt': q.called_at.isoformat() if q.called_at else None
                 } for q in recent_called]
                 
@@ -333,20 +330,100 @@ def queue_realtime_sse(request):
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
-def queue_by_department(request):
+def queue_realtime_data(request):
     """
-    부서별 대기 현황 - GET /admin/queue/by-department
+    실시간 대기열 조회 (JSON) - GET /admin/queue/realtime-data
+    
+    SSE가 아닌 일반 JSON 응답으로 실시간 대기열 데이터 반환
     """
-    # 권한 확인 (Staff 이상)
     try:
-        admin_user = User.objects.get(user=request.user)
+        # 권한 확인 (Staff 이상)
+        admin_user = request.user
         if admin_user.role not in ['super', 'dept', 'staff']:
             return APIResponse.error(
                 message="권한이 부족합니다.",
                 code="FORBIDDEN",
                 status_code=status.HTTP_403_FORBIDDEN
             )
-    except User.DoesNotExist:
+
+        # 현재 대기열 상태 조회
+        queue_stats = Queue.objects.filter(
+            state__in=['waiting', 'called', 'in_progress']
+        ).aggregate(
+            total_waiting=Count('queue_id', filter=Q(state='waiting')),
+            total_called=Count('queue_id', filter=Q(state='called')),
+            total_in_progress=Count('queue_id', filter=Q(state='in_progress')),
+            avg_wait_time=Avg('estimated_wait_time', filter=Q(state='waiting'))
+        )
+        
+        # 부서별 대기열 현황
+        dept_queues = []
+        for exam in Exam.objects.filter(is_active=True):
+            dept_stat = Queue.objects.filter(
+                exam=exam,
+                state__in=['waiting', 'called']
+            ).aggregate(
+                waiting_count=Count('queue_id', filter=Q(state='waiting')),
+                called_count=Count('queue_id', filter=Q(state='called')),
+                avg_wait=Avg('estimated_wait_time')
+            )
+            
+            dept_queues.append({
+                'examId': exam.exam_id,
+                'examName': exam.title,
+                'department': exam.department,
+                'waitingCount': dept_stat['waiting_count'] or 0,
+                'calledCount': dept_stat['called_count'] or 0,
+                'avgWaitTime': round(dept_stat['avg_wait'] or 0, 2)
+            })
+        
+        # 최근 호출된 환자
+        recent_called = Queue.objects.filter(
+            state='called',
+            called_at__isnull=False
+        ).order_by('-called_at')[:5]
+        
+        recent_called_list = [{
+            'queueNumber': q.queue_number,
+            'examName': q.exam.title,
+            'calledAt': q.called_at.isoformat() if q.called_at else None
+        } for q in recent_called]
+        
+        # JSON 응답 데이터
+        data = {
+            'timestamp': timezone.now().isoformat(),
+            'summary': {
+                'totalWaiting': queue_stats['total_waiting'] or 0,
+                'totalCalled': queue_stats['total_called'] or 0,
+                'totalInProgress': queue_stats['total_in_progress'] or 0,
+                'avgWaitTime': round(queue_stats['avg_wait_time'] or 0, 2)
+            },
+            'departments': dept_queues,
+            'recentCalled': recent_called_list
+        }
+        
+        return APIResponse.success(
+            data=data,
+            message="실시간 대기열 데이터 조회 성공"
+        )
+        
+    except Exception as e:
+        logger.error(f"Queue realtime data error: {str(e)}")
+        return APIResponse.error(
+            message="실시간 대기열 데이터 조회 중 오류가 발생했습니다.",
+            code="INTERNAL_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def queue_by_department(request):
+    """
+    부서별 대기 현황 - GET /admin/queue/by-department
+    """
+    # 권한 확인 (Staff 이상)
+    admin_user = request.user
+    if admin_user.role not in ['super', 'dept', 'staff']:
         return APIResponse.error(
             message="권한이 부족합니다.",
             code="FORBIDDEN",
@@ -438,17 +515,10 @@ def update_alert_settings(request):
     지연 알림 설정 - PUT /admin/queue/alert-settings
     """
     # 권한 확인 (Dept-Admin 이상)
-    try:
-        admin_user = User.objects.get(user=request.user)
-        if admin_user.role not in ['super', 'dept']:
-            return APIResponse.error(
-                message="부서 관리자 이상의 권한이 필요합니다.",
-                code="FORBIDDEN",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-    except User.DoesNotExist:
+    admin_user = request.user
+    if admin_user.role not in ['super', 'dept']:
         return APIResponse.error(
-            message="권한이 부족합니다.",
+            message="부서 관리자 이상의 권한이 필요합니다.",
             code="FORBIDDEN",
             status_code=status.HTTP_403_FORBIDDEN
         )
@@ -465,7 +535,7 @@ def update_alert_settings(request):
             exam.buffer_time = delay_threshold
             exam.save()
             
-            message = f"{exam.exam_name} 검사의 지연 알림 설정이 업데이트되었습니다."
+            message = f"{exam.title} 검사의 지연 알림 설정이 업데이트되었습니다."
         else:
             # 전체 설정 업데이트
             Exam.objects.update(buffer_time=delay_threshold)
@@ -496,17 +566,10 @@ def call_patient(request):
     환자 호출 - POST /medical/queue/call-patient
     """
     # 권한 확인 (Medical 이상)
-    try:
-        admin_user = User.objects.get(user=request.user)
-        if admin_user.role not in ['super', 'dept', 'staff']:
-            return APIResponse.error(
-                message="의료진 권한이 필요합니다.",
-                code="FORBIDDEN",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-    except User.DoesNotExist:
+    admin_user = request.user
+    if admin_user.role not in ['super', 'dept', 'staff']:
         return APIResponse.error(
-            message="권한이 부족합니다.",
+            message="의료진 권한이 필요합니다.",
             code="FORBIDDEN",
             status_code=status.HTTP_403_FORBIDDEN
         )
@@ -560,17 +623,10 @@ def missing_patients(request):
     누락 환자 감지 - GET /medical/queue/missing-patients
     """
     # 권한 확인 (Medical 이상)
-    try:
-        admin_user = User.objects.get(user=request.user)
-        if admin_user.role not in ['super', 'dept', 'staff']:
-            return APIResponse.error(
-                message="의료진 권한이 필요합니다.",
-                code="FORBIDDEN",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-    except User.DoesNotExist:
+    admin_user = request.user
+    if admin_user.role not in ['super', 'dept', 'staff']:
         return APIResponse.error(
-            message="권한이 부족합니다.",
+            message="의료진 권한이 필요합니다.",
             code="FORBIDDEN",
             status_code=status.HTTP_403_FORBIDDEN
         )
@@ -591,7 +647,7 @@ def missing_patients(request):
                 'queueId': str(queue.queue_id),
                 'queueNumber': queue.queue_number,
                 'patientName': queue.user.get_full_name() if hasattr(queue.user, 'get_full_name') else queue.user.username,
-                'examName': queue.exam.exam_name,
+                'examName': queue.exam.title,
                 'calledAt': queue.called_at.isoformat(),
                 'missingDuration': int(missing_duration.total_seconds() / 60),  # 분 단위
                 'priority': queue.priority,
@@ -633,17 +689,11 @@ def queue_performance_metrics(request):
     대기열 성능 메트릭 - GET /admin/queue/metrics
     """
     # 권한 확인 (Dept-Admin 이상)
-    try:
-        admin_user = User.objects.get(user=request.user)
-        if admin_user.role not in ['super', 'dept']:
-            return APIResponse.error(
-                message="부서 관리자 이상의 권한이 필요합니다.",
-                code="FORBIDDEN",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-    except User.DoesNotExist:
+
+    admin_user = request.user
+    if admin_user.role not in ['super', 'dept']:
         return APIResponse.error(
-            message="권한이 부족합니다.",
+            message="부서 관리자 이상의 권한이 필요합니다.",
             code="FORBIDDEN",
             status_code=status.HTTP_403_FORBIDDEN
         )

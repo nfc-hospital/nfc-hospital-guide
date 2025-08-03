@@ -177,7 +177,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
             if waiting_count > 0:  # 대기자가 있는 부서만
                 dept_queues.append({
                     'examId': exam.exam_id,
-                    'examName': exam.exam_name,
+                    'examName': exam.title,
                     'department': exam.department,
                     'waitingCount': waiting_count,
                     'avgWaitTime': Queue.objects.filter(

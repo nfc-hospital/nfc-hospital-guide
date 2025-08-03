@@ -22,6 +22,7 @@ from django.conf.urls.static import static
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from .utils import APIResponse
 from .views import ReactAppView
+from nfc import views as nfc_views
 
 # API 문서화
 def api_health_check(request):
@@ -59,7 +60,7 @@ urlpatterns = [
     # path('api/v1/chatbot/', include('chatbot.urls')),         # AI 챗봇
     # path('api/v1/navigation/', include('navigation.urls')),   # 경로 안내
     # path('api/v1/ai/', include('ai_models.urls')),            # AI 모델
-    path('api/v1/analytics/', include('analytics.urls')),        # 분석 (활성화됨)
+    path('api/v1/analytics/', include('analytics.urls')),        # 분석
     
     # Phase 3 완성 기능 (나중에 활성화)
     # path('api/v1/integration/', include('integrations.urls')), # 외부 연동

@@ -22,6 +22,7 @@ urlpatterns = [
     
     # 대기열 모니터링 추가 API
     path('admin/realtime/', views.queue_realtime_sse, name='queue-realtime-sse'),
+    path('admin/realtime-data/', views.queue_realtime_data, name='queue-realtime-data'),
     path('admin/by-department/', views.queue_by_department, name='queue-by-department'),
     path('admin/alert-settings/', views.update_alert_settings, name='update-alert-settings'),
     path('admin/metrics/', views.queue_performance_metrics, name='queue-performance-metrics'),

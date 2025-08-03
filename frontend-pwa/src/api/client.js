@@ -169,7 +169,7 @@ export const adminAPI = {
 
   // 대기열 모니터링
   queue: {
-    getRealTimeData: () => api.get('/queue/admin/realtime/'),
+    getRealTimeData: () => api.get('/queue/admin/realtime-data/'),
     getByDepartment: (params) => api.get('/queue/admin/by-department/', { params }),
     updateAlertSettings: (data) => api.put('/queue/admin/alert-settings/', data),
     getMetrics: (params) => api.get('/queue/admin/metrics/', { params }),
@@ -196,7 +196,10 @@ export class WebSocketClient {
   }
 
   connect(endpoint, onMessage, onError = null) {
-    const wsUrl = `ws://${window.location.host}/ws${endpoint}`;
+    // 개발/프로덕션 환경에 따른 WebSocket URL 설정
+    const isDev = import.meta.env.DEV;
+    const wsHost = isDev ? 'localhost:8000' : window.location.host;
+    const wsUrl = `ws://${wsHost}/ws${endpoint}`;
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {

@@ -31,13 +31,10 @@ logger = logging.getLogger(__name__)
 # 공통 헬퍼 함수
 def _check_admin_permission(request):
     """관리자 권한 확인 헬퍼 함수"""
-    try:
-        admin_user = User.objects.get(user=request.user)
-        if admin_user.role not in ['super', 'deft']:
-            return False, "관리자 권한이 필요합니다."
-        return True, None
-    except User.DoesNotExist:
+    admin_user = request.user
+    if admin_user.role not in ['super', 'deft']:
         return False, "관리자 권한이 필요합니다."
+    return True, None
 
 # 환자용 API
 @api_view(['POST'])
@@ -321,15 +318,8 @@ def create_tag_exam_mapping(request):
     """
     try:
         # 관리자 권한 확인
-        try:
-            admin_user = User.objects.get(user=request.user)
-            if admin_user.role not in ['super', 'dept']:
-                return APIResponse.error(
-                    message="관리자 권한이 필요합니다.",
-                    code="FORBIDDEN",
-                    status_code=status.HTTP_403_FORBIDDEN
-                )
-        except User.DoesNotExist:
+        admin_user = request.user
+        if admin_user.role not in ['super', 'dept']:
             return APIResponse.error(
                 message="관리자 권한이 필요합니다.",
                 code="FORBIDDEN",

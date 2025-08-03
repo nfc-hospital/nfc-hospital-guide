@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:clean": "npm run kill-port && npm run dev",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "kill-port": "npx kill-port 5174 || true"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",
@@ -28,6 +30,7 @@
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "kill-port": "^2.0.1",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "vite": "^5.1.4",

@@ -33,8 +33,10 @@ export default defineConfig({
     })
   ],
   server: {
-    port: 5173, // Vite 기본 포트 (3000에서 충돌 방지)
+    port: 5174, // 현재 사용 중인 포트 유지
+    strictPort: false, // 포트가 사용중이면 다른 포트 사용
     open: true,
+    host: true, // 네트워크 접근 허용
     proxy: {
       // HTTP API → Django runserver (포트 8000)
       '/api': {
