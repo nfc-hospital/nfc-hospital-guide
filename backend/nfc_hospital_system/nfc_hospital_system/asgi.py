@@ -14,6 +14,7 @@ try:
     
     print("Channels import success")
     
+    # 임시로 JWT 미들웨어 비활성화하고 기본 인증만 사용
     application = ProtocolTypeRouter({
         "http": django_asgi_app,
         "websocket": AuthMiddlewareStack(

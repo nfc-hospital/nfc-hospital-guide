@@ -225,4 +225,8 @@ CORS_ALLOW_HEADERS = [
     'sec-websocket-key',      # WebSocket용 추가
     'sec-websocket-protocol', # WebSocket용 추가
     'sec-websocket-version',  # WebSocket용 추가
+    'sec-websocket-extensions', # WebSocket용 추가
 ]
+
+# WebSocket을 위한 ALLOWED_HOSTS 추가
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*']

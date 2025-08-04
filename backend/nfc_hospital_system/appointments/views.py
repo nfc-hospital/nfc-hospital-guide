@@ -41,7 +41,7 @@ class ExamViewSet(viewsets.ModelViewSet):
     
     # 정렬 필드
     ordering_fields = [
-        'title', 'created_at', 'updated_at', 'duration',
+        'title', 'created_at', 'updated_at', 'average_duration',
         'department', 'category', 'building', 'floor', 'room'
     ]
 

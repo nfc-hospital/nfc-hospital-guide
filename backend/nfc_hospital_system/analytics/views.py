@@ -736,18 +736,36 @@ def identify_bottlenecks(request):
         process_bottlenecks = []
         
         # called 상태에서 in_progress로 전환이 오래 걸리는 경우
-        slow_transitions = Queue.objects.filter(
+        # MySQL 호환성을 위해 Python에서 시간 계산 수행
+        now = timezone.now()
+        slow_queues = Queue.objects.filter(
             state='called',
-            called_at__lt=timezone.now() - timedelta(minutes=15)
-        ).values('exam__title').annotate( # 'exam__exam_name' 대신 'exam__title' 사용
-            count=Count('queue_id'),
-            avg_delay=Avg(
-                ExpressionWrapper(
-                    Extract(timezone.now() - F('called_at'), 'epoch') / 60.0,
-                    output_field=fields.FloatField()
-                )
-            )
-        )
+            called_at__lt=now - timedelta(minutes=15)
+        ).select_related('exam')
+        
+        # Python에서 지연 시간 계산
+        slow_transitions = []
+        exam_delays = {}
+        
+        for queue in slow_queues:
+            exam_title = queue.exam.title if queue.exam else 'Unknown'
+            if queue.called_at:
+                delay_minutes = (now - queue.called_at).total_seconds() / 60.0
+                
+                if exam_title not in exam_delays:
+                    exam_delays[exam_title] = {'delays': [], 'count': 0}
+                
+                exam_delays[exam_title]['delays'].append(delay_minutes)
+                exam_delays[exam_title]['count'] += 1
+        
+        # 평균 계산
+        for exam_title, data in exam_delays.items():
+            if data['delays']:
+                slow_transitions.append({
+                    'exam__title': exam_title,
+                    'count': data['count'],
+                    'avg_delay': sum(data['delays']) / len(data['delays'])
+                })
         
         for trans in slow_transitions:
             if trans['count'] > 0:

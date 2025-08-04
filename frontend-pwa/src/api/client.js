@@ -195,15 +195,16 @@ export class WebSocketClient {
     this.connections = new Map();
   }
 
-  connect(endpoint, onMessage, onError = null) {
+  connect(endpoint, onMessage, onError = null, onOpen = null, onClose = null) {
     // 개발/프로덕션 환경에 따른 WebSocket URL 설정
     const isDev = import.meta.env.DEV;
-    const wsHost = isDev ? 'localhost:8000' : window.location.host;
+    const wsHost = isDev ? '127.0.0.1:8000' : window.location.host;
     const wsUrl = `ws://${wsHost}/ws${endpoint}`;
     const ws = new WebSocket(wsUrl);
     
     ws.onopen = () => {
       console.log(`WebSocket connected: ${endpoint}`);
+      if (onOpen) onOpen();
     };
     
     ws.onmessage = (event) => {
@@ -223,6 +224,7 @@ export class WebSocketClient {
     ws.onclose = () => {
       console.log(`WebSocket disconnected: ${endpoint}`);
       this.connections.delete(endpoint);
+      if (onClose) onClose();
     };
     
     this.connections.set(endpoint, ws);

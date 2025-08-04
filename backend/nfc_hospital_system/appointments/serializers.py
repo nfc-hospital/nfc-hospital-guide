@@ -19,7 +19,7 @@ class ExamSerializer(serializers.ModelSerializer):
         model = Exam
         # 모든 필드를 포함하되, PK는 `exam_id`로 명시
         fields = [
-            'exam_id', 'title', 'description', 'department', 'duration',
+            'exam_id', 'title', 'description', 'department', 'average_duration', 'buffer_time',
             'is_active', 'created_at', 'updated_at', 'preparations',
             'category',
             'location'

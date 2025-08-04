@@ -58,9 +58,19 @@ const AdminDashboard = () => {
         (error) => {
           console.error('WebSocket connection error:', error);
           setRealTimeConnected(false);
+        },
+        () => {
+          // onOpen 콜백: 연결 성공 시에만 상태 업데이트
+          console.log('WebSocket connection established');
+          setRealTimeConnected(true);
+        },
+        () => {
+          // onClose 콜백: 연결 종료 시 상태 업데이트
+          console.log('WebSocket connection closed');
+          setRealTimeConnected(false);
         }
       );
-      setRealTimeConnected(true);
+      // 즉시 true로 설정하지 않고, onOpen 콜백에서 설정
     } catch (err) {
       console.error('Failed to connect WebSocket:', err);
       setRealTimeConnected(false);

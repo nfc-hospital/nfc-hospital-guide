@@ -436,7 +436,7 @@ def queue_by_department(request):
         
         # 부서별 통계
         query = Queue.objects.filter(
-            joined_at__date=date
+            created_at__date=date
         )
         
         if department:
@@ -455,7 +455,7 @@ def queue_by_department(request):
             hourly_stats = []
             for hour in range(8, 18):  # 8시부터 18시까지
                 hour_queues = dept_queues.filter(
-                    joined_at__hour=hour
+                    created_at__hour=hour
                 )
                 
                 hourly_stats.append({
@@ -706,7 +706,7 @@ def queue_performance_metrics(request):
         
         # 기간 필터링
         queues = Queue.objects.filter(
-            joined_at__date__range=[start_date, end_date]
+            created_at__date__range=[start_date, end_date]
         )
         
         if department:
@@ -723,12 +723,12 @@ def queue_performance_metrics(request):
         )
         
         # 실제 대기 시간 vs 예상 대기 시간 분석
-        completed_queues = queues.filter(state='completed', completed_at__isnull=False)
+        completed_queues = queues.filter(state='completed', called_at__isnull=False)
         wait_time_accuracy = []
         
         for q in completed_queues:
-            if q.called_at and q.joined_at:
-                actual_wait = (q.called_at - q.joined_at).total_seconds() / 60
+            if q.called_at and q.created_at:
+                actual_wait = (q.called_at - q.created_at).total_seconds() / 60
                 estimated_wait = q.estimated_wait_time or 0
                 if estimated_wait > 0:
                     accuracy = 100 - abs((actual_wait - estimated_wait) / estimated_wait * 100)
@@ -736,17 +736,17 @@ def queue_performance_metrics(request):
         
         avg_accuracy = sum(wait_time_accuracy) / len(wait_time_accuracy) if wait_time_accuracy else 0
         
-        # 처리 시간 분석
+        # 처리 시간 분석 - updated_at과 called_at을 사용
         processing_times = []
         for q in completed_queues:
-            if q.started_at and q.completed_at:
-                processing_time = (q.completed_at - q.started_at).total_seconds() / 60
+            if q.called_at and q.updated_at:
+                processing_time = (q.updated_at - q.called_at).total_seconds() / 60
                 processing_times.append(processing_time)
         
         # 시간대별 효율성
         hourly_efficiency = []
         for hour in range(8, 18):
-            hour_queues = queues.filter(joined_at__hour=hour)
+            hour_queues = queues.filter(created_at__hour=hour)
             completed = hour_queues.filter(state='completed').count()
             total = hour_queues.count()
             
@@ -764,7 +764,7 @@ def queue_performance_metrics(request):
         daily_patterns = []
         for date in range(7):
             target_date = timezone.now().date() - timedelta(days=date)
-            day_queues = queues.filter(joined_at__date=target_date)
+            day_queues = queues.filter(created_at__date=target_date)
             
             daily_patterns.append({
                 'date': target_date.isoformat(),
@@ -774,7 +774,7 @@ def queue_performance_metrics(request):
                     avg=Avg('estimated_wait_time')
                 )['avg'] or 0,
                 'peakHour': day_queues.extra(
-                    select={'hour': "EXTRACT(hour FROM joined_at)"}
+                    select={'hour': "EXTRACT(hour FROM created_at)"}
                 ).values('hour').annotate(
                     count=Count('queue_id')
                 ).order_by('-count').first()

@@ -16,39 +16,37 @@ class DashboardConsumer(AsyncWebsocketConsumer):
     
     async def connect(self):
         """WebSocket 연결 시 처리"""
-        # 권한 확인 (관리자만 접근 가능)
-        user = self.scope["user"]
-        if not user.is_authenticated:
-            await self.close()
-            return
-        
-        # 관리자 권한 확인
-        try:
-            from authentication.models import User
-            admin_user = await database_sync_to_async(User.objects.get)(user=user)
-            if admin_user.role not in ['super', 'dept', 'staff']:
-                await self.close()
-                return
-        except Exception as e:
-            logger.error(f"Admin permission check failed: {str(e)}")
-            await self.close()
-            return
-        
-        # 그룹 참여
+        # room_group_name을 먼저 설정 (disconnect에서 안전하게 사용하기 위해)
         self.room_group_name = 'admin_dashboard'
-        await self.channel_layer.group_add(
-            self.room_group_name,
-            self.channel_name
-        )
         
-        await self.accept()
-        logger.info(f"Admin dashboard WebSocket connected: {user.username}")
+        print(f"=== WebSocket Connect Start ===")
+        print(f"User: {self.scope.get('user', 'No user')}")
+        print(f"Path: {self.scope.get('path', 'No path')}")
         
-        # 연결 시 현재 상태 즉시 전송
-        await self.send_dashboard_update()
-        
-        # 주기적 업데이트 시작
-        self.update_task = asyncio.create_task(self.periodic_update())
+        try:
+            # 개발용: 모든 연결 허용
+            print("Accepting WebSocket connection (development mode)")
+            
+            # 그룹 참여
+            await self.channel_layer.group_add(
+                self.room_group_name,
+                self.channel_name
+            )
+            
+            await self.accept()
+            print("✅ WebSocket connection accepted")
+            
+            # 연결 시 현재 상태 즉시 전송
+            await self.send_dashboard_update()
+            
+            # 주기적 업데이트 시작
+            self.update_task = asyncio.create_task(self.periodic_update())
+            
+        except Exception as e:
+            print(f"❌ Error in WebSocket connect: {e}")
+            import traceback
+            traceback.print_exc()
+            await self.close()
     
     async def disconnect(self, close_code):
         """WebSocket 연결 해제 시 처리"""
@@ -56,11 +54,12 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         if hasattr(self, 'update_task'):
             self.update_task.cancel()
         
-        # 그룹에서 제거
-        await self.channel_layer.group_discard(
-            self.room_group_name,
-            self.channel_name
-        )
+        # 그룹에서 제거 (방어적 코드)
+        if hasattr(self, 'room_group_name') and self.room_group_name:
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
         
         logger.info(f"Admin dashboard WebSocket disconnected: {close_code}")
     
@@ -150,7 +149,7 @@ class DashboardConsumer(AsyncWebsocketConsumer):
         
         # 오늘의 통계
         today_stats = Queue.objects.filter(
-            joined_at__gte=today_start
+            created_at__gte=today_start
         ).aggregate(
             total_patients=Count('queue_id'),
             completed_today=Count('queue_id', filter=Q(state='completed')),
@@ -314,24 +313,27 @@ class NFCMonitoringConsumer(AsyncWebsocketConsumer):
     
     async def connect(self):
         """WebSocket 연결 시 처리"""
-        # 권한 확인
-        user = self.scope["user"]
-        if not user.is_authenticated:
-            await self.close()
-            return
+        # room_group_name을 먼저 설정 (disconnect에서 안전하게 사용하기 위해)
+        self.room_group_name = 'nfc_monitoring'
         
-        try:
-            from authentication.models import User
-            admin_user = await database_sync_to_async(User.objects.get)(user=user)
-            if admin_user.role not in ['super', 'dept', 'staff']:
-                await self.close()
-                return
-        except Exception:
-            await self.close()
-            return
+        # 권한 확인 - 개발용으로 임시 완화
+        user = self.scope["user"]
+        
+        # 개발용 임시: 인증 없이도 연결 허용
+        if not user.is_authenticated:
+            logger.warning("NFC WebSocket connection without authentication (development mode)")
+            # 개발용으로 계속 진행
+        else:
+            try:
+                # self.scope["user"]는 이미 User 인스턴스이므로 직접 사용
+                if user.role not in ['super', 'dept', 'staff']:
+                    logger.warning(f"Non-admin user attempting NFC monitoring access: {user.role}")
+                    # 개발용으로 계속 진행
+            except Exception as e:
+                logger.error(f"NFC monitoring auth check failed: {str(e)}")
+                # 개발용으로 계속 진행
         
         # 그룹 참여
-        self.room_group_name = 'nfc_monitoring'
         await self.channel_layer.group_add(
             self.room_group_name,
             self.channel_name
@@ -342,10 +344,12 @@ class NFCMonitoringConsumer(AsyncWebsocketConsumer):
     
     async def disconnect(self, close_code):
         """WebSocket 연결 해제 시 처리"""
-        await self.channel_layer.group_discard(
-            self.room_group_name,
-            self.channel_name
-        )
+        # 그룹에서 제거 (방어적 코드)
+        if hasattr(self, 'room_group_name') and self.room_group_name:
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
         logger.info(f"NFC monitoring WebSocket disconnected: {close_code}")
     
     async def receive(self, text_data):
