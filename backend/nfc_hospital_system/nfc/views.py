@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 def _check_admin_permission(request):
     """관리자 권한 확인 헬퍼 함수"""
     admin_user = request.user
-    if admin_user.role not in ['super', 'deft']:
+    if not hasattr(admin_user, 'role') or admin_user.role not in ['super', 'dept']:
         return False, "관리자 권한이 필요합니다."
     return True, None
 
@@ -192,11 +192,11 @@ class AdminNFCTagViewSet(ModelViewSet):
     def check_admin_permission(self):
         """관리자 권한 확인"""
         try:
-            admin_user = User.objects.get(user=self.request.user)
-            if admin_user.role not in ['super', 'dept']:
+            admin_user = self.request.user
+            if not hasattr(admin_user, 'role') or admin_user.role not in ['super', 'dept']:
                 return False, "관리자 권한이 필요합니다."
             return True, None
-        except User.DoesNotExist:
+        except Exception as e:
             return False, "관리자 권한이 필요합니다."
     
     def create(self, request, *args, **kwargs):
@@ -400,10 +400,16 @@ def admin_tag_list(request):
         # 쿼리 파라미터 처리
         page = int(request.GET.get('page', 1))
         limit = min(int(request.GET.get('limit', 10)), 100)
-        is_active = request.GET.get('is_active', 'true').lower() == 'true'
+        is_active_param = request.GET.get('is_active', 'true')
         
         # 태그 목록 조회
-        tags = NFCTag.objects.filter(is_active=is_active).order_by('-created_at')
+        if is_active_param == '':  # 전체
+            tags = NFCTag.objects.all()
+        else:
+            is_active = is_active_param.lower() == 'true'
+            tags = NFCTag.objects.filter(is_active=is_active)
+        
+        tags = tags.order_by('-created_at')
         total_count = tags.count()
         
         # 페이지네이션 처리
@@ -568,7 +574,7 @@ def delete_tag_exam_mapping(request, mapping_id):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
-# 기존의 create_tag_exam_mapping 함수는 위에 nfc_tag_exam_mapping_create로 대체되었습니다.
+# 기존의 create_tag_exam_mapping 함수는 위에 nfc_tag_exam_mapping_create로 대체
 
 # 태그 관리 추가 API
 
@@ -631,7 +637,7 @@ def bulk_tag_operation(request):
                 is_active = operation == 'activate'
                 updated = NFCTag.objects.filter(tag_id__in=tag_ids).update(
                     is_active=is_active,
-                    modified_at=timezone.now()
+                    updated_at=timezone.now()
                 )
                 results['success'] = {
                     'updated_count': updated,
@@ -670,9 +676,13 @@ def bulk_tag_operation(request):
         
     except Exception as e:
         logger.error(f"Bulk tag operation error: {str(e)}", exc_info=True)
+        logger.error(f"Request data: {request.data}")
+        logger.error(f"Operation: {operation if 'operation' in locals() else 'Unknown'}")
+        logger.error(f"Tag IDs: {tag_ids if 'tag_ids' in locals() else 'Unknown'}")
         return APIResponse.error(
             message="대량 태그 작업 중 오류가 발생했습니다.",
             code="BULK_OPERATION_ERROR",
+            details={"error": str(e), "operation": operation if 'operation' in locals() else None},
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

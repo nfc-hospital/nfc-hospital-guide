@@ -55,15 +55,24 @@ const NFCTagManagement = () => {
     }
   };
 
-  const handleDeleteTag = async (tagId) => {
-    if (!confirm('이 태그를 비활성화하시겠습니까?')) return;
+  const handleToggleTag = async (tag) => {
+    const action = tag.is_active ? '비활성화' : '활성화';
+    if (!confirm(`이 태그를 ${action}하시겠습니까?`)) return;
     
     try {
-      await adminAPI.nfc.deleteTag(tagId);
+      if (tag.is_active) {
+        await adminAPI.nfc.deleteTag(tag.tag_id);
+      } else {
+        // 활성화를 위해 벌크 작업 사용
+        await adminAPI.nfc.bulkOperation({
+          operation: 'activate',
+          tag_ids: [tag.tag_id]
+        });
+      }
       loadTags();
     } catch (err) {
-      console.error('Tag deletion error:', err);
-      alert('태그 삭제 중 오류가 발생했습니다: ' + err.message);
+      console.error('Tag toggle error:', err);
+      alert(`태그 ${action} 중 오류가 발생했습니다: ` + err.message);
     }
   };
 
@@ -99,7 +108,7 @@ const NFCTagManagement = () => {
     if (selectedTags.length === tags.length) {
       setSelectedTags([]);
     } else {
-      setSelectedTags(tags.map(tag => tag.tagId));
+      setSelectedTags(tags.map(tag => tag.tag_id));
     }
   };
 
@@ -195,18 +204,18 @@ const NFCTagManagement = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {tags.map((tag) => (
-              <tr key={tag.tagId} className="hover:bg-gray-50">
+              <tr key={tag.tag_id} className="hover:bg-gray-50">
                 <td className="px-6 py-4">
                   <input
                     type="checkbox"
-                    checked={selectedTags.includes(tag.tagId)}
-                    onChange={() => handleSelectTag(tag.tagId)}
+                    checked={selectedTags.includes(tag.tag_id)}
+                    onChange={() => handleSelectTag(tag.tag_id)}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{tag.code}</div>
-                  <div className="text-sm text-gray-500">{tag.tagId?.substring(0, 8)}...</div>
+                  <div className="text-sm text-gray-500">{tag.tag_id?.substring(0, 8)}...</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">
@@ -217,20 +226,20 @@ const NFCTagManagement = () => {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                    tag.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    tag.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                   }`}>
-                    {tag.isActive ? '활성' : '비활성'}
+                    {tag.is_active ? '활성' : '비활성'}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {tag.lastScannedAt ? new Date(tag.lastScannedAt).toLocaleString('ko-KR') : '없음'}
+                  {tag.last_scanned_at ? new Date(tag.last_scanned_at).toLocaleString('ko-KR') : '없음'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                   <button
-                    onClick={() => handleDeleteTag(tag.tagId)}
-                    className="text-red-600 hover:text-red-900"
+                    onClick={() => handleToggleTag(tag)}
+                    className={tag.is_active ? "text-red-600 hover:text-red-900" : "text-green-600 hover:text-green-900"}
                   >
-                    비활성화
+                    {tag.is_active ? '비활성화' : '활성화'}
                   </button>
                 </td>
               </tr>

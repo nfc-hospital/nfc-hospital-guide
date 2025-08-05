@@ -4,17 +4,22 @@ from . import views
 
 # DRF Router 설정
 router = DefaultRouter()
-router.register(r'admin/nfc/tags', views.AdminNFCTagViewSet, basename='admin-nfc-tags')
+# router.register(r'admin/nfc/tags', views.AdminNFCTagViewSet, basename='admin-nfc-tags')
+router.register(r'tags', views.AdminNFCTagViewSet, basename='admin-nfc-tags')
+
 
 app_name = 'nfc'
 
 urlpatterns = [
+    # ViewSet URLs - ViewSet URLs이 먼저 처리되도록 상단에 위치
+    path('', include(router.urls)),
+
     # 환자용 API
     path('nfc/scan/', views.nfc_scan, name='nfc-scan'),
     path('nfc/tags/<str:tag_id>/', views.get_tag_info, name='tag-info'),
     
     # 관리자용 API (기존 유지)
-    path('admin/nfc/tags/list/', views.admin_tag_list, name='admin-tag-list'),
+    # path('admin/nfc/tags/list/', views.admin_tag_list, name='admin-tag-list'),
     
     # 검사-태그 매핑 API (새로 추가되거나 수정된 부분)
     path('admin/nfc/tag-exam-mapping/', views.nfc_tag_exam_mapping_create, name='nfc_tag_exam_mapping_create'), # POST
@@ -27,6 +32,4 @@ urlpatterns = [
     path('admin/tags/status/', views.tag_status_monitoring, name='tag-status-monitoring'),
     path('admin/nfc/tags/<uuid:tag_id>/history/', views.tag_assignment_history, name='tag-assignment-history'),
     
-    # ViewSet URLs
-    path('', include(router.urls)),
 ]

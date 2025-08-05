@@ -64,12 +64,14 @@ class NFCTag(models.Model):
     # 좌표 정보
     x_coord = models.FloatField(
         verbose_name='X 좌표',
-        help_text='지도상의 X 좌표값'
+        help_text='지도상의 X 좌표값',
+        default=0.0
     )
 
     y_coord = models.FloatField(
         verbose_name='Y 좌표',
-        help_text='지도상의 Y 좌표값'
+        help_text='지도상의 Y 좌표값',
+        default=0.0
     )
 
     is_active = models.BooleanField(

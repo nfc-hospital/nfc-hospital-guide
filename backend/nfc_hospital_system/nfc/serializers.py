@@ -199,6 +199,9 @@ class AdminNFCTagCreateSerializer(serializers.ModelSerializer):
     """
     관리자용 NFC 태그 생성 직렬화
     """
+    x_coord = serializers.FloatField(required=False, default=0.0)
+    y_coord = serializers.FloatField(required=False, default=0.0)
+    
     class Meta:
         model = NFCTag
         fields = [
