@@ -65,4 +65,23 @@ pnpm-debug.log*
 # Chatbot Server
 /chatbot-server/__pycache__/
 /chatbot-server/.venv/
+/chatbot-server/venv/
 /chatbot-server/.env
+/chatbot-server/*.pyc
+/chatbot-server/*.pyo
+/chatbot-server/*.pyd
+/chatbot-server/.Python
+/chatbot-server/pip-log.txt
+/chatbot-server/pip-delete-this-directory.txt
+/chatbot-server/.tox/
+/chatbot-server/.coverage
+/chatbot-server/.coverage.*
+/chatbot-server/htmlcov/
+/chatbot-server/.pytest_cache/
+/chatbot-server/nosetests.xml
+/chatbot-server/coverage.xml
+/chatbot-server/*.cover
+/chatbot-server/*.log
+/chatbot-server/.git
+/chatbot-server/.mypy_cache
+/chatbot-server/.hypothesis
