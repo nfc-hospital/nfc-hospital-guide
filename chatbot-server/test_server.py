@@ -67,7 +67,7 @@ def test_suggestions():
         return False
 
 def main():
-    print("🤖 NFC 병원 챗봇 서버 테스트")
+    print("NFC 병원 챗봇 서버 테스트")
     print("=" * 50)
     
     # 테스트 실행
@@ -89,9 +89,9 @@ def main():
             results.append((test_name, False))
     
     print("\n" + "=" * 50)
-    print("📊 테스트 결과 요약:")
+    print("테스트 결과 요약:")
     for test_name, result in results:
-        status = "✅ 성공" if result else "❌ 실패"
+        status = "[성공]" if result else "[실패]"
         print(f"{status} {test_name}")
     
     passed = sum(1 for _, result in results if result)

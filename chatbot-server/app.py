@@ -186,7 +186,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     debug_mode = os.getenv('FLASK_ENV') == 'development'
     
-    print(f"🤖 NFC Hospital Chatbot Server starting on port {port}")
-    print(f"📍 Environment: {'Development' if debug_mode else 'Production'}")
+    print(f"NFC Hospital Chatbot Server starting on port {port}")
+    print(f"Environment: {'Development' if debug_mode else 'Production'}")
     
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
