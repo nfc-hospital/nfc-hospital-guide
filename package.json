@@ -36,7 +36,8 @@
     "type:generate": "cd backend/nfc_hospital_system && python manage.py generateschema --file openapi-schema.yml && npm run type:convert",
     "type:convert": "openapi-typescript backend/nfc_hospital_system/openapi-schema.yml -o frontend-pwa/src/types/api.ts",
     "dev:backend:unix": "cd backend/nfc_hospital_system && export PYTHONPATH=$PWD && export PYTHONIOENCODING=utf-8 && echo 'Starting Django + WebSocket server...' && python manage.py runserver --asgi 8000",
-    "dev:backend:unix:daphne": "cd backend/nfc_hospital_system && export PYTHONPATH=$PWD && export PYTHONIOENCODING=utf-8 && echo 'Starting Django + WebSocket server with Daphne...' && ../venv/bin/python -m daphne -p 8000 --bind 0.0.0.0 nfc_hospital_system.asgi:application"
+    "dev:backend:unix:daphne": "cd backend/nfc_hospital_system && export PYTHONPATH=$PWD && export PYTHONIOENCODING=utf-8 && echo 'Starting Django + WebSocket server with Daphne...' && ../venv/bin/python -m daphne -p 8000 --bind 0.0.0.0 nfc_hospital_system.asgi:application",
+    "dev:backend:daphne-simple": "cd backend/nfc_hospital_system && daphne -b 0.0.0.0 -p 8000 nfc_hospital_system.asgi:application"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",

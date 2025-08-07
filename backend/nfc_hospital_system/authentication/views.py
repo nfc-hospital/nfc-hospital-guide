@@ -74,6 +74,7 @@ def simple_login(request):
             payload = {
                 'user_id': user_id_str,  # 문자열로 변환된 ID 사용
                 'name': user.name,
+                'token_type': 'access',  # 토큰 타입 추가
                 'exp': datetime.utcnow() + timedelta(hours=1),  # 1시간 후 만료
                 'iat': datetime.utcnow(),  # 발급 시간
             }
@@ -83,6 +84,7 @@ def simple_login(request):
             
             # 리프레시 토큰 (7일)
             refresh_payload = payload.copy()
+            refresh_payload['token_type'] = 'refresh'  # 리프레시 토큰 타입 설정
             refresh_payload['exp'] = datetime.utcnow() + timedelta(days=7)
             refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
             
@@ -200,6 +202,7 @@ def kakao_login(request):
             payload = {
                 'user_id': user_id_str,  # 문자열로 변환된 ID 사용
                 'name': user.name,
+                'token_type': 'access',  # 토큰 타입 추가
                 'exp': datetime.utcnow() + timedelta(hours=1),  # 1시간 후 만료
                 'iat': datetime.utcnow(),  # 발급 시간
             }
@@ -209,6 +212,7 @@ def kakao_login(request):
             
             # 리프레시 토큰 (7일)
             refresh_payload = payload.copy()
+            refresh_payload['token_type'] = 'refresh'  # 리프레시 토큰 타입 설정
             refresh_payload['exp'] = datetime.utcnow() + timedelta(days=7)
             refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
             
@@ -425,6 +429,7 @@ def kakao_login_mock(request):
             
             # 리프레시 토큰 (7일)
             refresh_payload = payload.copy()
+            refresh_payload['token_type'] = 'refresh'  # 리프레시 토큰 타입 설정
             refresh_payload['exp'] = datetime.utcnow() + timedelta(days=7)
             refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
             

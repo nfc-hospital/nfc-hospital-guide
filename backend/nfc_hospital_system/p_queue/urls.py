@@ -23,6 +23,7 @@ urlpatterns = [
     # 대기열 모니터링 추가 API
     path('dashboard/realtime/', views.queue_realtime_sse, name='queue-realtime-sse'),
     path('dashboard/realtime-data/', views.queue_realtime_data, name='queue-realtime-data'),
+    path('admin/realtime-data/', views.queue_realtime_data, name='queue-admin-realtime-data'),  # 관리자 전용
     path('dashboard/by-department/', views.queue_by_department, name='queue-by-department'),
     path('dashboard/alert-settings/', views.update_alert_settings, name='update-alert-settings'),
     path('dashboard/metrics/', views.queue_performance_metrics, name='queue-performance-metrics'),

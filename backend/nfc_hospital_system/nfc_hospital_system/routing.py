@@ -3,9 +3,30 @@ from django.urls import re_path
 from channels.routing import URLRouter
 
 # Consumer imports
-from p_queue.consumers import QueueConsumer
-from admin_dashboard.consumers import DashboardConsumer, NFCMonitoringConsumer
-from admin_dashboard.consumers import DashboardConsumer  
+print("🔍 Importing consumers...")
+try:
+    from p_queue.consumers import QueueConsumer
+    print("✅ QueueConsumer imported")
+except Exception as e:
+    print(f"❌ Failed to import QueueConsumer: {e}")
+
+try:
+    from admin_dashboard.consumers import DashboardConsumer, NFCMonitoringConsumer
+    print("✅ Admin consumers imported")
+except Exception as e:
+    print(f"❌ Failed to import admin consumers: {e}")
+    # Fallback: 기본 consumer 사용
+    from channels.generic.websocket import AsyncWebsocketConsumer
+    class DashboardConsumer(AsyncWebsocketConsumer):
+        async def connect(self):
+            await self.accept()
+        async def disconnect(self, close_code):
+            pass
+    class NFCMonitoringConsumer(AsyncWebsocketConsumer):
+        async def connect(self):
+            await self.accept()
+        async def disconnect(self, close_code):
+            pass  
 
 
 # WebSocket URL 패턴 

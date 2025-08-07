@@ -14,7 +14,7 @@ export function AuthProvider({ children }) {
   // 로컬 스토리지에서 사용자 정보 및 토큰 불러오기
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    const storedToken = localStorage.getItem('accessToken');
+    const storedToken = localStorage.getItem('access_token');
     
     if (storedUser && storedToken) {
       setUser(JSON.parse(storedUser));
@@ -85,8 +85,8 @@ export function AuthProvider({ children }) {
         console.log('- User Data:', userData);
         
         // 토큰과 사용자 정보 저장
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken);
         localStorage.setItem('user', JSON.stringify(userData));
         
         setUser(userData);
@@ -132,8 +132,8 @@ export function AuthProvider({ children }) {
         const refreshToken = data.data.tokens.refresh;
         const userData = data.data.user;
         
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
+        localStorage.setItem('access_token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken);
         localStorage.setItem('user', JSON.stringify(userData));
         
         setUser(userData);
@@ -152,7 +152,7 @@ export function AuthProvider({ children }) {
   // 로그아웃
   const logout = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      const token = localStorage.getItem('access_token');
       if (token) {
         // 백엔드에 로그아웃 요청
         await fetch('/api/v1/auth/logout/', {
@@ -169,8 +169,8 @@ export function AuthProvider({ children }) {
       // 로컬 데이터 정리
       setUser(null);
       localStorage.removeItem('user');
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       console.log('✅ 로그아웃 및 토큰 정리 완료');
     }
   };
@@ -178,7 +178,7 @@ export function AuthProvider({ children }) {
   // 토큰 갱신
   const refreshToken = async () => {
     try {
-      const refresh = localStorage.getItem('refreshToken');
+      const refresh = localStorage.getItem('refresh_token');
       if (!refresh) {
         throw new Error('Refresh token이 없습니다.');
       }
@@ -198,7 +198,7 @@ export function AuthProvider({ children }) {
       }
 
       const data = await response.json();
-      localStorage.setItem('accessToken', data.access);
+      localStorage.setItem('access_token', data.access);
       console.log('✅ 토큰 갱신 완료');
       return data.access;
 

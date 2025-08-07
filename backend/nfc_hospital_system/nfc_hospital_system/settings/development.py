@@ -153,11 +153,11 @@ if REACT_BUILD_DIR.exists():
 # 개발 환경에서 React index.html 서빙
 TEMPLATES[0]['DIRS'].insert(0, REACT_BUILD_DIR)
 
-# 개발용 JWT 설정 (더 긴 토큰 수명)
-SIMPLE_JWT = {
+# 개발용 JWT 설정 (base.py 설정을 확장)
+SIMPLE_JWT.update({
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
-}
+})
 
 # 개발용 REST Framework 설정
 REST_FRAMEWORK = {
@@ -166,7 +166,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny', # 개발용 권한 완화
+        'rest_framework.permissions.IsAuthenticated',  # 인증 필요로 변경
     ],
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
