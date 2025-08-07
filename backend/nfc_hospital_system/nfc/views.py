@@ -460,7 +460,7 @@ def nfc_tag_exam_mapping_create(request):
         )
 
     try:
-        serializer = NFCTagExamMappingCreateSerializer(data=request.data)
+        serializer = NFCTagExamMappingRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return APIResponse.error(
                 message="유효하지 않은 매핑 정보입니다.",
@@ -472,7 +472,7 @@ def nfc_tag_exam_mapping_create(request):
         exam_instance = serializer.validated_data['exam']
 
         # 매핑 생성
-        mapping = serializer.save() # NFCTagExamMappingCreateSerializer의 create 메서드 호출
+        mapping = serializer.save()  # NFCTagExamMappingRequestSerializer의 create 메서드 호출
 
         response_serializer = NFCTagExamDetailSerializer(mapping)
         
@@ -636,8 +636,7 @@ def bulk_tag_operation(request):
                 # 대량 활성화/비활성화
                 is_active = operation == 'activate'
                 updated = NFCTag.objects.filter(tag_id__in=tag_ids).update(
-                    is_active=is_active,
-                    updated_at=timezone.now()
+                    is_active=is_active
                 )
                 results['success'] = {
                     'updated_count': updated,
@@ -922,7 +921,7 @@ def tag_assignment_history(request, tag_id):
                 'examRoom': mapping.exam_room,
                 'isActive': mapping.is_active,
                 'createdAt': mapping.created_at.isoformat(),
-                'deactivatedAt': mapping.modified_at.isoformat() if not mapping.is_active else None
+                'deactivatedAt': None  # NFCTagExam 모델에 modified_at 필드가 없음
             })
         
         # 스캔 로그 요약
