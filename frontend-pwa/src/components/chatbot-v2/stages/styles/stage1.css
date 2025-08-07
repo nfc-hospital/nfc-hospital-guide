@@ -1,0 +1,139 @@
+.floating-button-stage1 {
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+.floating-button-stage1:focus {
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.6), 0 0 0 3px rgba(102, 126, 234, 0.3);
+}
+
+.floating-button-stage1.normal-size {
+  width: 70px;
+  height: 70px;
+}
+
+.floating-button-stage1.elderly-size {
+  width: 100px;
+  height: 100px;
+}
+
+.floating-button-stage1:hover {
+  transform: scale(1.1);
+  box-shadow: 0 15px 40px rgba(102, 126, 234, 0.5);
+}
+
+.floating-button-stage1:active {
+  transform: scale(1.05);
+}
+
+.button-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: white;
+  user-select: none;
+}
+
+.button-content .icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.elderly-size .button-content .icon {
+  font-size: 44px;
+}
+
+.button-content .text {
+  font-size: 14px;
+  font-weight: bold;
+  margin-top: 4px;
+  font-family: 'Noto Sans KR', sans-serif;
+}
+
+.elderly-size .button-content .text {
+  font-size: 18px;
+  margin-top: 6px;
+}
+
+.notification-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  background: #ff4757;
+  border-radius: 50%;
+  border: 2px solid white;
+  animation: notification-pulse 2s infinite;
+}
+
+.elderly-size .notification-dot {
+  width: 16px;
+  height: 16px;
+  top: 10px;
+  right: 10px;
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    transform: scale(1);
+  }
+  50% { 
+    box-shadow: 0 10px 50px rgba(102, 126, 234, 0.8);
+    transform: scale(1.05);
+  }
+}
+
+@keyframes notification-pulse {
+  0%, 100% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+.pulsing {
+  animation: pulse 2s infinite;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 768px) {
+  .floating-button-stage1.normal-size {
+    width: 60px;
+    height: 60px;
+  }
+
+  .floating-button-stage1.elderly-size {
+    width: 90px;
+    height: 90px;
+  }
+
+  .button-content .icon {
+    font-size: 28px;
+  }
+
+  .elderly-size .button-content .icon {
+    font-size: 40px;
+  }
+
+  .button-content .text {
+    font-size: 12px;
+  }
+
+  .elderly-size .button-content .text {
+    font-size: 16px;
+  }
+}

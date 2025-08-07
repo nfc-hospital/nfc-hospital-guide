@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ChatbotButton from '../components/ChatbotButton';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -218,8 +217,6 @@ const Home = () => {
         </div>
       </div>
 
-      {/* 챗봇 버튼 */}
-      <ChatbotButton />
     </div>
   );
 };

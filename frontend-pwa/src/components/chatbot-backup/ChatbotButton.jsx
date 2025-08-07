@@ -37,47 +37,24 @@ export default function ChatbotButton() {
     setIsTyping(true);
     
     try {
-      // 실제 API 호출 (현재는 Mock)
-      // const response = await fetch('/api/chatbot', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ message: input })
-      // });
-      // const data = await response.json();
+      // 실제 챗봇 서버 API 호출
+      const { chatbotAPI } = await import('../api/client');
+      const response = await chatbotAPI.query(input, {
+        currentLocation: localStorage.getItem('lastNFCLocation') || '',
+        userId: localStorage.getItem('userId') || 'anonymous'
+      });
       
-      // 임시 응답 Mock
-      const botResponses = {
-        '검사': '검사 전 준비사항은 각 검사별로 다릅니다. X-ray는 금속 제거, 혈액검사는 금식이 필요합니다.',
-        '위치': '현재 위치에서 검사실까지 경로는 앱 하단의 지도 버튼을 누르면 확인하실 수 있습니다.',
-        '대기': '현재 예상 대기시간은 약 15분입니다. 정확한 시간은 검사실 화면에서 확인하실 수 있습니다.',
-        '결과': '검사 결과는 보통 1-3일 내에 확인 가능합니다. 결과가 나오면 알림을 보내드립니다.',
-        '주차': '병원 지하 1층과 별관 옆 주차장을 이용하실 수 있습니다. 4시간까지 무료입니다.',
-        '시간': '병원 운영시간은 평일 9시부터 18시까지, 토요일은 9시부터 13시까지입니다.',
-        '약': '약 처방은 진료 후 수납창구에서 발급받을 수 있습니다.',
-        '화장실': '각 층 엘리베이터 옆에 화장실이 있습니다.'
-      };
-      
-      // 간단한 키워드 매칭
-      let botResponse = '죄송합니다, 해당 질문에 대한 답변을 찾을 수 없습니다. 다른 질문을 해주세요.';
-      
-      for (const [keyword, response] of Object.entries(botResponses)) {
-        if (input.includes(keyword)) {
-          botResponse = response;
-          break;
-        }
-      }
-      
-      // 타이핑 효과를 위한 지연
-      setTimeout(() => {
+      if (response.success) {
         const botMessage = {
           type: 'bot',
-          text: botResponse,
+          text: response.data.response.content,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         
         setMessages(prev => [...prev, botMessage]);
-        setIsTyping(false);
-      }, 1000);
+      } else {
+        throw new Error(response.error?.message || '챗봇 응답 실패');
+      }
     } catch (error) {
       console.error('챗봇 응답 오류:', error);
       
@@ -95,8 +72,29 @@ export default function ChatbotButton() {
   };
   
   const handleVoiceInput = () => {
-    // 음성 인식 기능 (WebSpeech API 사용 예정)
-    alert('음성 인식 기능은 준비 중입니다.');
+    // 음성 인식 기능
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('이 브라우저는 음성 인식을 지원하지 않습니다.');
+      return;
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'ko-KR';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    
+    recognition.start();
+    
+    recognition.onresult = (event) => {
+      const speechResult = event.results[0][0].transcript;
+      setInput(speechResult);
+    };
+    
+    recognition.onerror = (event) => {
+      console.error('음성 인식 오류:', event.error);
+      alert('음성 인식에 실패했습니다. 다시 시도해주세요.');
+    };
   };
   
   return (
@@ -173,6 +171,7 @@ export default function ChatbotButton() {
               </button>
               <button
                 type="submit"
+                onClick={handleSendMessage}
                 className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                 disabled={isTyping || !input.trim()}
               >

@@ -5,14 +5,22 @@ from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-import openai
+from openai import OpenAI
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-openai.api_key = os.getenv('OPENAI_API_KEY')
+# OpenAI 클라이언트 초기화
+try:
+    client = OpenAI(
+        api_key=os.getenv('OPENAI_API_KEY')
+    )
+    print("OpenAI client initialized successfully")
+except Exception as e:
+    print(f"Failed to initialize OpenAI client: {e}")
+    client = None
 
 SYSTEM_PROMPT = """
 당신은 NFC 기반 병원 검사·진료 안내 시스템의 AI 챗봇입니다. 
@@ -65,15 +73,28 @@ def chatbot_query():
             {"role": "user", "content": user_question}
         ]
         
+        # OpenAI API 키 확인
+        if not client:
+            return jsonify({
+                "success": False,
+                "error": {
+                    "code": "CONFIG_ERROR",
+                    "message": "OpenAI API가 설정되지 않았습니다. 관리자에게 문의하세요."
+                },
+                "timestamp": datetime.now().isoformat()
+            }), 500
+            
         # OpenAI API 호출
-        response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+        print(f"Sending query to OpenAI: {user_question}")
+        response = client.chat.completions.create(
+            model="gpt-4.1",
             messages=messages,
             max_tokens=500,
             temperature=0.7
         )
         
         ai_response = response.choices[0].message.content
+        print(f"Received response from OpenAI: {ai_response[:100]}...")
         
         return jsonify({
             "success": True,
@@ -95,11 +116,22 @@ def chatbot_query():
         })
         
     except Exception as e:
+        print(f"Error in chatbot_query: {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        # 에러 메시지를 더 사용자 친화적으로 변경
+        error_message = "챗봇 처리 중 오류가 발생했습니다."
+        if "api_key" in str(e).lower():
+            error_message = "OpenAI API 키가 유효하지 않습니다. 설정을 확인해주세요."
+        elif "rate" in str(e).lower():
+            error_message = "API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."
+        
         return jsonify({
             "success": False,
             "error": {
                 "code": "INTERNAL_ERROR",
-                "message": f"챗봇 처리 중 오류가 발생했습니다: {str(e)}"
+                "message": error_message
             },
             "timestamp": datetime.now().isoformat()
         }), 500
@@ -188,5 +220,12 @@ if __name__ == '__main__':
     
     print(f"NFC Hospital Chatbot Server starting on port {port}")
     print(f"Environment: {'Development' if debug_mode else 'Production'}")
+    
+    # API 키 상태 확인
+    api_key = os.getenv('OPENAI_API_KEY')
+    if api_key:
+        print(f"OpenAI API Key: {api_key[:8]}...{api_key[-4:]}")
+    else:
+        print("WARNING: OpenAI API Key not found!")
     
     app.run(host='0.0.0.0', port=port, debug=debug_mode)

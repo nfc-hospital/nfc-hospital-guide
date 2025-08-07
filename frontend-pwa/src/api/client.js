@@ -151,6 +151,148 @@ export const queueAPI = {
   getQueueStatus: (departmentId) => api.get(`/queue/status/${departmentId}/`),
 };
 
+// 챗봇 API
+export const chatbotAPI = {
+  query: async (question, context = {}) => {
+    // 오프라인 모드 처리
+    if (!navigator.onLine) {
+      const { searchOfflineFAQ, checkEmergencyKeywords, getEmergencyResponse } = await import('../utils/offlineData');
+      
+      if (checkEmergencyKeywords(question)) {
+        return getEmergencyResponse();
+      }
+      
+      return searchOfflineFAQ(question);
+    }
+    
+    try {
+      // 챗봇 서버는 별도 포트(5000)에서 실행되므로 직접 URL 사용
+      const chatbotUrl = import.meta.env.DEV 
+        ? 'http://localhost:5000/api/chatbot/query'
+        : '/api/chatbot/query';
+      
+      const response = await axios.post(chatbotUrl, { question, context }, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // 챗봇 서버는 CSRF 토큰이 필요없음
+        withCredentials: false,
+        timeout: 10000 // 10초 타임아웃
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.warn('API 호출 실패, 오프라인 모드로 폴백:', error);
+      
+      // API 실패 시 오프라인 모드로 폴백
+      const { searchOfflineFAQ, checkEmergencyKeywords, getEmergencyResponse } = await import('../utils/offlineData');
+      
+      if (checkEmergencyKeywords(question)) {
+        return getEmergencyResponse();
+      }
+      
+      return searchOfflineFAQ(question);
+    }
+  },
+  
+  getFaq: async () => {
+    if (!navigator.onLine) {
+      // 오프라인 FAQ 반환
+      return {
+        success: true,
+        data: {
+          items: [
+            {
+              id: "faq-offline-001",
+              question: "CT 검사는 얼마나 걸리나요?",
+              answer: "CT 검사는 15-30분 정도 소요됩니다.",
+              category: "검사시간"
+            },
+            {
+              id: "faq-offline-002",
+              question: "MRI 검사 전 준비사항은?",
+              answer: "모든 금속을 제거하시고, 4시간 금식하세요.",
+              category: "검사준비"
+            }
+          ],
+          totalCount: 2
+        },
+        message: "오프라인 FAQ",
+        offline: true
+      };
+    }
+    
+    try {
+      const chatbotUrl = import.meta.env.DEV 
+        ? 'http://localhost:5000/api/chatbot/faq'
+        : '/api/chatbot/faq';
+      
+      const response = await axios.get(chatbotUrl, { timeout: 5000 });
+      return response.data;
+    } catch (error) {
+      console.warn('FAQ API 호출 실패, 오프라인 FAQ 사용');
+      return this.getFaq(); // 재귀 호출로 오프라인 FAQ 반환
+    }
+  },
+  
+  getSuggestions: async () => {
+    if (!navigator.onLine) {
+      return {
+        success: true,
+        data: [
+          "검사실 위치가 어디인가요?",
+          "대기 시간은 얼마나 되나요?",
+          "검사 준비사항을 알려주세요",
+          "주차장은 어디에 있나요?",
+          "병원 운영 시간이 어떻게 되나요?"
+        ],
+        offline: true
+      };
+    }
+    
+    try {
+      const chatbotUrl = import.meta.env.DEV 
+        ? 'http://localhost:5000/api/chatbot/suggestions'
+        : '/api/chatbot/suggestions';
+      
+      const response = await axios.get(chatbotUrl, { timeout: 5000 });
+      return response.data;
+    } catch (error) {
+      console.warn('추천 질문 API 호출 실패, 오프라인 모드 사용');
+      return this.getSuggestions(); // 재귀 호출로 오프라인 데이터 반환
+    }
+  },
+  
+  // 의료 용어 설명 API
+  explainMedicalTerm: async (term) => {
+    if (!navigator.onLine) {
+      return {
+        term: term,
+        message: `'${term}' 용어에 대한 오프라인 설명을 사용할 수 없습니다.`,
+        suggestion: "의료진이나 간호사에게 직접 문의해주세요.",
+        offline: true
+      };
+    }
+    
+    try {
+      const chatbotUrl = import.meta.env.DEV 
+        ? 'http://localhost:5000/api/chatbot/medical-terms'
+        : '/api/chatbot/medical-terms';
+      
+      const response = await axios.post(chatbotUrl, { term }, {
+        headers: { 'Content-Type': 'application/json' },
+        withCredentials: false,
+        timeout: 5000
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.warn('의료 용어 API 호출 실패');
+      return this.explainMedicalTerm(term); // 재귀 호출로 오프라인 응답 반환
+    }
+  }
+};
+
 // 관리자 대시보드 API
 export const adminAPI = {
   // NFC 태그 관리

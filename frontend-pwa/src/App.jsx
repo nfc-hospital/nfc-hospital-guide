@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { initializeCSRFToken } from './api/client';
@@ -17,9 +17,14 @@ import AdminDashboard from './pages/admin/AdminDashboard';
 import NFCTagManagement from './pages/admin/NFCTagManagement';
 import QueueMonitoring from './pages/admin/QueueMonitoring';
 import AnalyticsDashboard from './pages/admin/AnalyticsDashboard';
+import ChatbotTest from './pages/ChatbotTest';
+// New Chatbot System
+import ChatbotSystem from './components/chatbot-v2';
 import './styles/global.css';
 
 function App() {
+  const [elderlyMode, setElderlyMode] = useState(false);
+
   // 앱 시작 시 CSRF 토큰 초기화
   useEffect(() => {
     initializeCSRFToken();
@@ -32,6 +37,7 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/oauth/kakao" element={<KakaoOAuth />} />
           <Route path="/public-guide" element={<PublicGuide />} />
+          <Route path="/chatbot-test" element={<ChatbotTest />} />
           <Route element={<Layout />}>
             <Route path="/" element={
               <PrivateRoute>
@@ -103,6 +109,9 @@ function App() {
             </div>
           </>
         )}
+        
+        {/* 새로운 챗봇 시스템 */}
+        <ChatbotSystem elderlyMode={elderlyMode} />
       </Router>
     </AuthProvider>
   );
