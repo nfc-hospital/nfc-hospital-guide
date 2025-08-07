@@ -807,3 +807,584 @@ def queue_performance_metrics(request):
             code="METRICS_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+    
+from .models import PatientState, StateTransition, DailySchedule
+from integrations.models import EmrSyncStatus
+
+# 환자 상태 관리 API 추가
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])  # 비로그인 접근 허용
+def nfc_public_info(request):
+    """
+    비로그인 NFC 태깅 처리 (ARRIVED 상태)
+    POST /p-queue/nfc/public-info
+    """
+    try:
+        tag_id = request.data.get('tag_id')
+        
+        if not tag_id:
+            return APIResponse.error(
+                message="NFC 태그 ID가 필요합니다.",
+                code="MISSING_TAG_ID",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # NFC 태그 정보 조회 (기존 nfc_tags 테이블 활용)
+        try:
+            from nfc.models import NfcTag  # nfc 앱에 있다고 가정
+            tag = NfcTag.objects.get(tag_id=tag_id)
+            
+            return APIResponse.success(
+                data={
+                    'tag_info': {
+                        'location': f"{tag.building} {tag.floor}층 {tag.room}",
+                        'description': tag.description
+                    },
+                    'public_info': {
+                        'welcome_message': '병원에 오신 것을 환영합니다',
+                        'reception_guide': '접수창구는 1층 정면 오른쪽입니다',
+                        'voice_guide_available': True,
+                        'building_map': f"/static/maps/{tag.building}.jpg"
+                    }
+                },
+                message="공용 안내 정보를 조회했습니다."
+            )
+            
+        except:  # NfcTag 모델이 없거나 태그를 찾을 수 없는 경우
+            return APIResponse.success(
+                data={
+                    'public_info': {
+                        'welcome_message': '병원에 오신 것을 환영합니다',
+                        'reception_guide': '접수창구에서 도착 처리를 받으세요',
+                        'voice_guide_available': True
+                    }
+                },
+                message="공용 안내 정보입니다."
+            )
+        
+    except Exception as e:
+        logger.error(f"NFC public info error: {str(e)}")
+        return APIResponse.error(
+            message="공용 안내 정보 조회 중 오류가 발생했습니다.",
+            code="PUBLIC_INFO_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def patient_current_state(request):
+    """
+    환자 현재 상태 조회 (로그인 후)
+    GET /p-queue/patient/current-state
+    """
+    try:
+        user = request.user
+        
+        # PatientState 조회
+        try:
+            patient_state = PatientState.objects.get(user=user)
+        except PatientState.DoesNotExist:
+            # PatientState가 없으면 기존 Queue에서 생성
+            latest_queue = Queue.objects.filter(user=user).order_by('-updated_at').first()
+            if latest_queue:
+                # Queue 상태를 PatientState로 변환
+                state_mapping = {
+                    'waiting': 'WAITING',
+                    'called': 'CALLED',
+                    'in_progress': 'ONGOING',
+                    'completed': 'COMPLETED',
+                    'cancelled': 'REGISTERED'
+                }
+                
+                patient_state = PatientState.objects.create(
+                    user=user,
+                    current_state=state_mapping.get(latest_queue.state, 'REGISTERED'),
+                    current_exam=latest_queue.exam.exam_id,
+                    is_logged_in=True
+                )
+            else:
+                # 큐도 없으면 기본 상태로 생성
+                patient_state = PatientState.objects.create(
+                    user=user,
+                    current_state='REGISTERED',
+                    is_logged_in=True
+                )
+        
+        # 오늘 일정 조회
+        today = timezone.now().date()
+        today_schedules = DailySchedule.objects.filter(
+            user=user,
+            schedule_date=today
+        ).order_by('sequence_order')
+        
+        # 기존 Queue 정보도 함께 제공 (호환성)
+        current_queue = Queue.objects.filter(
+            user=user,
+            state__in=['waiting', 'called', 'in_progress']
+        ).first()
+        
+        return APIResponse.success(
+            data={
+                'patient_state': {
+                    'current_state': patient_state.current_state,
+                    'current_location': patient_state.current_location,
+                    'current_exam': patient_state.current_exam,
+                    'is_logged_in': patient_state.is_logged_in,
+                    'emr_department': patient_state.emr_department,
+                    'updated_at': patient_state.updated_at.isoformat()
+                },
+                'current_queue': QueueSerializer(current_queue).data if current_queue else None,
+                'today_schedules': [{
+                    'sequence_order': ds.sequence_order,
+                    'exam_id': ds.exam_id,
+                    'emr_department': ds.emr_department,
+                    'our_queue_status': ds.our_queue_status,
+                    'estimated_start_time': ds.estimated_start_time.strftime('%H:%M') if ds.estimated_start_time else None
+                } for ds in today_schedules],
+                'next_action': get_next_action_guide(patient_state)
+            },
+            message="환자 상태를 조회했습니다."
+        )
+        
+    except Exception as e:
+        logger.error(f"Patient state error: {str(e)}")
+        return APIResponse.error(
+            message="환자 상태 조회 중 오류가 발생했습니다.",
+            code="PATIENT_STATE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def nfc_checkin(request):
+    """
+    NFC 태깅으로 위치 체크인 및 상태 업데이트
+    POST /p-queue/nfc/checkin
+    """
+    try:
+        user = request.user
+        tag_id = request.data.get('tag_id')
+        
+        if not tag_id:
+            return APIResponse.error(
+                message="NFC 태그 ID가 필요합니다.",
+                code="MISSING_TAG_ID",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # PatientState 조회 또는 생성
+        patient_state, created = PatientState.objects.get_or_create(
+            user=user,
+            defaults={
+                'current_state': 'ARRIVED',
+                'is_logged_in': True
+            }
+        )
+        
+        # 위치 업데이트
+        old_location = patient_state.current_location
+        old_state = patient_state.current_state
+        patient_state.current_location = tag_id
+        
+        # 태그 위치에 따른 상태 결정
+        new_state = determine_state_from_location(tag_id, patient_state)
+        
+        if new_state != old_state:
+            patient_state.current_state = new_state
+            
+            # 상태 전환 로그 생성
+            StateTransition.objects.create(
+                user=user,
+                from_state=old_state,
+                to_state=new_state,
+                trigger_type='nfc_tag',
+                trigger_source=tag_id,
+                location_at_transition=tag_id
+            )
+        
+        patient_state.save()
+        
+        return APIResponse.success(
+            data={
+                'checkin_success': True,
+                'location_updated': old_location != tag_id,
+                'state_changed': old_state != new_state,
+                'current_state': patient_state.current_state,
+                'current_location': patient_state.current_location,
+                'next_action': get_next_action_guide(patient_state)
+            },
+            message="체크인이 완료되었습니다."
+        )
+        
+    except Exception as e:
+        logger.error(f"NFC checkin error: {str(e)}")
+        return APIResponse.error(
+            message="체크인 처리 중 오류가 발생했습니다.",
+            code="CHECKIN_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+# 헬퍼 함수들
+def get_next_action_guide(patient_state):
+    """환자 상태에 따른 다음 액션 가이드"""
+    action_guides = {
+        'UNREGISTERED': {
+            'message': '접수창구에서 도착 처리를 받으세요',
+            'action': 'goto_reception',
+            'priority': 'high'
+        },
+        'ARRIVED': {
+            'message': '카카오톡 또는 PASS로 로그인하세요',
+            'action': 'login_required',
+            'priority': 'high'
+        },
+        'REGISTERED': {
+            'message': '첫 번째 검사실로 이동하세요',
+            'action': 'goto_exam_room',
+            'priority': 'medium'
+        },
+        'WAITING': {
+            'message': '대기 중입니다. 호출을 기다려주세요',
+            'action': 'wait_for_call',
+            'priority': 'low'
+        },
+        'CALLED': {
+            'message': '검사실로 입실하세요',
+            'action': 'enter_exam_room',
+            'priority': 'urgent'
+        },
+        'ONGOING': {
+            'message': '검사가 진행 중입니다',
+            'action': 'exam_in_progress',
+            'priority': 'info'
+        },
+        'COMPLETED': {
+            'message': '다음 일정을 확인하거나 수납창구로 이동하세요',
+            'action': 'check_next_or_payment',
+            'priority': 'medium'
+        },
+        'PAYMENT': {
+            'message': '수납을 완료하세요',
+            'action': 'complete_payment',
+            'priority': 'medium'
+        },
+        'FINISHED': {
+            'message': '모든 일정이 완료되었습니다',
+            'action': 'all_completed',
+            'priority': 'info'
+        }
+    }
+    
+    return action_guides.get(patient_state.current_state, {
+        'message': '상태를 확인해주세요',
+        'action': 'check_status',
+        'priority': 'medium'
+    })
+
+def determine_state_from_location(tag_id, patient_state):
+    """NFC 태그 위치에 따른 상태 결정 로직"""
+    # 실제로는 nfc_tags 테이블을 조회해서 위치별 로직을 구현
+    # 여기서는 간단한 예시
+    
+    current_state = patient_state.current_state
+    
+    # 태그 ID 패턴으로 위치 추정 (실제로는 DB 조회)
+    if 'entrance' in tag_id.lower():
+        return 'ARRIVED' if not patient_state.is_logged_in else 'REGISTERED'
+    elif 'exam' in tag_id.lower() or 'room' in tag_id.lower():
+        return 'WAITING' if current_state in ['REGISTERED', 'ARRIVED'] else current_state
+    elif 'exit' in tag_id.lower():
+        return 'FINISHED'
+    elif 'payment' in tag_id.lower():
+        return 'PAYMENT'
+    else:
+        return current_state  # 위치를 알 수 없으면 현재 상태 유지
+
+def calculate_wait_duration(queue):
+    """대기 시간 계산"""
+    if queue.state == 'waiting':
+        wait_time = timezone.now() - queue.created_at
+        return int(wait_time.total_seconds() / 60)  # 분 단위
+    elif queue.state == 'called' and queue.called_at:
+        call_wait_time = timezone.now() - queue.called_at
+        return int(call_wait_time.total_seconds() / 60)  # 호출 후 경과 시간
+    else:
+        return 0
+    
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def recent_state_transitions(request):
+    """
+    최근 상태 전환 목록
+    GET /api/v1/queue/transitions/recent/
+    """
+    try:
+        if request.user.role not in ['super', 'dept', 'staff']:
+            return APIResponse.error(
+                message="간호사 이상의 권한이 필요합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        hours = int(request.GET.get('hours', 24))
+        department = request.GET.get('department')
+        
+        start_time = timezone.now() - timedelta(hours=hours)
+        
+        query = StateTransition.objects.filter(
+            created_at__gte=start_time
+        ).select_related('user').order_by('-created_at')
+        
+        if department:
+            # PatientState를 통해 부서 필터링
+            patient_ids = PatientState.objects.filter(
+                emr_department=department
+            ).values_list('user_id', flat=True)
+            query = query.filter(user_id__in=patient_ids)
+        
+        transitions = query[:100]  # 최근 100개만
+        
+        return APIResponse.success(
+            data={
+                'transitions': [{
+                    'transition_id': str(t.transition_id),
+                    'user_name': t.user.name if hasattr(t.user, 'name') else t.user.username,
+                    'from_state': t.from_state,
+                    'to_state': t.to_state,
+                    'trigger_type': t.trigger_type,
+                    'trigger_source': t.trigger_source,
+                    'location_at_transition': t.location_at_transition,
+                    'exam_id': t.exam_id,
+                    'created_at': t.created_at.isoformat()
+                } for t in transitions],
+                'period_hours': hours,
+                'total_count': query.count()
+            },
+            message=f"최근 {hours}시간 상태 전환을 조회했습니다."
+        )
+        
+    except Exception as e:
+        logger.error(f"Recent transitions error: {str(e)}")
+        return APIResponse.error(
+            message="최근 상태 전환 조회 중 오류가 발생했습니다.",
+            code="RECENT_TRANSITIONS_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def state_transition_analytics(request):
+    """
+    상태 전환 분석 데이터
+    GET /api/v1/queue/transitions/analytics/
+    """
+    try:
+        if request.user.role not in ['super', 'dept']:
+            return APIResponse.error(
+                message="부서 관리자 이상의 권한이 필요합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        days = int(request.GET.get('days', 7))
+        start_date = timezone.now() - timedelta(days=days)
+        
+        transitions = StateTransition.objects.filter(
+            created_at__gte=start_date
+        )
+        
+        # 상태별 전환 통계
+        state_stats = transitions.values('from_state', 'to_state').annotate(
+            count=Count('transition_id')
+        ).order_by('-count')
+        
+        # 트리거 타입별 통계
+        trigger_stats = transitions.values('trigger_type').annotate(
+            count=Count('transition_id')
+        )
+        
+        # 시간대별 전환 패턴
+        hourly_pattern = []
+        for hour in range(24):
+            hour_count = transitions.filter(
+                created_at__hour=hour
+            ).count()
+            hourly_pattern.append({
+                'hour': hour,
+                'count': hour_count
+            })
+        
+        # 평균 상태 체류 시간 계산
+        avg_durations = {}
+        for state in ['WAITING', 'CALLED', 'ONGOING']:
+            # 해당 상태로 전환된 후 다음 상태로 전환되기까지의 시간
+            state_entries = transitions.filter(to_state=state).order_by('user', 'created_at')
+            durations = []
+            
+            for entry in state_entries:
+                next_transition = transitions.filter(
+                    user=entry.user,
+                    from_state=state,
+                    created_at__gt=entry.created_at
+                ).first()
+                
+                if next_transition:
+                    duration = (next_transition.created_at - entry.created_at).total_seconds() / 60
+                    durations.append(duration)
+            
+            avg_durations[state] = {
+                'avg_minutes': sum(durations) / len(durations) if durations else 0,
+                'samples': len(durations)
+            }
+        
+        return APIResponse.success(
+            data={
+                'period_days': days,
+                'total_transitions': transitions.count(),
+                'state_transitions': list(state_stats),
+                'trigger_breakdown': list(trigger_stats),
+                'hourly_pattern': hourly_pattern,
+                'average_durations': avg_durations,
+                'peak_hour': max(hourly_pattern, key=lambda x: x['count'])['hour'] if hourly_pattern else None
+            },
+            message="상태 전환 분석 데이터를 조회했습니다."
+        )
+        
+    except Exception as e:
+        logger.error(f"Transition analytics error: {str(e)}")
+        return APIResponse.error(
+            message="상태 전환 분석 중 오류가 발생했습니다.",
+            code="TRANSITION_ANALYTICS_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def patient_daily_schedule(request):
+    """
+    환자 일일 스케줄 조회
+    GET /api/v1/queue/patient/daily-schedule/
+    """
+    try:
+        user = request.user
+        target_date = request.GET.get('date', timezone.now().date().isoformat())
+        
+        schedules = DailySchedule.objects.filter(
+            user=user,
+            schedule_date=target_date
+        ).order_by('sequence_order')
+        
+        return APIResponse.success(
+            data={
+                'date': target_date,
+                'schedules': [{
+                    'sequence_order': s.sequence_order,
+                    'exam_id': s.exam_id,
+                    'emr_department': s.emr_department,
+                    'emr_doctor_name': s.emr_doctor_name,
+                    'estimated_start_time': s.estimated_start_time.strftime('%H:%M') if s.estimated_start_time else None,
+                    'our_queue_status': s.our_queue_status,
+                    'emr_status_code': s.emr_status_code
+                } for s in schedules]
+            },
+            message="일일 스케줄을 조회했습니다."
+        )
+        
+    except Exception as e:
+        logger.error(f"Daily schedule error: {str(e)}")
+        return APIResponse.error(
+            message="일일 스케줄 조회 중 오류가 발생했습니다.",
+            code="DAILY_SCHEDULE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def patient_state_history(request):
+    """
+    환자 상태 전환 히스토리
+    GET /api/v1/queue/patient/state-history/
+    """
+    try:
+        user = request.user
+        days = int(request.GET.get('days', 7))
+        
+        start_date = timezone.now() - timedelta(days=days)
+        
+        transitions = StateTransition.objects.filter(
+            user=user,
+            created_at__gte=start_date
+        ).order_by('-created_at')
+        
+        return APIResponse.success(
+            data={
+                'transitions': [{
+                    'from_state': t.from_state,
+                    'to_state': t.to_state,
+                    'trigger_type': t.trigger_type,
+                    'location_at_transition': t.location_at_transition,
+                    'created_at': t.created_at.isoformat()
+                } for t in transitions]
+            },
+            message="상태 전환 히스토리를 조회했습니다."
+        )
+        
+    except Exception as e:
+        logger.error(f"State history error: {str(e)}")
+        return APIResponse.error(
+            message="상태 히스토리 조회 중 오류가 발생했습니다.",
+            code="STATE_HISTORY_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def nurse_patients_by_state(request):
+    """
+    상태별 환자 목록 (간호사용)
+    GET /api/v1/queue/nurse/patients-by-state/
+    """
+    try:
+        if request.user.role not in ['super', 'dept', 'staff']:
+            return APIResponse.error(
+                message="간호사 이상의 권한이 필요합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        state = request.GET.get('state', 'WAITING')
+        department = request.GET.get('department')
+        
+        query = PatientState.objects.filter(current_state=state).select_related('user')
+        
+        if department:
+            query = query.filter(emr_department=department)
+        
+        patients = [{
+            'user_id': ps.user.user_id,
+            'patient_name': ps.user.name if hasattr(ps.user, 'name') else ps.user.username,
+            'current_state': ps.current_state,
+            'current_exam': ps.current_exam,
+            'emr_department': ps.emr_department,
+            'updated_at': ps.updated_at.isoformat()
+        } for ps in query]
+        
+        return APIResponse.success(
+            data={
+                'state_filter': state,
+                'department_filter': department,
+                'patients': patients,
+                'count': len(patients)
+            },
+            message=f"{state} 상태의 환자 목록을 조회했습니다."
+        )
+        
+    except Exception as e:
+        logger.error(f"Patients by state error: {str(e)}")
+        return APIResponse.error(
+            message="상태별 환자 조회 중 오류가 발생했습니다.",
+            code="PATIENTS_BY_STATE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    

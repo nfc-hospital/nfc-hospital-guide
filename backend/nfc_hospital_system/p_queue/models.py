@@ -99,6 +99,17 @@ class Queue(models.Model):
         verbose_name='대기열 상태 변경 시간'
     )
 
+    # 새로운 필드 추가
+    schedule = models.ForeignKey(
+        'DailySchedule', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True,
+        related_name='related_queues',
+        verbose_name='일일 스케줄 연결',
+        db_column='schedule_id'
+    )
+
     class Meta:
         db_table = 'queues'
         verbose_name = '대기열'
@@ -300,6 +311,29 @@ class QueueStatusLog(models.Model):
         verbose_name='변경 시간'
     )
 
+    # 새 필드 추가
+    queue_position_at_time = models.IntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name='변경 시점 대기순서'
+    )
+    estimated_wait_time_at_time = models.IntegerField(
+        null=True, 
+        blank=True, 
+        verbose_name='변경 시점 예상대기시간'
+    )
+    location = models.CharField(
+        max_length=36, 
+        null=True, 
+        blank=True, 
+        verbose_name='변경 시점 위치'
+    )
+    metadata = models.JSONField(
+        null=True, 
+        blank=True, 
+        verbose_name='추가 컨텍스트 정보'
+    )
+
     class Meta:
         db_table = 'queue_status_logs'
         verbose_name = '대기열 상태 로그'
@@ -308,7 +342,153 @@ class QueueStatusLog(models.Model):
         indexes = [
             models.Index(fields=['queue', 'created_at']),
             models.Index(fields=['new_state']),
+            models.Index(fields=['location']), 
         ]
 
     def __str__(self):
         return f"{self.queue.queue_id} - {self.previous_state} → {self.new_state}"
+
+# 환자 상태 관리 모델 추가
+class PatientState(models.Model):
+    """환자별 현재 상태 관리"""
+    state_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='patient_state')  # 'users.User' → User
+    
+    STATE_CHOICES = [
+        ('UNREGISTERED', 'Unregistered'),
+        ('ARRIVED', 'Arrived'),
+        ('REGISTERED', 'Registered'),
+        ('WAITING', 'Waiting'),
+        ('CALLED', 'Called'),
+        ('ONGOING', 'Ongoing'),
+        ('COMPLETED', 'Completed'),
+        ('PAYMENT', 'Payment'),
+        ('FINISHED', 'Finished'),
+    ]
+    current_state = models.CharField(max_length=20, choices=STATE_CHOICES, default='UNREGISTERED')
+    current_location = models.CharField(max_length=36, null=True, blank=True)
+    current_exam = models.CharField(max_length=50, null=True, blank=True)
+    emr_patient_id = models.CharField(max_length=100, null=True, blank=True)
+    
+    # EMR 정보
+    emr_raw_status = models.CharField(max_length=50, null=True, blank=True)
+    emr_department = models.CharField(max_length=50, null=True, blank=True)
+    emr_appointment_time = models.DateTimeField(null=True, blank=True)
+    emr_latest_update = models.DateTimeField(null=True, blank=True)
+    
+    # 로그인 정보
+    is_logged_in = models.BooleanField(default=False)
+    login_method = models.CharField(max_length=20, null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'patient_states'
+        indexes = [
+            models.Index(fields=['current_state']),
+            models.Index(fields=['emr_patient_id']),
+            models.Index(fields=['emr_appointment_time']),
+        ]
+        
+    def __str__(self):
+        return f"{self.user.name} - {self.current_state}"
+
+
+class StateTransition(models.Model):
+    """상태 전환 히스토리"""
+    transition_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='state_transitions')  # 'users.User' → User
+    
+    STATE_CHOICES = [
+        ('UNREGISTERED', 'Unregistered'),
+        ('ARRIVED', 'Arrived'),
+        ('REGISTERED', 'Registered'),
+        ('WAITING', 'Waiting'),
+        ('CALLED', 'Called'),
+        ('ONGOING', 'Ongoing'),
+        ('COMPLETED', 'Completed'),
+        ('PAYMENT', 'Payment'),
+        ('FINISHED', 'Finished'),
+    ]
+    from_state = models.CharField(max_length=20, choices=STATE_CHOICES, null=True, blank=True)
+    to_state = models.CharField(max_length=20, choices=STATE_CHOICES)
+    
+    TRIGGER_CHOICES = [
+        ('emr_sync', 'EMR Sync'),
+        ('nfc_tag', 'NFC Tag'),
+        ('system_auto', 'System Auto'),
+        ('nurse_manual', 'Nurse Manual'),
+    ]
+    trigger_type = models.CharField(max_length=20, choices=TRIGGER_CHOICES)
+    trigger_source = models.CharField(max_length=100, null=True, blank=True)
+    
+    # 컨텍스트 정보
+    location_at_transition = models.CharField(max_length=36, null=True, blank=True)
+    exam_id = models.CharField(max_length=50, null=True, blank=True)
+    emr_reference = models.CharField(max_length=100, null=True, blank=True)
+    
+    # EMR 상태 스냅샷
+    emr_status_before = models.CharField(max_length=50, null=True, blank=True)
+    emr_status_after = models.CharField(max_length=50, null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'state_transitions'
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['trigger_type', 'created_at']),
+            models.Index(fields=['from_state', 'to_state']),
+        ]
+        ordering = ['-created_at']
+        
+    def __str__(self):
+        return f"{self.user.name}: {self.from_state} → {self.to_state}"
+
+
+class DailySchedule(models.Model):
+    """환자 일일 스케줄"""
+    schedule_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_schedules')  # 'users.User' → User
+    schedule_date = models.DateField()
+    exam_id = models.CharField(max_length=50)
+    sequence_order = models.IntegerField()
+    
+    # EMR 연동 정보
+    emr_appointment_id = models.CharField(max_length=100, null=True, blank=True)
+    emr_status_code = models.CharField(max_length=50, null=True, blank=True)
+    emr_department = models.CharField(max_length=50, null=True, blank=True)
+    emr_doctor_name = models.CharField(max_length=100, null=True, blank=True)
+    emr_room_number = models.CharField(max_length=20, null=True, blank=True)
+    emr_last_sync = models.DateTimeField(null=True, blank=True)
+    
+    # 우리 시스템 상태
+    QUEUE_STATUS_CHOICES = [
+        ('not_started', 'Not Started'),
+        ('waiting', 'Waiting'),
+        ('called', 'Called'),
+        ('ongoing', 'Ongoing'),
+        ('completed', 'Completed'),
+    ]
+    our_queue_status = models.CharField(max_length=20, choices=QUEUE_STATUS_CHOICES, default='not_started')
+    estimated_start_time = models.TimeField(null=True, blank=True)
+    actual_start_time = models.DateTimeField(null=True, blank=True)
+    actual_end_time = models.DateTimeField(null=True, blank=True)
+    result_ready_time = models.DateTimeField(null=True, blank=True)
+    result_location = models.CharField(max_length=200, null=True, blank=True)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'daily_schedules'
+        indexes = [
+            models.Index(fields=['user', 'schedule_date']),
+            models.Index(fields=['schedule_date', 'sequence_order']),
+            models.Index(fields=['emr_appointment_id']),
+        ]
+        ordering = ['schedule_date', 'sequence_order']
+        
+    def __str__(self):
+        return f"{self.user.name} - {self.schedule_date} ({self.sequence_order})"

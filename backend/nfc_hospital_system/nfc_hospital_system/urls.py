@@ -63,7 +63,7 @@ urlpatterns = [
     path('api/v1/analytics/', include('analytics.urls')),        # 분석
     
     # Phase 3 완성 기능 (나중에 활성화)
-    # path('api/v1/integration/', include('integrations.urls')), # 외부 연동
+    path('api/v1/integration/', include('integrations.urls')), # 외부 연동
     # path('api/v1/feedback/', include('feedback.urls')),        # 피드백 
     # path('api/v1/notifications/', include('notifications.urls')), # 알림
     # path('api/v1/hospital/', include('hospital.urls')),        # 병원 정보
