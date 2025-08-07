@@ -831,7 +831,7 @@ def tag_status_monitoring(request):
             }
             
             # 장기간 미사용 체크
-            if not tag.last_scan_time or tag.last_scan_time < inactive_threshold:
+            if not tag.last_scanned_at or tag.last_scanned_at < inactive_threshold:
                 tag_status['status'] = 'warning'
                 tag_status['issues'].append({
                     'type': 'inactive',
