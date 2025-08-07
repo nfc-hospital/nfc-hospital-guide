@@ -354,10 +354,10 @@ class CSRFTokenView(APIView):
     CSRF 토큰을 쿠키로 설정하는 엔드포인트.
     이 뷰는 GET 요청에 대해 아무것도 반환하지 않아도 Django가 csrftoken 쿠키를 설정합니다.
     """
-    permission_classes = [] # 모든 사용자가 접근 가능하도록 설정
+    permission_classes = [AllowAny] # 모든 사용자가 접근 가능하도록 설정
 
     def get(self, request):
-        return Response({"detail": "CSRF cookie set"})
+        return Response({"success": True, "detail": "CSRF cookie set"})
     
 
 
