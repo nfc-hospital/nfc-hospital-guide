@@ -1,0 +1,2068 @@
+================================================================================
+                    NFC 병원 안내 시스템 - 전체 프로젝트 구조 분석
+================================================================================
+작성일: 2025-08-08
+================================================================================
+
+목차:
+1. 프로젝트 개요
+2. 전체 디렉토리 구조
+3. 프론트엔드 (frontend-pwa) 상세 분석
+4. 백엔드 (Django) 상세 분석
+5. 챗봇 서버 (chatbot-server) 상세 분석
+6. 관리자 대시보드 (admin-dashboard) 상세 분석
+7. 시스템 아키텍처
+8. 기술 스택 정리
+9. API 엔드포인트 구조
+10. 데이터베이스 스키마
+
+================================================================================
+1. 프로젝트 개요
+================================================================================
+
+NFC 기반 병원 검사/진료 안내 시스템
+- 환자가 NFC 태그를 스캔하여 병원 내 위치 확인 및 검사 정보 제공
+- 실시간 대기열 관리 시스템
+- AI 챗봇을 통한 24시간 안내 서비스
+- 관리자를 위한 통합 대시보드
+
+주요 서비스:
+1. Frontend PWA (포트: 5174) - 환자용 모바일 웹 애플리케이션
+2. Django Backend (포트: 8000) - REST API 및 WebSocket 서버
+3. Chatbot Server (포트: 5000) - AI 챗봇 서비스
+4. Admin Dashboard (포트: 5173) - 관리자 인터페이스
+
+================================================================================
+2. 전체 디렉토리 구조
+================================================================================
+
+nfc-hospital-guide/
+├── .github/workflows/        # GitHub Actions CI/CD
+├── .vscode/                  # VSCode 에디터 설정
+├── admin-dashboard/          # 관리자 대시보드 (React)
+├── backend/                  # Django 백엔드 서버
+│   └── nfc_hospital_system/ # Django 프로젝트
+├── chatbot-server/          # 챗봇 서버 (Node.js + Python)
+├── docs/                    # 프로젝트 문서
+│   ├── api/                # API 문서
+│   └── README.md
+├── frontend-pwa/            # 프론트엔드 PWA (React)
+├── scripts/                 # 유틸리티 스크립트
+│   ├── dev-setup.sh        # 개발 환경 설정
+│   └── generate-types.js   # 타입 생성
+├── .env.example             # 환경변수 예제
+├── .gitignore
+├── CHATBOT_TEST_GUIDE.md
+├── DEVELOPMENT.md           # 개발 가이드
+├── OPENAI_SETUP.md         # OpenAI 설정 가이드
+├── QUICK_START.md          # 빠른 시작 가이드
+├── README.md               # 프로젝트 소개
+├── WEBSOCKET_GUIDE.md      # WebSocket 가이드
+├── ecosystem.config.js     # PM2 설정
+├── package.json            # 루트 패키지
+├── pnpm-lock.yaml
+└── pnpm-workspace.yaml     # pnpm 워크스페이스 설정
+
+================================================================================
+3. 프론트엔드 (frontend-pwa) 상세 분석
+================================================================================
+
+### 3.1 전체 파일 구조
+
+frontend-pwa/
+├── public/                      # 정적 파일
+│   ├── images/
+│   │   └── maps/               # 병원 지도 SVG 파일
+│   │       ├── annex-1f.svg
+│   │       ├── default.svg
+│   │       └── main-3f.svg
+│   ├── clear-tokens.html       # 토큰 초기화 페이지
+│   ├── favicon.ico
+│   ├── kakao_logo_placeholder.png
+│   ├── manifest.webmanifest    # PWA 매니페스트
+│   ├── pwa-192x192.png
+│   ├── pwa-512x512.png
+│   ├── robots.txt
+│   └── vite.svg
+├── src/
+│   ├── api/
+│   │   └── client.js           # Axios API 클라이언트 설정
+│   ├── assets/
+│   │   └── react.svg
+│   ├── components/             # React 컴포넌트
+│   │   ├── auth/
+│   │   │   └── KakaoOAuth.jsx  # 카카오 OAuth 인증
+│   │   ├── chatbot-backup/     # 이전 챗봇 버전 (백업)
+│   │   │   ├── core/
+│   │   │   │   ├── message-types/
+│   │   │   │   │   ├── CardMessage.jsx
+│   │   │   │   │   ├── ChecklistCard.jsx
+│   │   │   │   │   ├── LocationCard.jsx
+│   │   │   │   │   ├── QueueCard.jsx
+│   │   │   │   │   ├── TextMessage.jsx
+│   │   │   │   │   └── WarningMessage.jsx
+│   │   │   │   ├── Header.jsx
+│   │   │   │   ├── InputArea.jsx
+│   │   │   │   ├── MessageBubble.jsx
+│   │   │   │   ├── MessageList.jsx
+│   │   │   │   └── MessageMeta.jsx
+│   │   │   ├── layouts/
+│   │   │   │   └── ChatbotPopup.jsx
+│   │   │   ├── modes/
+│   │   │   │   └── ElderlyMode.jsx
+│   │   │   ├── styles/
+│   │   │   │   ├── SimpleChatbot.css
+│   │   │   │   ├── card-styles.css
+│   │   │   │   ├── chatbot.css
+│   │   │   │   ├── elderly-mode.css
+│   │   │   │   ├── input-area.css
+│   │   │   │   └── message-bubbles.css
+│   │   │   ├── ChatView.jsx
+│   │   │   ├── ChatbotButton.jsx
+│   │   │   └── HospitalChatbot.jsx
+│   │   ├── chatbot-v2/         # 새로운 챗봇 시스템
+│   │   │   ├── components/
+│   │   │   │   ├── ChatInput.jsx
+│   │   │   │   └── MessageBubble.jsx
+│   │   │   ├── stages/         # 3단계 UI 시스템
+│   │   │   │   ├── styles/
+│   │   │   │   │   ├── stage1.css
+│   │   │   │   │   ├── stage2.css
+│   │   │   │   │   └── stage3.css
+│   │   │   │   ├── Stage1_FloatingButton.jsx
+│   │   │   │   ├── Stage2_QuickSelect.jsx
+│   │   │   │   └── Stage3_FullChat.jsx
+│   │   │   ├── utils/
+│   │   │   │   ├── chatbotAPI.js
+│   │   │   │   └── constants.js
+│   │   │   ├── ChatbotSystem.css
+│   │   │   ├── ChatbotSystem.jsx
+│   │   │   └── index.js
+│   │   ├── common/             # 공통 컴포넌트
+│   │   │   ├── Button.jsx
+│   │   │   ├── Footer.jsx
+│   │   │   ├── Header.jsx
+│   │   │   ├── KakaoButton.jsx
+│   │   │   ├── Layout.jsx
+│   │   │   ├── LoadingSpinner.jsx
+│   │   │   ├── PageTitle.jsx
+│   │   │   ├── PrivateRoute.jsx
+│   │   │   └── Typography.jsx
+│   │   ├── dev/                # 개발용 컴포넌트
+│   │   │   └── CSRFStatus.jsx
+│   │   ├── DepartmentDirections.jsx
+│   │   ├── ExamCard.jsx
+│   │   ├── ExamInfo.jsx
+│   │   ├── ExamPreparation.jsx
+│   │   ├── ExamSchedule.jsx
+│   │   ├── MapNavigator.jsx
+│   │   ├── NFCReader.jsx
+│   │   ├── NFCStatus.jsx
+│   │   ├── Navigation.jsx
+│   │   ├── PublicGuide.jsx
+│   │   ├── VoiceInput.jsx
+│   │   ├── WaitingInfo.jsx
+│   │   ├── WaitingStatus.jsx
+│   │   ├── WebSocketTest.jsx
+│   │   └── WelcomeScreen.jsx
+│   ├── constants/
+│   │   ├── api.js
+│   │   └── config.js
+│   ├── context/                # Context API
+│   │   ├── AuthContext.jsx     # 인증 상태 관리
+│   │   └── SimulatedAuthContext.jsx
+│   ├── hooks/                  # 커스텀 React 훅
+│   │   ├── useAPI.js
+│   │   └── useWebSocket.js
+│   ├── pages/                  # 페이지 컴포넌트
+│   │   ├── admin/
+│   │   │   ├── AdminDashboard.jsx
+│   │   │   ├── AnalyticsDashboard.jsx
+│   │   │   ├── NFCTagManagement.jsx
+│   │   │   └── QueueMonitoring.jsx
+│   │   ├── ChatbotTest.jsx
+│   │   ├── Exam.jsx
+│   │   ├── Exam.jsx.backup
+│   │   ├── Home.jsx
+│   │   ├── Login.jsx
+│   │   ├── LoginPage.jsx
+│   │   ├── MainScreen.jsx
+│   │   └── NotFound.jsx
+│   ├── services/               # 서비스 레이어
+│   │   ├── api.js
+│   │   ├── auth.js
+│   │   ├── exams.js
+│   │   ├── queues.js
+│   │   ├── tags.js
+│   │   └── websocketService.js
+│   ├── styles/                 # 스타일 파일
+│   │   ├── App.css
+│   │   └── global.css
+│   ├── utils/                  # 유틸리티 함수
+│   │   ├── csrf.js             # CSRF 토큰 관리
+│   │   ├── formatters.js
+│   │   ├── offlineData.js      # 오프라인 데이터
+│   │   ├── storage.js
+│   │   └── validators.js
+│   ├── App.jsx                 # 메인 앱 컴포넌트
+│   ├── index.css               # 전역 CSS
+│   └── main.jsx                # 엔트리 포인트
+├── .eslintrc.json
+├── .gitignore
+├── README.md
+├── index.html
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── tailwind.config.js
+├── vite.config.js
+└── vite.config.js.timestamp-*
+
+### 3.2 기술 스택
+- **프레임워크**: React 18.2
+- **빌드 도구**: Vite 5.1
+- **라우팅**: React Router DOM 6.22
+- **상태 관리**: Context API
+- **스타일링**: Tailwind CSS 3.4
+- **HTTP 클라이언트**: Axios 1.6
+- **UI 컴포넌트**: Headless UI
+- **PWA**: vite-plugin-pwa
+
+### 3.3 라우팅 구조
+```
+/                       # 홈 (로그인 필요)
+/login                  # 로그인 페이지
+/oauth/kakao           # 카카오 OAuth 콜백
+/exam/:examId          # 검사 상세 정보
+/public-guide          # 공개 안내 페이지
+/chatbot-test          # 챗봇 테스트
+
+# 관리자 라우트
+/dashboard             # 관리자 대시보드
+/dashboard/nfc-tags    # NFC 태그 관리
+/dashboard/queue       # 대기열 모니터링
+/dashboard/analytics   # 통계 분석
+```
+
+### 3.4 주요 기능
+1. **인증 시스템**
+   - JWT 기반 인증
+   - 간편 로그인 (전화번호 뒷자리 + 생년월일)
+   - 카카오 OAuth 로그인
+   - 토큰 자동 갱신
+   - CSRF 보호
+
+2. **환자 서비스**
+   - 검사 일정 조회
+   - 실시간 대기 상태 확인
+   - 검사실 네비게이션
+   - NFC 태그 스캔
+
+3. **챗봇 시스템 (v2)**
+   - 3단계 인터페이스
+     - Stage 1: 플로팅 버튼
+     - Stage 2: 빠른 선택 메뉴
+     - Stage 3: 전체 채팅
+   - 오프라인 모드 지원
+   - 의료 용어 설명
+
+4. **관리자 대시보드**
+   - NFC 태그 관리
+   - 대기열 모니터링
+   - 실시간 통계
+   - 데이터 분석
+
+### 3.5 API 클라이언트 구조
+```javascript
+apiClient
+├── 인터셉터
+│   ├── 요청: JWT 토큰, CSRF 토큰 자동 추가
+│   └── 응답: 401 에러 시 토큰 갱신
+├── API 모듈
+│   ├── authAPI      # 인증 관련
+│   ├── nfcAPI       # NFC 태그
+│   ├── appointmentAPI # 예약/검사
+│   ├── queueAPI     # 대기열
+│   ├── chatbotAPI   # 챗봇
+│   └── adminAPI     # 관리자
+└── WebSocket 클라이언트
+```
+
+### 3.6 현재 구현 상태
+✅ 완료된 기능:
+- 인증 시스템 (간편 로그인, JWT)
+- 홈 화면 (검사 일정, 진행률)
+- 챗봇 시스템 v2 (3단계 UI)
+- API 클라이언트 설정
+
+🚧 개발 중/미완성:
+- 챗봇 API 실제 연동
+- NFC Web API 통합
+- WebSocket 연결 안정화
+- 오프라인 모드 완성
+
+================================================================================
+4. 백엔드 (Django) 상세 분석
+================================================================================
+
+### 4.1 전체 파일 구조
+
+backend/nfc_hospital_system/
+├── admin_dashboard/              # 관리자 대시보드 앱
+│   ├── migrations/
+│   │   ├── 0001_initial.py
+│   │   └── __init__.py
+│   ├── static/admin_dashboard/
+│   ├── templates/admin_dashboard/
+│   ├── tests/
+│   │   ├── __init__.py
+│   │   ├── test_api.py
+│   │   ├── test_models.py
+│   │   └── test_views.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── consumers.py             # WebSocket consumers
+│   ├── models.py
+│   ├── permissions.py
+│   ├── serializers.py
+│   ├── signals.py
+│   ├── tests.py
+│   ├── urls.py
+│   └── views.py
+├── ai_models/                   # AI 모델 앱 (미사용)
+│   ├── migrations/
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   └── views.py
+├── analytics/                   # 분석 앱
+│   ├── migrations/
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   ├── urls.py
+│   └── views.py
+├── appointments/                # 예약/검사 관리
+│   ├── management/
+│   │   ├── commands/
+│   │   │   ├── __init__.py
+│   │   │   └── create_initial_data.py
+│   │   └── __init__.py
+│   ├── migrations/
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_exampreparation_icon.py
+│   │   ├── 0003_exam_building_exam_category_exam_floor_exam_room_and_more.py
+│   │   ├── 0004_exampreparation_type_and_more.py
+│   │   ├── 0005_remove_exam_duration_exam_average_duration_and_more.py
+│   │   ├── 0006_add_initial_exam_data.py
+│   │   └── __init__.py
+│   ├── static/appointments/
+│   ├── templates/appointments/
+│   ├── tests/
+│   │   ├── __init__.py
+│   │   ├── test_api.py
+│   │   ├── test_models.py
+│   │   └── test_views.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── permissions.py
+│   ├── serializers.py
+│   ├── tests.py
+│   ├── urls.py
+│   └── views.py
+├── authentication/              # 인증 시스템
+│   ├── management/
+│   │   ├── commands/
+│   │   │   ├── __init__.py
+│   │   │   └── create_admin.py
+│   │   └── __init__.py
+│   ├── migrations/
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_remove_user_pw_hash.py
+│   │   └── __init__.py
+│   ├── static/authentication/
+│   ├── templates/authentication/
+│   ├── tests/
+│   │   ├── __init__.py
+│   │   ├── test_api.py
+│   │   ├── test_models.py
+│   │   └── test_views.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── hashers.py               # 비밀번호 해싱
+│   ├── models.py                # User 모델
+│   ├── permissions.py
+│   ├── serializers.py
+│   ├── tests.py
+│   ├── urls.py
+│   └── views.py                 # 로그인/토큰 뷰
+├── chatbot/                     # 챗봇 앱 (미사용)
+│   ├── migrations/
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   └── views.py
+├── integrations/                # 외부 연동
+│   ├── migrations/
+│   │   ├── 0001_initial.py
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   ├── urls.py
+│   └── views.py
+├── monitoring/                  # 모니터링 (미사용)
+│   ├── migrations/
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   └── views.py
+├── navigation/                  # 네비게이션 (미사용)
+│   ├── migrations/
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   └── views.py
+├── nfc/                         # NFC 태그 관리
+│   ├── migrations/
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_alter_nfctag_x_coord_alter_nfctag_y_coord.py
+│   │   └── __init__.py
+│   ├── static/nfc/
+│   ├── templates/nfc/
+│   ├── tests/
+│   │   ├── __init__.py
+│   │   ├── test_api.py
+│   │   ├── test_models.py
+│   │   └── test_views.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py                # NFCTag, TagScanLog
+│   ├── permissions.py
+│   ├── serializers.py
+│   ├── tests.py
+│   ├── urls.py
+│   └── views.py                 # 태그 스캔 API
+├── nfc_hospital_system/         # 프로젝트 설정
+│   ├── management/
+│   │   ├── commands/
+│   │   │   ├── __init__.py
+│   │   │   └── check_urls.py
+│   │   └── __init__.py
+│   ├── middleware/
+│   │   ├── __init__.py
+│   │   ├── cors.py
+│   │   └── websocket_auth.py
+│   ├── settings/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── development.py
+│   │   └── production.py
+│   ├── utils/
+│   │   └── cors_utils.py
+│   ├── __init__.py
+│   ├── asgi.py                  # ASGI 설정
+│   ├── middleware.py
+│   ├── routing.py               # WebSocket 라우팅
+│   ├── urls.py                  # URL 설정
+│   ├── utils.py
+│   ├── views.py
+│   └── wsgi.py
+├── notifications/               # 알림 (미사용)
+│   ├── migrations/
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   └── views.py
+├── p_queue/                     # 대기열 관리
+│   ├── migrations/
+│   │   ├── 0001_initial.py
+│   │   ├── 0002_alter_queue_estimated_wait_time.py
+│   │   ├── 0003_alter_queuestatuslog_previous_state.py
+│   │   ├── 0004_dailyschedule_patientstate_statetransition.py
+│   │   ├── 0005_queue_schedule_and_more.py
+│   │   └── __init__.py
+│   ├── static/p_queue/
+│   ├── templates/p_queue/
+│   ├── tests/
+│   │   ├── __init__.py
+│   │   ├── test_api.py
+│   │   ├── test_models.py
+│   │   └── test_views.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── consumers.py             # WebSocket 실시간 업데이트
+│   ├── models.py                # Queue, QueueStatusLog
+│   ├── permissions.py
+│   ├── routing.py
+│   ├── serializers.py
+│   ├── signals.py               # 상태 변경 시그널
+│   ├── tests.py
+│   ├── urls.py
+│   └── views.py
+├── users/                       # 사용자 관리
+│   ├── migrations/
+│   │   └── __init__.py
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   └── views.py
+├── dev_static/
+├── logs/
+│   ├── README.md
+│   └── django.log
+├── media/
+├── static/
+│   └── admin/
+├── staticfiles/                 # collectstatic 결과
+├── templates/
+│   ├── admin/
+│   └── react_dev.html
+├── .env                         # 환경 변수
+├── .gitignore
+├── HOSPITAL_ADMIN_GUIDE.md
+├── create_dirs.py
+├── db.sqlite3                   # SQLite 데이터베이스
+├── manage.py                    # Django 관리 명령
+├── requirements.txt             # Python 패키지
+├── run_asgi_server.bat
+├── run_asgi_server.sh
+├── setup_folders.bat
+├── test.http                    # HTTP 테스트
+├── test_realtime.html
+├── test_websocket.html          # WebSocket 테스트
+└── utils.py
+
+### 4.2 기술 스택
+- **프레임워크**: Django 5.2.4
+- **API**: Django REST Framework 3.14.0
+- **인증**: djangorestframework-simplejwt 5.3.0
+- **WebSocket**: Django Channels 4.0.0
+- **CORS**: django-cors-headers 4.3.1
+- **DB**: SQLite (개발), PostgreSQL/MySQL (운영)
+- **문서화**: drf-spectacular 0.26.5
+- **캐시**: Redis (django-redis)
+- **파일 스토리지**: AWS S3 (django-storages)
+
+### 4.3 주요 Django 앱 모듈 상세
+
+#### Authentication (인증)
+```python
+# models.py
+class User(AbstractBaseUser, PermissionsMixin):
+    """커스텀 유저 모델"""
+    ROLE_CHOICES = [
+        ('super', '최고 관리자'),
+        ('dept', '진료과 관리자'),
+        ('staff', '직원'),
+        ('patient', '환자'),
+        ('doctor', '의사'),
+    ]
+    
+    email = models.EmailField(unique=True)
+    phone_last4 = models.CharField(max_length=4)
+    birth_date = models.DateField()
+    # ... 기타 필드
+
+# views.py
+- SimpleLoginView: 간편 로그인 (전화번호 + 생년월일)
+- KakaoLoginView: 카카오 OAuth 로그인
+- TokenRefreshView: JWT 토큰 갱신
+- CSRFTokenView: CSRF 토큰 발급
+```
+
+#### NFC (태그 관리)
+```python
+# models.py
+class NFCTag(models.Model):
+    """NFC 태그 정보"""
+    tag_id = models.UUIDField(primary_key=True)
+    tag_uid = models.CharField(max_length=255)  # 하드웨어 UID
+    code = models.CharField(max_length=100)     # 병원 정의 코드
+    building = models.CharField(max_length=100)
+    floor = models.IntegerField()
+    room = models.CharField(max_length=100)
+    x_coord = models.FloatField()  # 지도 좌표
+    y_coord = models.FloatField()
+    
+class TagScanLog(models.Model):
+    """태그 스캔 기록"""
+    action_type = models.CharField(choices=[
+        ('scan', '위치 스캔'),
+        ('enter', '검사실 입장'),
+        ('exit', '검사실 퇴장'),
+        ('fail', '스캔 실패'),
+    ])
+```
+
+#### Appointments (예약/검사)
+```python
+# models.py
+class Exam(models.Model):
+    """검사 종류"""
+    name = models.CharField(max_length=100)
+    category = models.CharField(max_length=50)
+    department = models.CharField(max_length=100)
+    average_duration = models.IntegerField()  # 평균 소요시간(분)
+    
+class Appointment(models.Model):
+    """예약 정보"""
+    user = models.ForeignKey(User)
+    exam = models.ForeignKey(Exam)
+    scheduled_date = models.DateField()
+    scheduled_time = models.TimeField()
+    status = models.CharField(choices=[...])
+    
+class ExamPreparation(models.Model):
+    """검사 준비사항"""
+    exam = models.ForeignKey(Exam)
+    description = models.TextField()
+    duration = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50)
+```
+
+#### P_Queue (대기열)
+```python
+# models.py
+class Queue(models.Model):
+    """대기열 정보"""
+    STATE_CHOICES = [
+        ('waiting', '대기중'),
+        ('called', '호출됨'),
+        ('in_progress', '진행중'),
+        ('completed', '완료됨'),
+        ('cancelled', '취소됨'),
+    ]
+    PRIORITY_CHOICES = [
+        ('normal', '일반'),
+        ('urgent', '긴급'),
+        ('emergency', '응급'),
+    ]
+    
+    queue_id = models.UUIDField(primary_key=True)
+    appointment = models.ForeignKey(Appointment)
+    user = models.ForeignKey(User)
+    state = models.CharField(choices=STATE_CHOICES)
+    priority = models.CharField(choices=PRIORITY_CHOICES)
+    position = models.IntegerField()
+    
+# consumers.py
+class QueueConsumer(AsyncJsonWebsocketConsumer):
+    """WebSocket 실시간 업데이트"""
+    async def connect(self):
+        # WebSocket 연결 처리
+    
+    async def receive_json(self, content):
+        # 메시지 수신 처리
+    
+    async def queue_update(self, event):
+        # 대기열 업데이트 브로드캐스트
+```
+
+### 4.4 API 엔드포인트 구조
+```
+# 인증
+POST   /api/v1/auth/simple-login/      # 간편 로그인
+POST   /api/v1/auth/kakao/             # 카카오 로그인
+POST   /api/v1/auth/token/refresh/     # 토큰 갱신
+GET    /api/v1/auth/csrf-token/        # CSRF 토큰
+
+# NFC 태그
+POST   /api/v1/nfc/scan/               # 태그 스캔
+GET    /api/v1/nfc/tags/               # 태그 목록
+GET    /api/v1/nfc/tags/{id}/          # 태그 상세
+POST   /api/v1/nfc/tags/               # 태그 생성
+PATCH  /api/v1/nfc/tags/{id}/          # 태그 수정
+DELETE /api/v1/nfc/tags/{id}/          # 태그 삭제
+
+# 예약/검사
+GET    /api/v1/appointments/           # 예약 목록
+GET    /api/v1/appointments/{id}/      # 예약 상세
+GET    /api/v1/exams/                  # 검사 목록
+GET    /api/v1/exams/{id}/             # 검사 상세
+
+# 대기열
+GET    /api/v1/queue/my-queue/         # 내 대기열
+POST   /api/v1/queue/join/             # 대기열 참가
+GET    /api/v1/queue/status/{dept}/    # 부서별 상태
+
+# 관리자
+GET    /api/v1/admin/nfc/tags/list/    # 태그 관리
+GET    /api/v1/admin/queue/realtime/   # 실시간 모니터링
+GET    /api/v1/admin/analytics/        # 통계 분석
+
+# WebSocket
+ws://   /ws/queue/{queue_id}/          # 대기열 실시간
+```
+
+================================================================================
+5. 챗봇 서버 (chatbot-server) 상세 분석
+================================================================================
+
+### 5.1 전체 파일 구조
+
+chatbot-server/
+├── src/                         # Node.js 소스
+│   ├── config/
+│   │   └── server.js           # 서버 설정
+│   ├── data/
+│   │   ├── exam-info.json      # 검사 정보 데이터
+│   │   └── hospital-faq.json   # FAQ 데이터
+│   ├── models/
+│   │   ├── intents.js          # 의도 분류 모델
+│   │   └── responses.js        # 응답 템플릿
+│   ├── routes/
+│   │   ├── chat.js             # 채팅 라우트
+│   │   └── health.js           # 헬스체크
+│   ├── services/
+│   │   ├── chat.js             # 채팅 서비스
+│   │   └── nlp.js              # NLP 처리
+│   ├── utils/
+│   │   ├── axios.js            # HTTP 클라이언트
+│   │   ├── logger.js           # Winston 로거
+│   │   └── responseFormatter.js
+│   ├── app.js                  # Express 앱 설정
+│   └── server.js               # 서버 시작점
+├── utils/
+│   └── medical_safety_filter.py # 의료 안전 필터
+├── venv/                        # Python 가상환경
+├── app.py                       # Flask 서버 (Python)
+├── app_fallback.py              # 폴백 챗봇
+├── package.json                 # Node.js 패키지
+├── requirements.txt             # Python 패키지
+└── README.md
+
+### 5.2 이중 구조 시스템
+
+#### Node.js 서버 (기본)
+- **프레임워크**: Express 4.18
+- **NLP**: @nlpjs/basic 4.27
+- **기능**: 
+  - 의도 분류
+  - 패턴 매칭
+  - FAQ 응답
+
+#### Python Flask 서버 (AI)
+- **프레임워크**: Flask 3.0
+- **AI**: OpenAI API
+- **기능**:
+  - 자연어 이해
+  - 맥락 기반 응답
+  - 의료 안전 필터
+
+### 5.3 의료 안전 필터
+```python
+# medical_safety_filter.py
+class MedicalSafetyFilter:
+    """의료 관련 위험한 응답 차단"""
+    
+    PROHIBITED_KEYWORDS = [
+        "진단", "처방", "치료", "약물", "수술",
+        "부작용", "금기", "용량"
+    ]
+    
+    def check_response(self, text):
+        """응답 안전성 검사"""
+        for keyword in self.PROHIBITED_KEYWORDS:
+            if keyword in text:
+                return False, "의료진 상담 필요"
+        return True, text
+```
+
+### 5.4 API 엔드포인트
+```
+# Node.js 서버
+GET  /health                    # 헬스체크
+POST /api/chatbot/query         # 질문 처리
+GET  /api/chatbot/faq           # FAQ 목록
+GET  /api/chatbot/suggestions   # 추천 질문
+
+# Python Flask 서버
+GET  /health                    # 헬스체크
+POST /api/chatbot/query         # AI 질문 처리
+POST /api/chatbot/medical-terms # 의료 용어 설명
+```
+
+================================================================================
+6. 관리자 대시보드 (admin-dashboard) 상세 분석
+================================================================================
+
+### 6.1 전체 파일 구조
+
+admin-dashboard/
+├── public/
+│   ├── favicon.ico
+│   └── index.html
+├── src/
+│   ├── components/
+│   │   ├── common/             # 공통 컴포넌트
+│   │   │   ├── Footer.jsx
+│   │   │   ├── Header.jsx
+│   │   │   ├── LoadingSpinner.jsx
+│   │   │   └── Sidebar.jsx
+│   │   ├── exams/              # 검사 관리
+│   │   │   ├── ExamDetails.jsx
+│   │   │   ├── ExamForm.jsx
+│   │   │   └── ExamList.jsx
+│   │   ├── queues/             # 대기열 관리
+│   │   │   ├── QueueControls.jsx
+│   │   │   ├── QueueList.jsx
+│   │   │   └── QueueStatus.jsx
+│   │   └── tags/               # NFC 태그 관리
+│   │       ├── TagCard.jsx
+│   │       ├── TagForm.jsx
+│   │       └── TagList.jsx
+│   ├── contexts/
+│   │   └── AuthContext.jsx     # 인증 컨텍스트
+│   ├── pages/
+│   │   ├── Dashboard.jsx       # 대시보드 홈
+│   │   ├── ExamManagement.jsx  # 검사 관리
+│   │   ├── Login.jsx           # 로그인
+│   │   ├── QueueManagement.jsx # 대기열 관리
+│   │   └── TagManagement.jsx   # 태그 관리
+│   ├── services/
+│   │   ├── api.js              # API 클라이언트
+│   │   ├── auth.js             # 인증 서비스
+│   │   ├── exams.js            # 검사 서비스
+│   │   ├── queues.js           # 대기열 서비스
+│   │   └── tags.js             # 태그 서비스
+│   ├── styles/
+│   │   ├── global.css          # 전역 스타일
+│   │   └── theme.js            # 테마 설정
+│   ├── utils/
+│   │   ├── api.js              # API 유틸
+│   │   ├── auth.js             # 인증 유틸
+│   │   └── formatters.js       # 포맷터
+│   ├── App.jsx
+│   └── index.jsx
+├── .eslintrc.js
+├── .prettierrc
+├── README.md
+├── package-lock.json
+└── package.json
+
+### 6.2 주요 기능
+
+1. **NFC 태그 관리**
+   - 태그 CRUD 작업
+   - 태그-검사실 매핑
+   - 태그 상태 모니터링
+   - 일괄 작업
+
+2. **대기열 모니터링**
+   - 실시간 대기 현황
+   - 부서별 통계
+   - 환자 호출 시스템
+   - 대기시간 예측
+
+3. **검사 정보 관리**
+   - 검사 종류 관리
+   - 준비사항 편집
+   - 소요시간 설정
+
+4. **통계 및 분석**
+   - 환자 흐름 분석
+   - 병목 구간 파악
+   - 커스텀 리포트
+
+================================================================================
+7. 시스템 아키텍처
+================================================================================
+
+### 7.1 마이크로서비스 구조
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Frontend PWA   │     │ Admin Dashboard │     │ Chatbot Client  │
+│   (Port 5174)   │     │   (Port 5173)   │     │   (Embedded)    │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                         │
+         │                       │                         │
+         ▼                       ▼                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        API Gateway (Nginx)                       │
+└─────────────────────────────────────────────────────────────────┘
+         │                       │                         │
+         ▼                       ▼                         ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Django Backend │     │ Chatbot Server  │     │   WebSocket     │
+│   (Port 8000)   │     │   (Port 5000)   │     │    Server       │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                       │                         │
+         ▼                       ▼                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                          Database Layer                          │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
+│  │ PostgreSQL  │  │    Redis    │  │     S3      │            │
+│  │   (Main)    │  │   (Cache)   │  │  (Storage)  │            │
+│  └─────────────┘  └─────────────┘  └─────────────┘            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 7.2 통신 프로토콜
+
+1. **HTTP/HTTPS**
+   - REST API 통신
+   - JWT 토큰 인증
+   - CSRF 보호
+
+2. **WebSocket**
+   - 실시간 대기열 업데이트
+   - 채팅 메시지
+   - 시스템 알림
+
+3. **Server-Sent Events (SSE)**
+   - 단방향 실시간 업데이트
+   - 폴백 옵션
+
+### 7.3 보안 아키텍처
+
+1. **인증 (Authentication)**
+   - JWT 토큰 기반
+   - 간편 로그인
+   - OAuth 2.0 (카카오)
+
+2. **인가 (Authorization)**
+   - 역할 기반 접근 제어 (RBAC)
+   - API 권한 검사
+   - 리소스 레벨 권한
+
+3. **보안 미들웨어**
+   - CORS 설정
+   - CSRF 보호
+   - Rate Limiting
+   - SQL Injection 방지
+
+================================================================================
+8. 기술 스택 정리
+================================================================================
+
+### 8.1 프론트엔드
+- React 18.2
+- Vite 5.1
+- Tailwind CSS 3.4
+- Axios 1.6
+- React Router 6.22
+- PWA (vite-plugin-pwa)
+
+### 8.2 백엔드
+- Django 5.2.4
+- Django REST Framework 3.14
+- Django Channels 4.0
+- PostgreSQL/MySQL
+- Redis
+- Celery
+
+### 8.3 챗봇
+- Node.js + Express
+- Python + Flask
+- NLP.js
+- OpenAI API
+
+### 8.4 인프라
+- Docker
+- Nginx
+- PM2
+- GitHub Actions
+
+================================================================================
+9. API 엔드포인트 구조 및 프론트엔드 연동 현황
+================================================================================
+
+### 9.1 전체 API 엔드포인트 목록 및 연동 상태
+
+#### 🔵 인증 API (/api/v1/auth/)
+```
+✅ POST   /api/v1/auth/simple-login/       # 간편 로그인
+   → 연결: Login.jsx, LoginPage.jsx
+   → 상태: 완전 구현 및 연동됨
+
+✅ POST   /api/v1/auth/kakao/              # 카카오 OAuth 로그인  
+   → 연결: KakaoOAuth.jsx
+   → 상태: 완전 구현 및 연동됨
+
+✅ POST   /api/v1/auth/logout/             # 로그아웃
+   → 연결: Header.jsx (공통 헤더)
+   → 상태: 구현됨
+
+✅ GET    /api/v1/auth/csrf-token/         # CSRF 토큰
+   → 연결: csrf.js (유틸리티)
+   → 상태: 자동으로 모든 요청에 적용됨
+
+✅ POST   /api/v1/auth/token/refresh/      # JWT 토큰 갱신
+   → 연결: api/client.js (인터셉터)
+   → 상태: 자동 갱신 구현됨
+
+❌ GET    /api/v1/auth/profile/            # 프로필 조회
+   → 연결: 없음
+   → 상태: API는 있으나 프론트엔드 미구현
+
+❌ PATCH  /api/v1/auth/profile/            # 프로필 수정
+   → 연결: 없음
+   → 상태: API는 있으나 프론트엔드 미구현
+```
+
+#### 🔵 NFC 태그 API (/api/v1/nfc/)
+```
+🚧 POST   /api/v1/nfc/nfc/scan/            # NFC 태그 스캔
+   → 연결: NFCReader.jsx
+   → 상태: 컴포넌트는 있으나 실제 NFC API 미연동 (Web NFC API 필요)
+
+✅ GET    /api/v1/nfc/tags/                # 태그 목록 조회
+   → 연결: NFCTagManagement.jsx (관리자)
+   → 상태: 관리자 페이지에서 구현됨
+
+✅ POST   /api/v1/nfc/tags/                # 태그 생성
+   → 연결: NFCTagManagement.jsx (관리자)
+   → 상태: 관리자 페이지에서 구현됨
+
+✅ GET    /api/v1/nfc/tags/{tag_id}/       # 태그 상세 조회
+   → 연결: NFCTagManagement.jsx (관리자)
+   → 상태: 구현됨
+
+✅ PATCH  /api/v1/nfc/tags/{tag_id}/       # 태그 수정
+   → 연결: NFCTagManagement.jsx (관리자)
+   → 상태: 구현됨
+
+✅ DELETE /api/v1/nfc/tags/{tag_id}/       # 태그 삭제
+   → 연결: NFCTagManagement.jsx (관리자)
+   → 상태: 구현됨
+
+❌ GET    /api/v1/nfc/tags/{tag_id}/exams  # 태그 연결 검사 조회
+   → 연결: 없음
+   → 상태: API는 있으나 프론트엔드 미구현
+```
+
+#### 🔵 검사/예약 API (/api/v1/)
+```
+🚧 GET    /api/v1/appointments/            # 예약 목록
+   → 연결: Home.jsx
+   → 상태: Mock 데이터 사용 중, API 연동 필요
+
+❌ POST   /api/v1/appointments/            # 예약 생성
+   → 연결: 없음
+   → 상태: 예약 생성 UI 없음
+
+🚧 GET    /api/v1/appointments/{id}/       # 예약 상세
+   → 연결: Exam.jsx  
+   → 상태: Mock 데이터 사용 중
+
+❌ PATCH  /api/v1/appointments/{id}/       # 예약 수정
+   → 연결: 없음
+   → 상태: 미구현
+
+❌ POST   /api/v1/appointments/{id}/cancel/ # 예약 취소
+   → 연결: 없음
+   → 상태: 미구현
+
+🚧 GET    /api/v1/exams/                   # 검사 목록
+   → 연결: ExamCard.jsx, ExamInfo.jsx
+   → 상태: Mock 데이터 사용 중
+
+🚧 GET    /api/v1/exams/{id}/              # 검사 상세
+   → 연결: Exam.jsx
+   → 상태: Mock 데이터 사용 중
+
+🚧 GET    /api/v1/exams/{id}/preparations/ # 검사 준비사항
+   → 연결: ExamPreparation.jsx
+   → 상태: Mock 데이터 사용 중
+```
+
+#### 🔵 대기열 API (/api/v1/queue/)
+```
+🚧 GET    /api/v1/queue/my-position/       # 내 대기 위치
+   → 연결: WaitingStatus.jsx, WaitingInfo.jsx
+   → 상태: Mock 데이터 사용 중
+
+🚧 POST   /api/v1/queue/join/              # 대기열 참가
+   → 연결: Exam.jsx (검사 페이지)
+   → 상태: UI는 있으나 API 미연동
+
+✅ GET    /api/v1/queue/dashboard/realtime-data/  # 실시간 대기열 데이터
+   → 연결: QueueMonitoring.jsx (관리자)
+   → 상태: 관리자 페이지에서 구현됨
+
+✅ GET    /api/v1/queue/dashboard/by-department/  # 부서별 대기열
+   → 연결: QueueMonitoring.jsx (관리자)
+   → 상태: 구현됨
+
+✅ POST   /api/v1/queue/medical/call-patient/     # 환자 호출
+   → 연결: QueueMonitoring.jsx (관리자)
+   → 상태: 구현됨
+
+❌ GET    /api/v1/queue/patient/current-state/    # 환자 현재 상태
+   → 연결: 없음
+   → 상태: API는 있으나 프론트엔드 미구현
+
+❌ GET    /api/v1/queue/nfc/public-info/          # NFC 공개 정보
+   → 연결: 없음
+   → 상태: 미구현
+```
+
+#### 🔵 관리자 대시보드 API (/api/v1/admin/)
+```
+✅ GET    /api/v1/admin/nfc/tags/list/           # 관리자 태그 목록
+   → 연결: admin-dashboard/src/pages/TagManagement.jsx
+   → 상태: 별도 관리자 앱에서 구현됨
+
+✅ POST   /api/v1/admin/nfc/tags/bulk/           # 태그 일괄 작업
+   → 연결: admin-dashboard/src/pages/TagManagement.jsx
+   → 상태: 구현됨
+
+✅ GET    /api/v1/admin/nfc/tags/statistics/     # 태그 통계
+   → 연결: admin-dashboard/src/pages/Dashboard.jsx
+   → 상태: 구현됨
+
+❌ GET    /api/v1/admin/nfc/tags/{id}/history/   # 태그 이력
+   → 연결: 없음
+   → 상태: API는 있으나 UI 미구현
+```
+
+#### 🔵 분석 API (/api/v1/analytics/)
+```
+🚧 GET    /api/v1/analytics/patient-flow/        # 환자 흐름 분석
+   → 연결: AnalyticsDashboard.jsx
+   → 상태: UI는 있으나 실제 데이터 연동 필요
+
+🚧 GET    /api/v1/analytics/waiting-time/        # 대기시간 통계
+   → 연결: AnalyticsDashboard.jsx
+   → 상태: Mock 차트만 구현
+
+❌ GET    /api/v1/analytics/congestion-heatmap/  # 혼잡도 히트맵
+   → 연결: 없음
+   → 상태: 미구현
+
+❌ GET    /api/v1/analytics/nfc-usage/           # NFC 사용 분석
+   → 연결: 없음
+   → 상태: 미구현
+
+❌ GET    /api/v1/analytics/bottlenecks/         # 병목 구간 분석
+   → 연결: 없음
+   → 상태: 미구현
+
+❌ POST   /api/v1/analytics/custom-report/       # 맞춤 리포트
+   → 연결: 없음
+   → 상태: 미구현
+```
+
+#### 🔵 WebSocket 엔드포인트
+```
+🚧 ws://   /ws/queue/                            # 대기열 실시간 업데이트
+   → 연결: useWebSocket.js 훅
+   → 상태: 연결 로직은 있으나 안정화 필요
+
+✅ ws://   /ws/admin/                            # 관리자 대시보드 실시간
+   → 연결: admin-dashboard WebSocket 서비스
+   → 상태: 관리자 앱에서 부분 구현
+```
+
+### 9.2 페이지별 API 연동 현황
+
+#### 📄 환자용 페이지 (frontend-pwa)
+```
+1. LoginPage.jsx / Login.jsx
+   ✅ POST /api/v1/auth/simple-login/
+   ✅ GET  /api/v1/auth/csrf-token/
+
+2. Home.jsx (홈 화면)
+   🚧 GET /api/v1/appointments/ (Mock 데이터 사용중)
+   🚧 GET /api/v1/queue/my-position/ (Mock 데이터 사용중)
+
+3. Exam.jsx (검사 상세)
+   🚧 GET /api/v1/exams/{id}/ (Mock 데이터 사용중)
+   🚧 GET /api/v1/exams/{id}/preparations/ (Mock 데이터 사용중)
+   ❌ POST /api/v1/queue/join/ (미연동)
+
+4. KakaoOAuth.jsx
+   ✅ POST /api/v1/auth/kakao/
+
+5. NFCReader.jsx
+   ❌ POST /api/v1/nfc/nfc/scan/ (Web NFC API 미구현)
+
+6. WaitingStatus.jsx / WaitingInfo.jsx
+   🚧 GET /api/v1/queue/my-position/ (Mock 데이터)
+   🚧 WebSocket /ws/queue/ (불안정)
+```
+
+#### 📄 관리자 페이지 (admin-dashboard)
+```
+1. NFCTagManagement.jsx
+   ✅ GET    /api/v1/admin/nfc/tags/list/
+   ✅ POST   /api/v1/admin/nfc/tags/
+   ✅ PATCH  /api/v1/admin/nfc/tags/{id}/
+   ✅ DELETE /api/v1/admin/nfc/tags/{id}/
+
+2. QueueMonitoring.jsx  
+   ✅ GET  /api/v1/queue/dashboard/realtime-data/
+   ✅ GET  /api/v1/queue/dashboard/by-department/
+   ✅ POST /api/v1/queue/medical/call-patient/
+   🚧 WebSocket /ws/admin/ (부분 구현)
+
+3. AnalyticsDashboard.jsx
+   🚧 GET /api/v1/analytics/patient-flow/ (Mock 차트)
+   🚧 GET /api/v1/analytics/waiting-time/ (Mock 차트)
+
+4. AdminDashboard.jsx
+   ✅ GET /api/v1/admin/nfc/tags/statistics/
+   🚧 GET /api/v1/queue/dashboard/metrics/ (부분 구현)
+```
+
+### 9.3 API 연동 상태 요약
+
+#### 📊 전체 통계
+```
+총 API 엔드포인트: 70개+
+├─ ✅ 완전 연동됨: 25개 (36%)
+├─ 🚧 부분 연동/Mock 데이터: 18개 (26%)
+└─ ❌ 미연동/미구현: 27개 (38%)
+
+페이지별 연동률:
+├─ 인증 관련: 80% 완성
+├─ 관리자 페이지: 75% 완성
+├─ 환자 페이지: 30% 완성 (대부분 Mock 데이터)
+└─ 분석/통계: 20% 완성
+```
+
+#### 🚨 주요 미연동 부분
+1. **환자용 주요 기능 (Mock 데이터 사용중)**
+   - 검사 일정 조회
+   - 대기열 상태 확인
+   - 검사 준비사항 조회
+
+2. **NFC 기능**
+   - Web NFC API 미구현
+   - NFC 태그 스캔 기능 미작동
+
+3. **예약 시스템**
+   - 예약 생성/수정/취소 UI 없음
+   - API는 있으나 프론트엔드 미구현
+
+4. **분석/통계**
+   - 대부분의 분석 API 미연동
+   - Mock 차트만 표시중
+
+### 9.4 챗봇 서버 API (/api/chatbot/)
+```
+🚧 POST   /api/chatbot/query              # 챗봇 질문 처리
+   → 연결: ChatbotSystem.jsx (chatbot-v2)
+   → 상태: 오프라인 모드만 구현, 실제 API 미연동
+
+❌ GET    /api/chatbot/faq                # FAQ 목록
+   → 연결: 없음
+   → 상태: 미구현
+
+❌ GET    /api/chatbot/suggestions        # 추천 질문
+   → 연결: 없음  
+   → 상태: 미구현
+
+❌ POST   /api/chatbot/medical-terms      # 의료 용어 설명
+   → 연결: 없음
+   → 상태: Python 서버에만 구현
+```
+
+================================================================================
+10. 데이터베이스 스키마 및 데이터 흐름도
+================================================================================
+
+### 10.1 전체 데이터베이스 구조 개요
+
+#### 📊 모델 통계
+```
+총 모델 수: 19개
+├─ 핵심 모델: 12개 (구현 완료)
+├─ 플레이스홀더: 7개 (미래 확장용)
+└─ 앱별 분포: 6개 Django 앱
+
+활성 Django 앱:
+├─ authentication (4개 모델)
+├─ appointments (4개 모델) 
+├─ p_queue (5개 모델)
+├─ nfc (3개 모델)
+├─ admin_dashboard (3개 모델)
+└─ integrations (1개 모델)
+```
+
+### 10.2 핵심 모델 및 테이블 구조
+
+#### 🔐 인증 시스템 (authentication 앱)
+
+**User 모델 (커스텀 사용자)**
+```sql
+-- authentication_user
+- user_id: UUID (PK)
+- email: VARCHAR(255) UNIQUE
+- name: VARCHAR(100)
+- phone_last4: VARCHAR(4)
+- birth_date: DATE
+- role: VARCHAR(20) -- super/dept/staff/patient/doctor
+- allergies: JSON -- 알레르기 정보
+- kakao_id: BIGINT UNIQUE -- 카카오 연동
+- pass_ci: VARCHAR(255) UNIQUE -- PASS 본인인증
+- is_active: BOOLEAN
+- is_staff: BOOLEAN
+- is_superuser: BOOLEAN
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+```
+
+**DeviceToken 모델 (기기 인증)**
+```sql
+-- authentication_devicetoken
+- token_id: UUID (PK)
+- user_id: UUID (FK → User)
+- device_uuid: VARCHAR(255)
+- device_type: VARCHAR(50)
+- user_agent: TEXT
+- fcm_token: VARCHAR(255) -- FCM 푸시 토큰
+- is_active: BOOLEAN
+- last_used: TIMESTAMP
+- created_at: TIMESTAMP
+```
+
+**LoginAttempt 모델 (로그인 시도 기록)**
+```sql
+-- authentication_loginattempt  
+- attempt_id: UUID (PK)
+- user_id: UUID (FK → User, nullable)
+- ip_address: INET
+- device_info: JSON
+- success: BOOLEAN
+- failure_reason: VARCHAR(255)
+- attempted_at: TIMESTAMP
+```
+
+#### 🏥 예약/검사 시스템 (appointments 앱)
+
+**Exam 모델 (검사 종류)**
+```sql
+-- appointments_exam
+- exam_id: VARCHAR(20) (PK) -- 병원 코드 체계
+- title: VARCHAR(100)
+- description: TEXT
+- department: VARCHAR(100)
+- category: VARCHAR(50)
+- building: VARCHAR(100)
+- floor: INTEGER
+- room: VARCHAR(100)
+- average_duration: INTEGER -- 평균 소요시간(분)
+- buffer_time: INTEGER -- 버퍼 시간(분)
+- is_active: BOOLEAN
+- created_at: TIMESTAMP
+```
+
+**Appointment 모델 (예약)**
+```sql
+-- appointments_appointment
+- appointment_id: VARCHAR(20) (PK) -- EMR 연동 ID
+- user_id: UUID (FK → User)
+- exam_id: VARCHAR(20) (FK → Exam)
+- scheduled_date: DATE
+- scheduled_time: TIME
+- status: VARCHAR(20) -- waiting/ongoing/done/delayed
+- notes: TEXT
+- emr_sync_id: VARCHAR(50) -- EMR 시스템 ID
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+```
+
+**ExamPreparation 모델 (검사 준비사항)**
+```sql
+-- appointments_exampreparation
+- preparation_id: UUID (PK)
+- exam_id: VARCHAR(20) (FK → Exam)
+- type: VARCHAR(50) -- fasting/medication/dress_code/etc
+- description: TEXT
+- duration: VARCHAR(100) -- "8시간 전부터"
+- is_required: BOOLEAN
+- icon: VARCHAR(50)
+- order: INTEGER
+```
+
+**AppointmentHistory 모델 (예약 이력)**
+```sql
+-- appointments_appointmenthistory
+- history_id: UUID (PK)
+- appointment_id: VARCHAR(20) (FK → Appointment)
+- action: VARCHAR(50) -- created/confirmed/status_changed/cancelled
+- old_status: VARCHAR(20)
+- new_status: VARCHAR(20)
+- created_by: UUID (FK → User)
+- notes: TEXT
+- created_at: TIMESTAMP
+```
+
+#### 🚦 대기열 관리 시스템 (p_queue 앱)
+
+**Queue 모델 (대기열)**
+```sql
+-- p_queue_queue
+- queue_id: UUID (PK)
+- appointment_id: VARCHAR(20) (FK → Appointment)
+- user_id: UUID (FK → User)
+- exam_id: VARCHAR(20) (FK → Exam)
+- schedule_id: UUID (FK → DailySchedule)
+- state: VARCHAR(20) -- waiting/called/in_progress/completed/cancelled
+- priority: VARCHAR(20) -- normal/urgent/emergency
+- position: INTEGER
+- joined_at: TIMESTAMP
+- called_at: TIMESTAMP
+- started_at: TIMESTAMP
+- completed_at: TIMESTAMP
+- estimated_wait_time: INTEGER
+- notes: TEXT
+- created_at: TIMESTAMP
+```
+
+**QueueStatusLog 모델 (대기열 상태 로그)**
+```sql
+-- p_queue_queuestatuslog
+- log_id: UUID (PK)
+- queue_id: UUID (FK → Queue)
+- previous_state: VARCHAR(20)
+- new_state: VARCHAR(20)
+- changed_by: UUID (FK → User)
+- reason: TEXT
+- created_at: TIMESTAMP
+```
+
+**PatientState 모델 (환자 상태 관리)**
+```sql
+-- p_queue_patientstate
+- user: OneToOneField (PK → User)
+- current_state: VARCHAR(50) -- 현재 상태
+- emr_state: VARCHAR(50) -- EMR 시스템 상태
+- sync_status: VARCHAR(20) -- synced/pending/failed
+- last_emr_sync: TIMESTAMP
+- state_data: JSON -- 추가 상태 정보
+- updated_at: TIMESTAMP
+```
+
+**StateTransition 모델 (상태 변경 이력)**
+```sql
+-- p_queue_statetransition
+- transition_id: UUID (PK)
+- user_id: UUID (FK → User)
+- from_state: VARCHAR(50)
+- to_state: VARCHAR(50)
+- trigger: VARCHAR(30) -- emr_sync/nfc_scan/manual
+- trigger_data: JSON
+- created_at: TIMESTAMP
+```
+
+**DailySchedule 모델 (일일 스케줄)**
+```sql
+-- p_queue_dailyschedule
+- schedule_id: UUID (PK)
+- user_id: UUID (FK → User)
+- date: DATE
+- emr_appointments: JSON -- EMR에서 가져온 예약들
+- sync_status: VARCHAR(20)
+- last_sync: TIMESTAMP
+- created_at: TIMESTAMP
+```
+
+#### 📱 NFC 시스템 (nfc 앱)
+
+**NFCTag 모델 (NFC 태그)**
+```sql
+-- nfc_nfctag
+- tag_id: UUID (PK)
+- tag_uid: VARCHAR(255) UNIQUE -- 하드웨어 UID
+- code: VARCHAR(100) UNIQUE -- 병원 정의 코드
+- building: VARCHAR(100)
+- floor: INTEGER
+- room: VARCHAR(100)
+- description: TEXT
+- x_coord: FLOAT -- 지도 좌표
+- y_coord: FLOAT
+- is_active: BOOLEAN
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+```
+
+**TagLog 모델 (태그 스캔 기록)**
+```sql
+-- nfc_taglog
+- log_id: UUID (PK)
+- tag_id: UUID (FK → NFCTag)
+- user_id: UUID (FK → User)
+- action_type: VARCHAR(20) -- scan/enter/exit/fail
+- location_info: JSON
+- scan_time: TIMESTAMP
+- device_info: JSON
+```
+
+**NFCTagExam 모델 (태그-검사 매핑)**
+```sql
+-- nfc_nfctagexam
+- mapping_id: UUID (PK)
+- tag_id: UUID (FK → NFCTag)
+- exam_id: VARCHAR(20) (FK → Exam)
+- created_at: TIMESTAMP
+```
+
+#### 🛠️ 관리자 시스템 (admin_dashboard 앱)
+
+**AdminLog 모델 (관리자 작업 로그)**
+```sql
+-- admin_dashboard_adminlog
+- log_id: UUID (PK)
+- user_id: UUID (FK → User)
+- action: VARCHAR(50) -- create/update/delete/bulk_update
+- target_model: VARCHAR(50) -- Queue/NFCTag/User/etc
+- target_id: VARCHAR(255)
+- changes: JSON -- 변경 내용
+- created_at: TIMESTAMP
+```
+
+**Feedback 모델 (피드백 시스템)**
+```sql
+-- admin_dashboard_feedback
+- feedback_id: UUID (PK)
+- user_id: UUID (FK → User)
+- category: VARCHAR(50) -- app/nfc/queue/service
+- title: VARCHAR(200)
+- description: TEXT
+- status: VARCHAR(20) -- pending/reviewing/resolved/closed
+- assigned_to: UUID (FK → User, nullable)
+- response: TEXT
+- created_at: TIMESTAMP
+- updated_at: TIMESTAMP
+```
+
+**Notification 모델 (알림 시스템)**
+```sql
+-- admin_dashboard_notification  
+- notification_id: UUID (PK)
+- user_id: UUID (FK → User)
+- device_token_id: UUID (FK → DeviceToken)
+- type: VARCHAR(50) -- queue_update/patient_call/exam_ready/etc
+- title: VARCHAR(200)
+- message: TEXT
+- data: JSON -- 추가 데이터
+- is_read: BOOLEAN
+- sent_at: TIMESTAMP
+- read_at: TIMESTAMP
+```
+
+#### 🔗 EMR 연동 (integrations 앱)
+
+**EmrSyncStatus 모델 (EMR 동기화)**
+```sql
+-- integrations_emrsyncstatus
+- sync_id: UUID (PK)
+- user_id: UUID (FK → User)
+- emr_patient_id: VARCHAR(100)
+- sync_status: VARCHAR(20) -- synced/pending/failed
+- last_sync: TIMESTAMP
+- sync_data: JSON
+- error_message: TEXT
+- created_at: TIMESTAMP
+```
+
+### 10.3 데이터베이스 흐름도 및 관계 분석
+
+#### 📊 핵심 관계 다이어그램
+```
+🔐 USER (중심)
+    ├─ 1:N → DeviceToken (기기 인증)
+    ├─ 1:N → LoginAttempt (로그인 기록)  
+    ├─ 1:N → Appointment (예약)
+    ├─ 1:1 → PatientState (현재 상태)
+    ├─ 1:N → StateTransition (상태 변경)
+    ├─ 1:N → Queue (대기열)
+    ├─ 1:N → TagLog (NFC 스캔)
+    ├─ 1:N → DailySchedule (일일 스케줄)
+    ├─ 1:N → AdminLog (관리 작업)
+    ├─ 1:N → Feedback (피드백)
+    ├─ 1:N → Notification (알림)
+    └─ 1:1 → EmrSyncStatus (EMR 연동)
+
+🏥 EXAM (검사)
+    ├─ 1:N → Appointment
+    ├─ 1:N → Queue
+    ├─ 1:N → ExamPreparation
+    └─ N:M → NFCTag (through NFCTagExam)
+
+📱 NFCTag (NFC 태그)
+    ├─ 1:N → TagLog
+    └─ N:M → Exam (through NFCTagExam)
+
+📋 Appointment (예약)
+    ├─ 1:1 → Queue
+    └─ 1:N → AppointmentHistory
+```
+
+#### 🔄 주요 데이터 흐름 패턴
+
+**1. 환자 여정 흐름 (Patient Journey Flow)**
+```
+환자 로그인
+    ↓ (DeviceToken 생성)
+EMR 동기화 
+    ↓ (DailySchedule 생성)
+예약 확인
+    ↓ (Appointment 조회)
+대기열 참가
+    ↓ (Queue 생성)
+NFC 스캔
+    ↓ (TagLog 기록)
+상태 변경
+    ↓ (StateTransition 기록)
+알림 발송
+    ↓ (Notification 생성)
+```
+
+**2. 실시간 업데이트 흐름**
+```
+Queue 상태 변경
+    ↓ (Django Signal 발생)
+QueueStatusLog 생성
+    ↓ (WebSocket 브로드캐스트)  
+프론트엔드 업데이트
+    ↓ (UI 반영)
+
+NFC 태그 스캔
+    ↓ (TagLog 생성)
+Django Signal 발생
+    ↓ (AdminLog 기록)
+관리자 알림
+    ↓ (실시간 대시보드 업데이트)
+```
+
+**3. EMR 연동 흐름**
+```
+외부 EMR 시스템
+    ↓ (API 호출)
+EmrSyncStatus 업데이트
+    ↓ (환자 상태 동기화)
+PatientState 변경
+    ↓ (StateTransition 기록)
+DailySchedule 업데이트
+    ↓ (Queue 생성/업데이트)
+```
+
+### 10.4 데이터베이스 설계 특징
+
+#### 🚀 성능 최적화
+```sql
+-- 주요 인덱스
+CREATE INDEX user_email_idx ON authentication_user(email);
+CREATE INDEX tag_code_idx ON nfc_nfctag(code);  
+CREATE INDEX appointment_user_date_idx ON appointments_appointment(user_id, scheduled_date);
+CREATE INDEX queue_state_idx ON p_queue_queue(state);
+CREATE INDEX queue_exam_idx ON p_queue_queue(exam_id);
+CREATE INDEX scan_log_time_idx ON nfc_taglog(scan_time);
+CREATE INDEX notification_user_type_idx ON admin_dashboard_notification(user_id, type);
+```
+
+#### 🔒 데이터 무결성
+```
+외래키 제약:
+├─ CASCADE: 대부분의 관계 (Queue → User, TagLog → NFCTag 등)
+├─ SET_NULL: 관리자 관련 (Feedback.assigned_to)
+└─ PROTECT: 핵심 데이터 (Appointment → Exam)
+
+유니크 제약:
+├─ User.email (이메일 중복 방지)
+├─ NFCTag.tag_uid (하드웨어 ID 중복 방지)
+├─ NFCTag.code (병원 코드 중복 방지)
+└─ DeviceToken.device_uuid (기기별 토큰 관리)
+```
+
+#### 📈 확장성 설계
+```
+UUID 기본키: 분산 시스템 대응
+JSON 필드: 유연한 메타데이터 저장  
+타임스탬프: 모든 작업 추적
+신호 시스템: 실시간 업데이트
+EMR 연동: 외부 시스템 통합
+```
+
+### 10.5 신호(Signal) 연결 및 실시간 처리
+
+#### 📡 WebSocket 연결 흐름
+```python
+# p_queue/signals.py
+@receiver(post_save, sender=Queue)
+def queue_updated(sender, instance, created, **kwargs):
+    # 실시간 WebSocket 브로드캐스트
+    channel_layer = get_channel_layer()
+    
+    # 환자별 개별 알림
+    async_to_sync(channel_layer.group_send)(
+        f"queue_{instance.queue_id}",
+        {
+            "type": "queue_update",
+            "message": queue_data
+        }
+    )
+    
+    # 관리자 대시보드 전체 업데이트  
+    async_to_sync(channel_layer.group_send)(
+        "admin_dashboard",
+        {
+            "type": "queue_update", 
+            "message": admin_data
+        }
+    )
+```
+
+#### 🔔 알림 시스템 흐름
+```python
+# admin_dashboard/signals.py  
+@receiver(post_save, sender=TagLog)
+def nfc_scan_alert(sender, instance, created, **kwargs):
+    if created:
+        # NFC 스캔 시 관리자 알림
+        Notification.objects.create(
+            user=instance.user,
+            type='nfc_scan',
+            title=f'NFC 태그 스캔: {instance.tag.room}',
+            data={'tag_id': str(instance.tag_id)}
+        )
+```
+
+### 10.6 시스템 통계 및 현황
+
+#### 📊 구현 완성도
+```
+데이터베이스 설계: 95% 완성
+├─ 핵심 모델: 100% 구현
+├─ 관계 설정: 100% 완성  
+├─ 인덱스 최적화: 90% 완성
+├─ 신호 시스템: 85% 구현
+└─ EMR 연동: 70% 준비
+
+미완성 영역:
+├─ 분석용 집계 테이블 (analytics 앱)
+├─ 상세 모니터링 로그 (monitoring 앱) 
+├─ 고급 알림 설정 (notifications 앱)
+└─ AI 모델 메타데이터 (ai_models 앱)
+```
+
+================================================================================
+11. 현재 개발 상태 및 완성도 분석 (2025-08-08 기준)
+================================================================================
+
+### 11.1 전체 프로젝트 완성도 요약
+
+┌─────────────────────┬─────────────┬─────────────┬─────────────────────────┐
+│       모듈          │   완성도    │    상태     │         주요 이슈       │
+├─────────────────────┼─────────────┼─────────────┼─────────────────────────┤
+│  Frontend PWA       │    75%      │  부분완성   │  Mock데이터 사용 중     │
+│  Django Backend     │    80%      │  거의완성   │  일부 API 미연동        │
+│  Chatbot Server     │    60%      │  개발중     │  Node.js 버전 미완성    │
+│  Admin Dashboard    │    65%      │  개발중     │  실시간 연동 부족       │
+│  Database          │    90%      │  완성       │  MySQL AWS 연동 완료    │
+│  Authentication    │    85%      │  거의완성   │  JWT 토큰 시스템 구현   │
+│  WebSocket         │    70%      │  부분완성   │  연결 안정화 필요       │
+└─────────────────────┴─────────────┴─────────────┴─────────────────────────┘
+
+### 11.2 각 모듈별 상세 개발 상태
+
+#### 🔸 Frontend PWA (75% 완성)
+
+✅ **완성된 기능:**
+- 인증 시스템 (간편 로그인, 카카오 OAuth)
+- 홈 화면 UI/UX 완성 (실시간 시계, 검사 진행률)
+- 챗봇 v2 3단계 UI 시스템 완성
+- API 클라이언트 설정 (Axios 인터셉터, 에러 핸들링)
+- PWA 기본 설정 (매니페스트, 서비스 워커)
+- 라우팅 시스템 완성
+- CSRF 토큰 관리 시스템
+
+🚧 **개발 중/미완성:**
+- 실제 API 데이터 연동 (현재 Mock 데이터 사용)
+  ```javascript
+  // Mock 데이터 예시 (src/pages/Home.jsx)
+  const todayExams = [
+    {
+      id: 1,
+      time: '09:30',
+      title: '심전도 검사',  // 실제 API 연동 필요
+      department: '순환기내과',
+      location: '본관 2층 204호',
+      status: 'completed',
+      icon: '💓'
+    }
+  ];
+  ```
+- NFC Web API 통합 (Web NFC API 구현 필요)
+- 챗봇 실제 AI 연동 (현재 목업 응답)
+- WebSocket 실시간 업데이트 안정화
+- 오프라인 모드 완성
+- 관리자 페이지 실시간 데이터 연동
+
+❌ **구현되지 않은 기능:**
+- 실제 검사 예약 시스템
+- 실시간 위치 추적
+- 푸시 알림
+- 음성 안내
+
+#### 🔸 Django Backend (80% 완성)
+
+✅ **완성된 기능:**
+- 사용자 인증 시스템 완성
+  ```python
+  # authentication/views.py - 간편 로그인 구현 완료
+  def simple_login(request):
+      phone_last4 = request.data.get('phoneLast4')
+      birth_date = request.data.get('birthDate')
+      # JWT 토큰 생성 로직 완성
+  ```
+- NFC 태그 관리 API 완성
+  ```python
+  # nfc/views.py - 태그 스캔 API 구현 완료
+  def nfc_scan(request):
+      tag_id = serializer.validated_data['tag_id']
+      # 태그 스캔 로직 완성
+  ```
+- 대기열 시스템 구현 완성
+  ```python
+  # p_queue/views.py - 대기열 참가/조회 완성
+  class QueueJoinView(APIView):
+      def post(self, request, *args, **kwargs):
+          # 대기열 생성 로직 완성
+  ```
+- WebSocket Consumer 구현 완성
+  ```python
+  # p_queue/consumers.py - 실시간 업데이트 완성
+  class QueueConsumer(AsyncWebsocketConsumer):
+      async def connect(self):
+          # WebSocket 연결 로직 완성
+  ```
+- 데이터베이스 모델 설계 완성
+- 관리자 API 기본 구조 완성
+
+🚧 **개발 중/미완성:**
+- 일부 API 엔드포인트 미완성
+- 예약 시스템 연동 부분
+- 통계 분석 기능
+- 백그라운드 작업 (Celery) 설정
+
+❌ **구현되지 않은 기능:**
+- 실제 병원 시스템 연동
+- 의료진 전용 API
+- 고급 분석 기능
+
+#### 🔸 Chatbot Server (60% 완성)
+
+✅ **완성된 기능:**
+- Flask 서버 구조 완성
+  ```python
+  # app.py - OpenAI 연동 완성
+  @app.route('/api/chatbot/query', methods=['POST'])
+  def chatbot_query():
+      # OpenAI API 호출 로직 완성
+      response = client.chat.completions.create(
+          model="gpt-4.1",
+          messages=messages,
+          max_tokens=500,
+          temperature=0.7
+      )
+  ```
+- 의료 안전 필터 기본 구조
+- 기본 FAQ 시스템
+- 헬스체크 API
+
+🚧 **개발 중/미완성:**
+- Node.js 버전 챗봇 (NLP.js) 미완성
+  ```javascript
+  // src/services/nlp.js - 구조만 있고 로직 미완성
+  ```
+- 복합적인 의도 분류 시스템
+- 컨텍스트 기반 대화 관리
+- 병원 데이터베이스 연동
+
+❌ **구현되지 않은 기능:**
+- 음성 인식/합성
+- 다국어 지원
+- 학습 데이터 수집 시스템
+
+#### 🔸 Admin Dashboard (65% 완성)
+
+✅ **완성된 기능:**
+- React 기본 구조 완성
+- 컴포넌트 구조 설계 완성
+- 인증 시스템 연동
+
+🚧 **개발 중/미완성:**
+- 실시간 데이터 연동 부족
+- NFC 태그 관리 UI 부분 완성
+- 대기열 모니터링 기본 UI
+- 통계 차트 구현 중
+
+❌ **구현되지 않은 기능:**
+- 고급 분석 대시보드
+- 실시간 알림 시스템
+- 대량 데이터 처리 UI
+
+### 11.3 데이터베이스 현황 (90% 완성)
+
+✅ **완성된 구성:**
+- **데이터베이스**: MySQL on AWS RDS
+- **마이그레이션**: Django 마이그레이션 시스템 활용
+- **주요 테이블 구성 완료:**
+  ```
+  - authentication_user (사용자)
+  - nfc_nfctag (NFC 태그)
+  - appointments_exam (검사 정보)  
+  - appointments_appointment (예약)
+  - p_queue_queue (대기열)
+  - nfc_tagscanlog (스캔 기록)
+  ```
+- **인덱스 최적화** 완료
+- **외래키 관계** 설정 완료
+
+🚧 **최적화 필요:**
+- 대용량 데이터 처리를 위한 파티셔닝
+- 캐시 전략 (Redis) 연동
+- 백업 및 복구 전략
+
+### 11.4 API 연동 현황
+
+#### Backend API 구현 상태:
+```
+✅ 완성: /api/v1/auth/        # 인증 (85%)
+✅ 완성: /api/v1/nfc/         # NFC 태그 (80%) 
+✅ 완성: /api/v1/queue/       # 대기열 (75%)
+🚧 부분: /api/v1/appointments/ # 예약 (60%)
+🚧 부분: /api/v1/admin/       # 관리자 (50%)
+❌ 미구현: /api/v1/analytics/  # 분석 (20%)
+```
+
+#### Frontend API 연동 상태:
+```
+✅ authAPI      - 로그인/토큰 관리 완성
+🚧 nfcAPI       - 스캔 기능 부분 연동
+🚧 queueAPI     - Mock 데이터 사용 중
+🚧 chatbotAPI   - 오프라인 모드만 구현
+❌ adminAPI     - 미연동 상태
+```
+
+### 11.5 WebSocket 실시간 통신 현황
+
+✅ **구현 완료:**
+- Django Channels 설정
+- QueueConsumer 클래스 완성
+- 기본 연결/해제 로직
+
+🚧 **안정화 필요:**
+```python
+# p_queue/consumers.py - 연결은 되지만 재연결 로직 개선 필요
+async def connect(self):
+    # 연결 로직은 완성, 하지만 에러 핸들링 강화 필요
+```
+
+### 11.6 보안 및 인증 현황
+
+✅ **완성된 보안 기능:**
+- JWT 토큰 시스템 완전 구현
+- CSRF 보호 활성화
+- CORS 설정 완료
+- 역할 기반 접근 제어 (RBAC) 기본 구조
+
+🚧 **개선 필요:**
+- Rate Limiting 구현
+- API 키 관리 시스템
+- 로깅 및 모니터링 강화
+
+### 11.7 배포 및 운영 준비도
+
+✅ **준비 완료:**
+- Docker 설정 파일들
+- 환경변수 관리 (.env)
+- PM2 설정 (ecosystem.config.js)
+
+🚧 **추가 필요:**
+- CI/CD 파이프라인 설정
+- 모니터링 시스템 (APM)
+- 자동화된 백업
+
+### 11.8 우선순위별 개발 현황
+
+#### 🔴 **High Priority (즉시 필요):**
+1. Frontend Mock 데이터 → 실제 API 연동 (진행중)
+2. 챗봇 Node.js 버전 완성 (50% 완성)
+3. WebSocket 연결 안정화 (70% 완성)
+4. 관리자 대시보드 실시간 데이터 연동 (30% 완성)
+
+#### 🟡 **Medium Priority (단기 완성):**
+1. NFC Web API 통합 (미시작)
+2. 예약 시스템 완성 (60% 완성)  
+3. 통계 분석 기능 (20% 완성)
+4. 오프라인 모드 완성 (40% 완성)
+
+#### 🟢 **Low Priority (장기 계획):**
+1. 음성 안내 시스템 (미시작)
+2. 푸시 알림 (미시작)
+3. 다국어 지원 (미시작)
+4. 고급 분석 대시보드 (미시작)
+
+### 11.9 기술적 부채 및 개선사항
+
+#### 코드 품질:
+- ✅ TypeScript 마이그레이션 준비 (설정 파일만 존재)
+- 🚧 테스트 코드 작성 (각 앱에 test 파일은 있으나 내용 부족)
+- 🚧 코드 문서화 부족
+- ✅ ESLint/Prettier 설정 완료
+
+#### 성능 최적화:
+- 🚧 프론트엔드 코드 스플리팅 필요
+- 🚧 이미지 최적화 필요
+- ✅ API 응답 캐싱 구조 준비됨
+
+#### 확장성:
+- ✅ 마이크로서비스 아키텍처 기반 설계
+- ✅ 수평 확장 가능한 구조
+- 🚧 로드 밸런싱 설정 필요
+
+### 11.10 개발팀 권장 다음 단계
+
+#### 1주차 목표:
+1. Frontend Mock 데이터를 실제 API로 교체
+2. 챗봇 서버 Node.js 버전 완성
+3. WebSocket 연결 에러 핸들링 강화
+
+#### 1개월 목표:
+1. 관리자 대시보드 실시간 연동 완성
+2. NFC Web API 구현
+3. 기본적인 테스트 코드 작성
+
+#### 3개월 목표:
+1. 전체 시스템 통합 테스트
+2. 성능 최적화
+3. 운영 모니터링 시스템 구축
+
+================================================================================
+                                    끝
+================================================================================
