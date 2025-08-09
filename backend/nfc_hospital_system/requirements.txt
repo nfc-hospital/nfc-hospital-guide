@@ -50,7 +50,7 @@ kombu==5.5.4
 mccabe==0.7.0
 msgpack==1.1.1
 mypy_extensions==1.1.0
-mysqlclient==2.2.0
+mysqlclient
 packaging==25.0
 pathspec==0.12.1
 Pillow==10.1.0
