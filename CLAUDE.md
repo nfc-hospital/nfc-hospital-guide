@@ -321,32 +321,6 @@ System:      /api/v1/virtual-db/, 내부 동기화 API
 - **알림 시스템**: FCM 푸시 알림
 - **예약 시스템**: 예약 생성/수정/취소
 
-## 개발 우선순위 지침
-
-Claude가 API 개발을 할 때는 다음 우선순위를 따라야 합니다:
-
-### 1순위: 환자용 핵심 기능 완성
-```bash
-# Mock 데이터 → 실제 API 연동
-GET    /api/v1/schedule/today           # 당일 일정 조회
-GET    /api/v1/queue/my-position        # 내 대기 순서
-GET    /api/v1/appointments/{id}/       # 예약 상세 정보
-POST   /api/v1/queue/join               # 대기열 등록
-```
-
-### 2순위: NFC 기능 구현
-```bash
-# Web NFC API 연동 필요
-POST   /api/v1/nfc/scan/                # NFC 태그 스캔
-POST   /api/v1/nfc/public-info          # 비로그인 NFC 정보
-```
-
-### 3순위: WebSocket 안정화
-```bash
-# 실시간 업데이트 안정화
-ws://api.nfc-hospital.kr/ws/queue/      # 환자 대기 상태
-ws://api.nfc-hospital.kr/ws/admin/      # 관리자 모니터링
-```
 
 ## 보안 및 성능 고려사항
 
@@ -467,29 +441,51 @@ Claude가 UI 컴포넌트를 만들 때 반드시 따라야 할 디자인 원칙
 └─────────────────────────────────────┘
 ```
 
+### 🎨 Tailwind CSS 스타일 가이드
+Claude가 사용해야 할 핵심 Tailwind 클래스 원칙:
 
-```javascript
-// 역할별 메뉴 접근 권한
-const menuAccess = {
-  'staff': ['대기열 관리'],
-  'dept-admin': ['대기열 관리', 'NFC 태그 관리', '검사 콘텐츠 관리'],
-  'super-admin': ['모든 메뉴', '사용자 관리', '감사 로그']
-};
+**고령자 친화적 기본 스타일**
+- 텍스트: `text-lg sm:text-xl font-medium leading-relaxed`
+- 버튼: `px-8 py-4 text-xl font-semibold rounded-xl min-h-[56px]`
+- 고대비: `bg-white text-gray-900 border-2 border-gray-300`
 
-// 역할별 버튼 표시
-{role === 'staff' && <QueueControlButton />}
-{['dept-admin', 'super-admin'].includes(role) && <TagManagementButton />}
-{role === 'super-admin' && <UserManagementButton />}
-```
+**현대적이고 부드러운 애니메이션**
+- 전환: `transition-all duration-300 ease-in-out`
+- 그림자: `shadow-lg hover:shadow-xl`
+- 모서리: `rounded-2xl`
+
+**상태별 색상 (직관적)**
+- 대기중: `bg-amber-50 text-amber-800 border-amber-200`
+- 호출됨: `bg-green-50 text-green-800 border-green-200`
+- 진행중: `bg-blue-50 text-blue-800 border-blue-200`
+- 완료: `bg-gray-50 text-gray-600 border-gray-200`
+
+**중요도별 버튼**
+- 주요 액션: `bg-blue-600 hover:bg-blue-700 text-white`
+- 보조 액션: `bg-gray-100 hover:bg-gray-200 text-gray-700`
+- 위험 액션: `bg-red-600 hover:bg-red-700 text-white`
+
+### 🔐 RBAC 기반 UI 제어
+관리자 대시보드에서 JWT 토큰의 `role` 클레임에 따른 UI 차등 노출:
+
+**역할별 메뉴 접근 권한**
+- `staff`: 대기열 관리 + 분석 정보
+- `dept-admin`: 대기열 관리 + NFC 태그 관리 + 검사 콘텐츠 관리  
+- `super-admin`: 모든 메뉴 + 사용자 관리 + 감사 로그
+
+**구현 방식**
+- 같은 `/dashboard` 화면 사용
+- `role`에 따라 버튼/메뉴 조건부 렌더링
+- 백엔드에서도 동일한 권한 검증 필요
 
 ### 📲 하단 네비게이션 가이드라인
 환자 PWA 하단 보조 기능바는 직관적이고 헷갈리지 않게:
 
 ```
-1. TTS로 현재 화면 정보 읽어 주는 버튼튼
-2. 간단한 사용법 툴팁/가이드(도움말말)
-3. AI 챗봇에게 질문하기 모달
-4. 전체 메뉴 - 다른 페이지 접근 (설정, 이력 등)
+🔊 음성 안내    → TTS로 현재 화면 정보 읽어주기
+💬 도움말      → 간단한 사용법 툴팁/가이드
+🤖 AI 챗봇     → 질문하기 모달
+📋 전체 메뉴   → 다른 페이지 접근 (설정, 이력 등)
 ```
 
 **접근성 고려사항:**
@@ -497,79 +493,6 @@ const menuAccess = {
 - 터치 영역 충분히 확보 (최소 44px)
 - 색상에만 의존하지 않는 정보 전달
 - 고대비 모드 지원
-
-## 개발 환경 및 API 연동 가이드
-
-### 🔄 가상 EMR API 패턴
-```javascript
-// 가상 EMR 데이터 조회 (READ-ONLY)
-const fetchPatientState = async () => {
-  try {
-    const response = await api.get('/api/v1/virtual-db');
-    return {
-      ...response.data,
-      isVirtual: true,  // 가상 데이터임을 표시
-      lastSyncedAt: response.data.lastSyncedAt
-    };
-  } catch (error) {
-    console.error('가상 EMR 조회 실패:', error);
-    return null;
-  }
-};
-
-// 프론트엔드에서 동기화 시간 표시
-<Badge className="text-xs text-gray-500">
-  데이터 기준: {formatTime(lastSyncedAt)}
-</Badge>
-```
-
-### ⚡ 실시간 대기열 업데이트 패턴
-```javascript
-// WebSocket으로 대기열 실시간 업데이트
-const useQueueWebSocket = () => {
-  useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws/queue/');
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'queue_update') {
-        // 부드러운 애니메이션과 함께 UI 업데이트
-        setQueueData(data.queue);
-        showNotification('대기 상태가 업데이트되었습니다', 'info');
-      }
-    };
-    
-    return () => ws.close();
-  }, []);
-};
-```
-
-### 🎯 현대적이고 부드러운 상호작용
-```javascript
-// 버튼 클릭 시 부드러운 피드백
-const handleButtonClick = async (action) => {
-  // 1. 즉시 시각적 피드백
-  setIsLoading(true);
-  
-  // 2. 부드러운 애니메이션
-  buttonRef.current?.classList.add('scale-95');
-  
-  try {
-    // 3. API 호출
-    await performAction(action);
-    
-    // 4. 성공 피드백
-    showNotification('✅ 완료되었습니다', 'success');
-  } catch (error) {
-    // 5. 오류 피드백
-    showNotification('❌ 오류가 발생했습니다', 'error');
-  } finally {
-    // 6. 상태 복원
-    setIsLoading(false);
-    buttonRef.current?.classList.remove('scale-95');
-  }
-};
-```
 
 ---
 
