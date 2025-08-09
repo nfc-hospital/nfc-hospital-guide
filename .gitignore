@@ -85,3 +85,8 @@ pnpm-debug.log*
 /chatbot-server/.git
 /chatbot-server/.mypy_cache
 /chatbot-server/.hypothesis
+
+
+# Firebase 서비스 계정 키 (보안 중요!)
+firebase-service-account.json
+/backend/nfc_hospital_system/firebase-service-account.json

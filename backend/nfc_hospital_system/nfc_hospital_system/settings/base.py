@@ -263,3 +263,36 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# ===== Firebase 설정 =====
+import os
+
+# Firebase 서비스 계정 키 파일 경로
+FIREBASE_CRED_PATH = os.path.join(BASE_DIR, 'firebase-service-account.json')
+
+# Firebase 초기화 (패키지가 설치된 경우에만)
+try:
+    import firebase_admin
+    from firebase_admin import credentials
+    
+    if os.path.exists(FIREBASE_CRED_PATH):
+        try:
+            # 이미 초기화되었는지 확인
+            if not firebase_admin._apps:
+                cred = credentials.Certificate(FIREBASE_CRED_PATH)
+                firebase_admin.initialize_app(cred)
+            print("✅ Firebase Admin SDK 초기화 완료")
+        except Exception as e:
+            print(f"❌ Firebase 초기화 실패: {e}")
+    else:
+        print(f"❌ Firebase 서비스 계정 키 파일을 찾을 수 없습니다: {FIREBASE_CRED_PATH}")
+except ImportError:
+    print("⚠️ Firebase Admin SDK가 설치되지 않았습니다. FCM 기능이 비활성화됩니다.")
+    print("   설치 방법: pip install firebase-admin")
+
+# FCM 관련 설정
+FCM_SETTINGS = {
+    "APP_VERBOSE_NAME": "NFC Hospital System",
+    "ONE_DEVICE_PER_USER": False,
+    "DELETE_INACTIVE_DEVICES": False,
+}
