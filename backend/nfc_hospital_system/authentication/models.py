@@ -81,18 +81,18 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name='이름'
     )
 
-    phoneNumber = models.CharField(
+    phone_number = models.CharField(
         max_length=20,
         verbose_name='전화번호',
         help_text='암호화 저장'
     )
 
-    birthDate = models.DateField(
+    birth_date = models.DateField(
         verbose_name='생년월일'
     )
 
     # 환자 전용 필드
-    patientId = models.CharField(
+    patient_id = models.CharField(
         max_length=20,
         blank=True,
         null=True,
@@ -100,7 +100,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         help_text='환자 전용'
     )
 
-    emergencyContact = models.CharField(
+    emergency_contact = models.CharField(
         max_length=20,
         blank=True,
         null=True,
@@ -113,7 +113,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name='알레르기 정보'
     )
 
-    lastLoginAt = models.DateTimeField(
+    last_login_at = models.DateTimeField(
         blank=True,
         null=True,
         verbose_name='마지막 로그인 시간'
@@ -137,7 +137,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     objects = UserManager()
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['name', 'phoneNumber', 'birthDate']
+    REQUIRED_FIELDS = ['name', 'phone_number', 'birth_date']
 
     class Meta:
         db_table = 'users'
@@ -146,9 +146,9 @@ class User(AbstractBaseUser, PermissionsMixin):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['email']),
-            models.Index(fields=['phoneNumber']),
+            models.Index(fields=['phone_number']),
             models.Index(fields=['role', 'is_active']),
-            models.Index(fields=['patientId']),
+            models.Index(fields=['patient_id']),
         ]
 
     def __str__(self):
@@ -230,7 +230,7 @@ class DeviceToken(models.Model):
     )
 
     # 사용자 연결 (한 사용자가 여러 디바이스를 가질 수 있음)
-    user_id = models.ForeignKey(
+    user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         related_name='device_tokens',

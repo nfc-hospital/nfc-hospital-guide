@@ -171,7 +171,7 @@ npm run type:generate
 #### 1. API 클라이언트 사용법
 \`\`\`javascript
 // frontend-pwa/src/api/client.js
-import { api, authAPI, nfcAPI, appointmentAPI } from '@/api/client';
+import { api, authAPI, nfcAPI, appointmentAPI } from '@/api/client'; 
 
 // 로그인
 const login = async (credentials) => {

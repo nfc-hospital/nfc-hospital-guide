@@ -742,7 +742,7 @@ def tag_usage_statistics(request):
                 'location': tag.get_location_display(),
                 'totalScans': total_scans,
                 'errorRate': (error_scans / total_scans * 100) if total_scans > 0 else 0,
-                'lastScanTime': tag.last_scan_time.isoformat() if tag.last_scan_time else None,
+                'lastScanTime': tag.last_scanned_at.isoformat() if tag.last_scanned_at else None,
                 'averageScansPerDay': 0,
                 'peakHour': None
             }

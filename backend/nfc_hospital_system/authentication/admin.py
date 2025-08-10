@@ -11,32 +11,31 @@ class UserAdmin(BaseUserAdmin):
     BaseUserAdmin을 상속받아 기존 Django User 모델의 기능을 유지하면서 커스터마이징합니다.
     """
     list_display = (
-        'email', 'name', 'role', 'phoneNumber', 'is_active', 'is_staff',
-        'is_superuser', 'lastLoginAt', 'created_at'
+        'email', 'name', 'role', 'phone_number', 'is_active', 'is_staff',
+        'is_superuser', 'last_login_at', 'created_at'
     )
     list_filter = (
         'is_active', 'is_staff', 'is_superuser', 'role', 'created_at',
-        'lastLoginAt'
+        'last_login_at'
     )
-    search_fields = (
-        'email', 'name', 'phoneNumber', 'patientId', 'user_id'
-    )
+    search_fields = ('email', 'name', 'phone_number', 'patient_id') # 필드명 수정
+
     ordering = ('-created_at',)
     date_hierarchy = 'created_at'
 
     # 필드셋 정의 (기존 BaseUserAdmin의 fieldsets를 확장)
     fieldsets = (
         (None, {'fields': ('email', 'password')}), # pw_hash는 읽기 전용으로 두거나 제외
-        ('개인 정보', {'fields': ('name', 'phoneNumber', 'birthDate')}),
+        ('개인 정보', {'fields': ('name', 'phone_number', 'birth_date')}),
         ('역할 및 권한', {'fields': (
             'role', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'
         )}),
         ('환자 정보', {
-            'fields': ('patientId', 'emergencyContact', 'allergies'),
+            'fields': ('patient_id', 'emergency_contact', 'allergies'),
             'classes': ('collapse',), # 필요에 따라 접어두기
             'description': '환자 역할의 사용자에게만 해당되는 정보입니다.'
         }),
-        ('로그인 정보', {'fields': ('lastLoginAt', 'created_at')}),
+        ('로그인 정보', {'fields': ('last_login_at', 'created_at')}),
     )
 
     # BaseUserAdmin의 add_fieldsets를 오버라이드하여 사용자 생성 시 필드 구성
@@ -44,14 +43,14 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'password', 'name', 'phoneNumber', 'birthDate', 'role', 'is_staff', 'is_superuser', 'is_active'),
+            'fields': ('email', 'password', 'name', 'phone_number', 'birth_date', 'role', 'is_staff', 'is_superuser', 'is_active'),
         }),
     )
 
     # password 필드는 AbstractBaseUser에서 관리하므로 pw_hash 필드는 읽기 전용으로 설정
     # 또는 set_password 메서드에 의해 내부적으로 관리되므로, admin에서 직접 수정은 권장되지 않음
     readonly_fields = (
-        'user_id', 'created_at', 'lastLoginAt', 'password'
+        'user_id', 'created_at', 'last_login_at', 'password'
     )
 
     # AbstractBaseUser의 'password' 필드는 BaseUserAdmin에 의해 적절히 관리 되므로 제거
@@ -110,7 +109,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
         'token', 'device_uuid', 'device_name', 'user_id__email',
         'user_id__name', 'fcm_token'
     )
-    raw_id_fields = ('user_id',) # user_id 필드에 대해 검색 가능한 입력 필드 제공
+    raw_id_fields = ('user',) # user_id 필드에 대해 검색 가능한 입력 필드 제공
     date_hierarchy = 'created_at'
     ordering = ('-last_login_at',)
 

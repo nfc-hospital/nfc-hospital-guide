@@ -30,7 +30,7 @@ class NFCTag(models.Model):
         max_length=255,
         unique=True,
         verbose_name='NFC 태그 UID',
-        help_text='NFC 하드웨어 고유 식별자'
+        help_text='NFC 하드웨어 고유 식별자(NFC 태그 하드웨어 코드)'
     )
 
     code = models.CharField(
@@ -95,6 +95,11 @@ class NFCTag(models.Model):
         blank=True,
         verbose_name='마지막 스캔 시간'
     )
+
+    # examId에 해당하는 필드 추가
+    # 대신 연결된 검사들을 가져오는 헬퍼 메서드 구현
+    def get_associated_exams(self):
+        return [association.exam for association in self.exam_associations.all()]
 
     class Meta:
         db_table = 'nfc_tags'
@@ -256,7 +261,7 @@ class NFCTagExam(models.Model):
         verbose_name='검사',
         to_field='exam_id', 
         db_column='exam_id',
-        null=True, # 임시로 null 허용 
+        null=True,
         blank=True,
     )
 

@@ -57,7 +57,7 @@ class Exam(models.Model):
         help_text='검사가 진행되는 건물명 (예: 본관, 별관)'
     )
 
-    floor = models.CharField( # 층수는 'B1', '1F' 등 문자열이 될 수 있으므로 CharField
+    floor = models.CharField(
         max_length=50,
         blank=True,
         null=True,
@@ -71,6 +71,18 @@ class Exam(models.Model):
         null=True,
         verbose_name='호실명',
         help_text='검사가 진행되는 상세 호실 (예: 101호)'
+    )
+
+    x_coord = models.FloatField(
+        verbose_name='X 좌표',
+        help_text='지도상의 X 좌표값',
+        default=0.0
+    )
+
+    y_coord = models.FloatField(
+        verbose_name='Y 좌표',
+        help_text='지도상의 Y 좌표값',
+        default=0.0
     )
 
     # category 필드 추가
@@ -232,8 +244,9 @@ class ExamPreparation(models.Model):
         ('fasting', '금식'),
         ('medication', '약물 관련'),
         ('bladder', '방광 관련'),
-        ('dress_code', '복장'),
+        ('clothing', '복장'), 
         ('documents', '서류'),
+        ('arrival', '도착'),
         ('other', '기타'),
     ]
 

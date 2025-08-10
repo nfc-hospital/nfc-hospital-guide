@@ -42,16 +42,16 @@ def simple_login(request):
         try:
             # 먼저 기존 사용자 찾기
             user = User.objects.filter(
-                phoneNumber__endswith=phone_last4,
-                birthDate=birth_date
+                phone_number__endswith=phone_last4,
+                birth_date=birth_date
             ).first()
             
             if not user:
                 # 없으면 새로 생성
                 user = User.objects.create(
                     name=f'환자{phone_last4}',
-                    phoneNumber=f'010****{phone_last4}',
-                    birthDate=birth_date,
+                    phone_number=f'010****{phone_last4}',
+                    birth_date=birth_date,
                 )
             
         except Exception as create_error:
@@ -171,7 +171,7 @@ def kakao_login(request):
             
             # 방법 3: phoneNumber로 찾기
             if not user:
-                user = User.objects.filter(phoneNumber=f'kakao_{kakao_id}').first()
+                user = User.objects.filter(phone_number=f'kakao_{kakao_id}').first()
             
             # 사용자가 없으면 새로 생성
             if not user:
@@ -182,8 +182,8 @@ def kakao_login(request):
                 
                 user = User.objects.create(
                     name=f'카카오_{nickname}',
-                    phoneNumber=f'kakao_{kakao_id}',
-                    birthDate='19900101',
+                    phone_number=f'kakao_{kakao_id}',
+                    birth_date='19900101',
                     email=unique_email,
                 )
                 
@@ -336,7 +336,7 @@ def profile(request):
                 "user": {
                     "id": str(user.pk),
                     "name": user.name,
-                    "phoneNumber": getattr(user, 'phoneNumber', ''),
+                    "phoneNumber": getattr(user, 'phone_number', ''),
                 }
             },
             "message": "프로필 조회 성공",
@@ -387,9 +387,9 @@ def kakao_login_mock(request):
             if not user:
                 user = User.objects.filter(email=f'kakao_{kakao_id}@temp.com').first()
             
-            # 방법 3: phoneNumber로 찾기
+            # 방법 3: phone_number로 찾기
             if not user:
-                user = User.objects.filter(phoneNumber=f'kakao_{kakao_id}').first()
+                user = User.objects.filter(phone_number=f'kakao_{kakao_id}').first()
             
             # 사용자가 없으면 새로 생성
             if not user:
@@ -400,8 +400,8 @@ def kakao_login_mock(request):
                 
                 user = User.objects.create(
                     name=f'카카오_{nickname}',
-                    phoneNumber=f'kakao_{kakao_id}',
-                    birthDate='19900101',
+                    phone_number=f'kakao_{kakao_id}',
+                    birth_date='19900101',
                     email=unique_email,
                 )
                 

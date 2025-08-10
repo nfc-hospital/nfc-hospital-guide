@@ -14,9 +14,11 @@ class Queue(models.Model):
     STATE_CHOICES = [
         ('waiting', '대기중'),
         ('called', '호출됨'),
-        ('in_progress', '진행중'),
-        ('completed', '완료됨'),
-        ('cancelled', '취소됨'),
+        ('ongoing', '진행중(검사실/진료실 입장)'),
+        ('completed', '완료'),
+        ('delayed', '지연'), # 추가
+        ('no_show', '미방문/이탈 (No-Show)'), # 추가
+        ('cancelled', '취소'),
     ]
 
     PRIORITY_CHOICES = [
@@ -137,7 +139,7 @@ class Queue(models.Model):
 
     def start_examination(self):
         """검사 시작 처리"""
-        self.state = 'in_progress'
+        self.state = 'ongoing'
         self.save(update_fields=['state', 'updated_at'])
 
     def complete_examination(self):
@@ -167,6 +169,19 @@ class Queue(models.Model):
             if old_priority != new_priority:
                 self.reorder_queue_numbers()
 
+    def mark_as_delayed(self):
+        """대기열 지연 처리"""
+        self.state = 'delayed'
+        self.save(update_fields=['state', 'updated_at'])
+        # 지연 처리 시 필요한 추가 로직 (예: 환자에게 알림)을 여기에 구현
+
+    def mark_as_no_show(self):
+        """미방문/이탈(No-Show) 처리"""
+        self.state = 'no_show'
+        self.save(update_fields=['state', 'updated_at'])
+        # No-Show 처리 시 필요한 추가 로직 (예: 다음 환자 호출)을 여기에 구현
+        self.reorder_queue_numbers()
+
     def recalculate_wait_times(self):
         """대기시간 재계산"""
         waiting_queues_to_update = []
@@ -180,7 +195,7 @@ class Queue(models.Model):
 
         for queue in waiting_queues:
             queue.estimated_wait_time = current_wait
-            waiting_queues_to_update.append(queue) # 업데이트할 객체를 리스트에 추가 =
+            waiting_queues_to_update.append(queue) # 업데이트할 객체를 리스트에 추가
 
             # 우선순위에 따른 가중치
             if queue.priority == 'emergency':
@@ -198,7 +213,7 @@ class Queue(models.Model):
         active_queues_to_update = []
         active_queues = Queue.objects.filter(
             exam=self.exam,
-            state__in=['waiting', 'called']
+            state__in=['waiting', 'called', 'delayed']
         ).order_by('priority', 'created_at')  # 우선순위 내에서 생성 시간 기준으로 정렬하여 순서 안정화
 
         with transaction.atomic():  # 모든 업데이트를 하나의 트랜잭션으로 묶음
