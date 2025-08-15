@@ -19,12 +19,13 @@ jobs:
           EC2_HOST_ENV=${{ secrets.EC2_HOST }}
           FRONTEND_BUILD_PATH_ENV=${{ secrets.FRONTEND_BUILD_PATH }}
         script: |
-          # --- (Gunicorn -> Daphne 교체) 최종 배포 스크립트 ---
+          # --- (안정성 강화) 최종 배포 스크립트 ---
+          set -e # 이 줄이 추가되었습니다. 명령어 실패 시 즉시 중단합니다.
           
           PROJECT_DIR="$HOME/nfc-hospital"
           BACKEND_DIR="$PROJECT_DIR/backend"
           FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
-          VENV_DAPHNE="$BACKEND_DIR/venv/bin/daphne" # Gunicorn 대신 Daphne 경로
+          VENV_DAPHNE="$BACKEND_DIR/venv/bin/daphne"
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
           DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
           
@@ -39,13 +40,13 @@ jobs:
           
           # 2. 이전 백엔드 서버(Daphne) 종료
           echo ">>> 2. Safely stopping the old backend server..."
-          pkill -f "^$VENV_DAPHNE" || true # Gunicorn 대신 Daphne 프로세스 종료
+          pkill -f "^$VENV_DAPHNE" || true
           sleep 2
           
           # 3. Nginx 설정 및 프론트엔드 파일 복사
           echo ">>> 3. Setting up Nginx and copying files..."
           sudo apt-get update
-          sudo apt-get install -y nginx
+          sudo apt-get -y install nginx
           sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<EOF
           server {
               listen 80;
@@ -67,21 +68,22 @@ jobs:
                   proxy_set_header X-Forwarded-Proto \$scheme;
               }
           }
-
-          EOF
           
+          EOF
+
           sudo mkdir -p $FRONTEND_BUILD_PATH_ENV
           sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH_ENV
           sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH_ENV
           sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
           sudo rm -f /etc/nginx/sites-enabled/default
-          sudo nginx -t && sudo systemctl restart nginx
+          echo ">>> Testing Nginx configuration..."
+          sudo nginx -t
+          echo ">>> Restarting Nginx..."
+          sudo systemctl restart nginx
           
           # 4. 새 백엔드 서버를 Daphne로 시작
           echo ">>> 4. Starting backend server with Daphne..."
           cd $DJANGO_DIR
-          
-          # Gunicorn 명령어 대신 Daphne 실행 명령어로 변경
           screen -dmS django $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
           
           # 5. 최종 상태 검증
@@ -93,7 +95,7 @@ jobs:
             exit 1
           fi
           
-          if curl -f http://localhost/ > /dev/null 2&>1; then
+          if curl -f http://localhost/ > /dev/null 2>&1; then
               echo "✅ Success: Full stack deployment completed!"
           else
               echo "❌ ERROR: Nginx/Frontend is not responding."
