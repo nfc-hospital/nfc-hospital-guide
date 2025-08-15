@@ -16,37 +16,50 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          # --- Script to Deploy Django Application on EC2 ---
+          # --- 최종 안정화된 Django 배포 스크립트 ---
 
-          # Define project paths for easier maintenance
-          # ~ 대신 $HOME을 사용하여 경로를 명확히 지정합니다.
+          # 경로 변수 정의
           PROJECT_DIR="$HOME/nfc-hospital"
           BACKEND_DIR="$PROJECT_DIR/backend"
           VENV_GUNICORN="$BACKEND_DIR/venv/bin/gunicorn"
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
           DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
+          PID_FILE="$BACKEND_DIR/gunicorn.pid" # PID 파일 경로 정의
 
-          # 1. Navigate to the project directory and pull the latest code
-          echo ">>> Navigating to project directory and pulling changes..."
+          # 1. 코드 업데이트
+          echo ">>> 1. Pulling latest code..."
           cd $PROJECT_DIR
           git pull origin main
           
-          # 2. Install/update Python dependencies using the venv pip
-          echo ">>> Installing Python dependencies..."
+          # 2. 파이썬 의존성 설치
+          echo ">>> 2. Installing Python dependencies..."
           $VENV_PIP install -r $DJANGO_DIR/requirements.txt
           
-          # 3. Restart the application server
-          echo ">>> Restarting the Django application server..."
-          pkill -f "gunicorn" || true
-          sleep 3
+          # 3. 이전 서버 안전하게 종료 (PID 파일 사용)
+          echo ">>> 3. Safely stopping the old server..."
+          if [ -f $PID_FILE ]; then
+            echo "PID file found. Killing process $(cat $PID_FILE)..."
+            kill $(cat $PID_FILE)
+            rm $PID_FILE
+            sleep 3
+          else
+            echo "PID file not found. Killing gunicorn processes by name as a fallback..."
+            pkill -f "nfc_hospital_system.wsgi:application" || true # 더 구체적인 패턴으로 변경
+            sleep 3
+          fi
           
-          # 4. Start the server with Gunicorn in a detached screen session
-          echo ">>> Starting Gunicorn in a new 'django' screen session..."
+          # 4. 새 서버 시작 (PID 파일 생성 옵션 추가)
+          echo ">>> 4. Starting new server with Gunicorn..."
           cd $DJANGO_DIR
-          screen -dmS django $VENV_GUNICORN --workers 3 --bind 0.0.0.0:8000 nfc_hospital_system.wsgi:application --settings=nfc_hospital_system.settings.development
+          screen -dmS django $VENV_GUNICORN \
+            --workers 3 \
+            --bind 0.0.0.0:8000 \
+            --pid $PID_FILE \
+            nfc_hospital_system.wsgi:application \
+            --settings=nfc_hospital_system.settings.development
           
-          # 5. Verify that the server started correctly
-          echo ">>> Verifying server status..."
+          # 5. 서버 상태 검증
+          echo ">>> 5. Verifying server status..."
           sleep 5
           
           if screen -list | grep -q "django"; then
