@@ -25,14 +25,14 @@ urlpatterns = [
     path('notifications/register/', FCMTokenRegistrationAPIView.as_view(), name='fcm-token-register'),
     path('notifications/test/', NotificationTestAPIView.as_view(), name='notification-test'),
     
-    # ViewSet URLs
-    path('', include(router.urls)),
-
-    # NFC 관련 특정 경로들 (기존)
+    # NFC 관련 특정 경로들 (router보다 먼저 배치해야 함!)
     path('nfc/tags/list/', admin_tag_list, name='admin-nfc-tag-list'),
     path('nfc/tags/bulk/', bulk_tag_operation, name='admin-bulk-tag-operation'),
     path('nfc/tags/statistics/', tag_usage_statistics, name='admin-tag-usage-statistics'),
     path('nfc/tags/<uuid:tag_id>/history/', tag_assignment_history, name='admin-tag-assignment-history'),
     path('nfc/tag-exam-mapping/', nfc_tag_exam_mapping_create, name='admin-nfc-tag-exam-mapping'),
     path('tags/status/', tag_status_monitoring, name='admin-tag-status'),
+    
+    # ViewSet URLs (마지막에 배치)
+    path('', include(router.urls)),
 ]
