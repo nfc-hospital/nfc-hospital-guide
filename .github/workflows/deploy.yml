@@ -16,7 +16,7 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          # --- (최종 안정화) Django 배포 스크립트 ---
+          # --- (디버깅 강화) Django 배포 스크립트 ---
 
           # 경로 변수 정의
           PROJECT_DIR="$HOME/nfc-hospital"
@@ -25,6 +25,7 @@ jobs:
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
           DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
           PID_FILE="$BACKEND_DIR/gunicorn.pid"
+          GUNICORN_LOG_FILE="$BACKEND_DIR/gunicorn.error.log" # 에러 로그 파일 경로
 
           # 1. 코드 업데이트
           echo ">>> 1. Pulling latest code..."
@@ -35,38 +36,45 @@ jobs:
           echo ">>> 2. Installing Python dependencies..."
           $VENV_PIP install -r $DJANGO_DIR/requirements.txt
           
-          # 3. 이전 서버 안전하게 종료 (PID 파일 우선, 대체 pkill 로직 수정)
+          # 3. 이전 서버 안전하게 종료
           echo ">>> 3. Safely stopping the old server..."
           if [ -f $PID_FILE ]; then
-            echo "PID file found. Killing process $(cat $PID_FILE)..."
             kill $(cat $PID_FILE)
-            rm $PID_FILE
-            sleep 2
+            rm -f $PID_FILE
           else
-            echo "PID file not found. Killing gunicorn by full path..."
-            # Gunicorn 실행 파일 경로로 시작하는 프로세스만 정확히 종료 (가장 안전한 pkill 방식)
             pkill -f "^$VENV_GUNICORN" || true
-            sleep 2
           fi
+          sleep 2
           
-          # 4. 새 서버 시작 (PID 파일 생성 옵션 추가)
+          # 4. 새 서버 시작 (로그 생성 옵션 추가)
           echo ">>> 4. Starting new server with Gunicorn..."
+          # 이전 로그 파일 삭제하여 항상 새로운 로그만 확인
+          rm -f $GUNICORN_LOG_FILE
           cd $DJANGO_DIR
           screen -dmS django $VENV_GUNICORN \
             --workers 3 \
             --bind 0.0.0.0:8000 \
             --pid $PID_FILE \
+            --log-level=info \
+            --error-logfile $GUNICORN_LOG_FILE \
             nfc_hospital_system.wsgi:application \
             --settings=nfc_hospital_system.settings.development
           
-          # 5. 서버 상태 검증
+          # 5. 서버 상태 검증 및 실패 시 로그 출력
           echo ">>> 5. Verifying server status..."
           sleep 5
           
           if screen -list | grep -q "django"; then
             echo "✅ Screen session 'django' is running."
           else
-            echo "❌ ERROR: Screen session 'django' failed to start."
+            echo "❌ ERROR: Screen session failed to start. This is likely a Gunicorn/Django error."
+            # Gunicorn 에러 로그가 존재하면 출력
+            if [ -f $GUNICORN_LOG_FILE ]; then
+              echo "--- Gunicorn Error Log ---"
+              cat $GUNICORN_LOG_FILE
+            else
+              echo "Gunicorn log file not found. The error is very early in the process."
+            fi
             exit 1
           fi
           
@@ -74,7 +82,7 @@ jobs:
               echo "✅ Success: Django server is up and running!"
           else
               echo "❌ ERROR: Django server is not responding."
-              echo "--- Displaying last 20 lines of the screen log for debugging ---"
-              screen -S django -X hardcopy .screen-log.txt && tail -n 20 .screen-log.txt
+              echo "--- Displaying Gunicorn error log for debugging ---"
+              cat $GUNICORN_LOG_FILE
               exit 1
           fi
