@@ -3,65 +3,69 @@ name: Deploy to EC2
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-      
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-        
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-        
-    - name: Deploy to EC2
-      uses: appleboy/ssh-action@v0.1.7
+    - name: Deploy Backend to EC2
+      # This action allows running commands on a remote server via SSH
+      uses: appleboy/ssh-action@v1.0.3 # Using a newer version
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          cd ~/nfc-hospital
+          # --- Script to Deploy Django Application on EC2 ---
+
+          # Define project paths for easier maintenance
+          PROJECT_DIR="~/nfc-hospital"
+          BACKEND_DIR="$PROJECT_DIR/backend"
+          VENV_GUNICORN="$BACKEND_DIR/venv/bin/gunicorn"
+          VENV_PIP="$BACKEND_DIR/venv/bin/pip"
+          DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
+
+          # 1. Navigate to the project directory and pull the latest code
+          echo ">>> Navigating to project directory and pulling changes..."
+          cd $PROJECT_DIR
           git pull origin main
           
-          # Backend 배포
-          cd backend
-          source venv/bin/activate
-          pip install -r nfc_hospital_system/requirements.txt
+          # 2. Install/update Python dependencies using the venv pip
+          echo ">>> Installing Python dependencies..."
+          $VENV_PIP install -r $DJANGO_DIR/requirements.txt
           
-          # Django 서버 재시작
-          pkill -f "manage.py runserver" || true
+          # 3. Restart the application server
+          echo ">>> Restarting the Django application server..."
+          # Kill any existing Gunicorn process to ensure a clean start
+          pkill -f "gunicorn" || true
           sleep 3
           
-          # screen 세션으로 Django 실행
-          # -dmS: detach 모드로 (백그라운드에서) 실행하고, 세션 이름을 'django'로 지정
-          cd nfc_hospital_system
-          screen -dmS django python manage.py runserver 0.0.0.0:8000 --settings=nfc_hospital_system.settings.development
+          # 4. Start the server with Gunicorn in a detached screen session
+          echo ">>> Starting Gunicorn in a new 'django' screen session..."
+          cd $DJANGO_DIR
+          # IMPORTANT: Using Gunicorn is the correct way for deployment.
+          # Replace 'development' with your 'production' settings file in a real environment.
+          screen -dmS django $VENV_GUNICORN --workers 3 --bind 0.0.0.0:8000 nfc_hospital_system.wsgi:application --settings=nfc_hospital_system.settings.development
           
-          # screen 세션이 정상적으로 시작되었는지 확인
-          sleep 5
+          # 5. Verify that the server started correctly
+          echo ">>> Verifying server status..."
+          sleep 5 # Give the server a moment to start up
+          
           if screen -list | grep -q "django"; then
-            echo "Django screen session is running."
+            echo "✅ Screen session 'django' is running."
           else
-            echo "Django screen session failed to start."
+            echo "❌ ERROR: Screen session 'django' failed to start."
             exit 1
           fi
           
-          # 서버 시작 확인
-          # curl 요청이 성공하면 'Django server is running!' 출력, 실패하면 'Django server failed to start' 출력
+          # Check if the application is responding to HTTP requests
           if curl -f http://localhost:8000/ > /dev/null 2>&1; then
-              echo "Django server is running!"
+              echo "✅ Success: Django server is up and running!"
           else
-              echo "Django server failed to start"
+              echo "❌ ERROR: Django server is not responding."
+              # If the server fails, print the last 20 lines of the screen log for debugging
+              echo "--- Displaying last 20 lines of the screen log for debugging ---"
+              screen -S django -X hardcopy .screen-log.txt && tail -n 20 .screen-log.txt
               exit 1
           fi
