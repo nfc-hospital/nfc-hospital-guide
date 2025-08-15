@@ -19,18 +19,16 @@ jobs:
           EC2_HOST_ENV=${{ secrets.EC2_HOST }}
           FRONTEND_BUILD_PATH_ENV=${{ secrets.FRONTEND_BUILD_PATH }}
         script: |
-          # --- 풀스택 자동 배포 스크립트 (웹소켓 지원 강화) ---
+          # --- (Gunicorn -> Daphne 교체) 최종 배포 스크립트 ---
           
           PROJECT_DIR="$HOME/nfc-hospital"
           BACKEND_DIR="$PROJECT_DIR/backend"
           FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
-          VENV_GUNICORN="$BACKEND_DIR/venv/bin/gunicorn"
+          VENV_DAPHNE="$BACKEND_DIR/venv/bin/daphne" # Gunicorn 대신 Daphne 경로
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
           DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
-          PID_FILE="$BACKEND_DIR/gunicorn.pid"
-          GUNICORN_LOG_FILE="$BACKEND_DIR/gunicorn.error.log"
           
-          # 1. 코드 업데이트, 백엔드/프론트엔드 빌드 (기존과 동일)
+          # 1. 업데이트, 설치, 빌드
           echo ">>> 1. Pulling, Installing, and Building..."
           cd $PROJECT_DIR
           git pull origin main
@@ -39,87 +37,64 @@ jobs:
           npm install
           npm run build
           
-          # 2. 백엔드 서버 안전하게 종료 (기존과 동일)
+          # 2. 이전 백엔드 서버(Daphne) 종료
           echo ">>> 2. Safely stopping the old backend server..."
-          if [ -f $PID_FILE ]; then
-            kill $(cat $PID_FILE); rm -f $PID_FILE;
-          else
-            pkill -f "^$VENV_GUNICORN" || true
-          fi
+          pkill -f "^$VENV_DAPHNE" || true # Gunicorn 대신 Daphne 프로세스 종료
           sleep 2
           
-          # 3. Nginx 설치 및 설정 (웹소켓 경로 추가)
-          echo ">>> 3. Setting up Nginx..."
+          # 3. Nginx 설정 및 프론트엔드 파일 복사
+          echo ">>> 3. Setting up Nginx and copying files..."
           sudo apt-get update
           sudo apt-get install -y nginx
-          
-          # Nginx 설정 파일 생성 (수정된 부분)
           sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<EOF
           server {
               listen 80;
               server_name $EC2_HOST_ENV;
               
-              # 프론트엔드 (React PWA)
               location / {
                   root $FRONTEND_BUILD_PATH_ENV;
                   try_files \$uri \$uri/ /index.html;
-                  add_header Cache-Control "no-cache, no-store, must-revalidate";
               }
               
-              # 백엔드 API, Admin, 그리고 웹소켓 경로(/ws/)를 함께 처리
               location ~ ^/(api|admin|ws)/ {
                   proxy_pass http://127.0.0.1:8000;
-                  
-                  # 웹소켓 지원에 필요한 헤더 설정
                   proxy_http_version 1.1;
                   proxy_set_header Upgrade \$http_upgrade;
                   proxy_set_header Connection "upgrade";
-                  
-                  # 일반적인 프록시 헤더 설정
                   proxy_set_header Host \$host;
                   proxy_set_header X-Real-IP \$remote_addr;
                   proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
                   proxy_set_header X-Forwarded-Proto \$scheme;
-                  proxy_read_timeout 86400; # 타임아웃 시간 연장
               }
           }
-          
+
           EOF
           
-          # Nginx 사이트 활성화 및 재시작
+          sudo mkdir -p $FRONTEND_BUILD_PATH_ENV
+          sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH_ENV
+          sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH_ENV
           sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
           sudo rm -f /etc/nginx/sites-enabled/default
           sudo nginx -t && sudo systemctl restart nginx
           
-          # 4. 백엔드 서버 시작 (기존과 동일)
-          echo ">>> 4. Starting backend server with Gunicorn..."
-          rm -f $GUNICORN_LOG_FILE
+          # 4. 새 백엔드 서버를 Daphne로 시작
+          echo ">>> 4. Starting backend server with Daphne..."
           cd $DJANGO_DIR
           
-          screen -dmS django bash -c "export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.development'; \
-            exec $VENV_GUNICORN \
-              --workers 3 \
-              --bind 127.0.0.1:8000 \
-              --pid $PID_FILE \
-              --log-level=info \
-              --error-logfile $GUNICORN_LOG_FILE \
-              nfc_hospital_system.wsgi:application"
+          # Gunicorn 명령어 대신 Daphne 실행 명령어로 변경
+          screen -dmS django $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
           
-          # 5. 최종 상태 검증 (기존과 동일)
+          # 5. 최종 상태 검증
           echo ">>> 5. Verifying deployment..."
           sleep 5
           
           if ! screen -list | grep -q "django"; then
-            echo "❌ Backend server failed to start. Check Gunicorn logs."
-            cat $GUNICORN_LOG_FILE
+            echo "❌ Backend server failed to start. Check server logs."
             exit 1
           fi
           
-          if curl -f http://localhost/ > /dev/null 2>&1; then
+          if curl -f http://localhost/ > /dev/null 2&>1; then
               echo "✅ Success: Full stack deployment completed!"
-              echo "🌐 Frontend: http://$EC2_HOST_ENV/"
-              echo "🔧 Backend & WebSocket: http://$EC2_HOST_ENV/api/ & ws://$EC2_HOST_ENV/ws/"
-              echo "⚙️ Admin: http://$EC2_HOST_ENV/admin/"
           else
               echo "❌ ERROR: Nginx/Frontend is not responding."
               exit 1
