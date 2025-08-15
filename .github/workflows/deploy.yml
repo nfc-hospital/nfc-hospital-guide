@@ -15,13 +15,17 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
+        # GitHub Secrets를 원격 서버의 환경 변수로 전달합니다.
         envs: |
           EC2_HOST_ENV=${{ secrets.EC2_HOST }}
           FRONTEND_BUILD_PATH_ENV=${{ secrets.FRONTEND_BUILD_PATH }}
         script: |
-          # --- (안정성 강화) 최종 배포 스크립트 ---
-          set -e # 이 줄이 추가되었습니다. 명령어 실패 시 즉시 중단합니다.
+          # --- 최종 완성본 풀스택 자동 배포 스크립트 ---
           
+          # 1. 스크립트 안정성 강화 (명령어 실패 시 즉시 중단)
+          set -e
+          
+          # 2. 주요 경로 변수 정의
           PROJECT_DIR="$HOME/nfc-hospital"
           BACKEND_DIR="$PROJECT_DIR/backend"
           FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
@@ -29,7 +33,7 @@ jobs:
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
           DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
           
-          # 1. 업데이트, 설치, 빌드
+          # 3. 코드 업데이트, 의존성 설치, 프론트엔드 빌드
           echo ">>> 1. Pulling, Installing, and Building..."
           cd $PROJECT_DIR
           git pull origin main
@@ -38,15 +42,17 @@ jobs:
           npm install
           npm run build
           
-          # 2. 이전 백엔드 서버(Daphne) 종료
+          # 4. 이전 백엔드 서버(Daphne) 종료
           echo ">>> 2. Safely stopping the old backend server..."
           pkill -f "^$VENV_DAPHNE" || true
           sleep 2
           
-          # 3. Nginx 설정 및 프론트엔드 파일 복사
+          # 5. Nginx 설정 및 프론트엔드 파일 복사/권한 설정
           echo ">>> 3. Setting up Nginx and copying files..."
           sudo apt-get update
           sudo apt-get -y install nginx
+          
+          # Nginx 설정 파일 자동 생성
           sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<EOF
           server {
               listen 80;
@@ -55,6 +61,7 @@ jobs:
               location / {
                   root $FRONTEND_BUILD_PATH_ENV;
                   try_files \$uri \$uri/ /index.html;
+                  add_header Cache-Control "no-cache, no-store, must-revalidate";
               }
               
               location ~ ^/(api|admin|ws)/ {
@@ -68,25 +75,28 @@ jobs:
                   proxy_set_header X-Forwarded-Proto \$scheme;
               }
           }
-
+          
           EOF
-
+          
+          # 프론트엔드 빌드 결과물을 웹 서버 경로로 복사 및 권한 설정
           sudo mkdir -p $FRONTEND_BUILD_PATH_ENV
           sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH_ENV
           sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH_ENV
+          
+          # Nginx 사이트 활성화 및 재시작
           sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
           sudo rm -f /etc/nginx/sites-enabled/default
           echo ">>> Testing Nginx configuration..."
           sudo nginx -t
           echo ">>> Restarting Nginx..."
-          sudo systemctl restart nginx 
+          sudo systemctl restart nginx
           
-          # 4. 새 백엔드 서버를 Daphne로 시작
+          # 6. 새 백엔드 서버를 Daphne로 시작
           echo ">>> 4. Starting backend server with Daphne..."
           cd $DJANGO_DIR
           screen -dmS django $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
           
-          # 5. 최종 상태 검증
+          # 7. 최종 상태 검증
           echo ">>> 5. Verifying deployment..."
           sleep 5
           
