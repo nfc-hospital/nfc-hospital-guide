@@ -15,6 +15,10 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
+        # env 블록을 통해 GitHub Secrets를 원격 서버의 환경 변수로 전달합니다.
+        env:
+          EC2_HOST_ENV: ${{ secrets.EC2_HOST }}
+          FRONTEND_BUILD_PATH_ENV: ${{ secrets.FRONTEND_BUILD_PATH }}
         script: |
           # --- 풀스택 자동 배포 스크립트 ---
           
@@ -57,26 +61,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y nginx
           
-          # Nginx 설정 파일 생성
-          sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
+          # Nginx 설정 파일 생성 (환경 변수 사용)
+          sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<EOF
           server {
               listen 80;
-              server_name ${{ secrets.EC2_HOST }}; # 서버 IP 또는 도메인
+              server_name $EC2_HOST_ENV; # 서버 IP 또는 도메인
               
               # 프론트엔드 (React PWA)
               location / {
-                  root ${{ secrets.FRONTEND_BUILD_PATH }}; # 예: /home/ubuntu/nfc-hospital/frontend-pwa/dist
-                  try_files $uri $uri/ /index.html;
+                  root $FRONTEND_BUILD_PATH_ENV; # 예: /home/ubuntu/nfc-hospital/frontend-pwa/dist
+                  try_files \$uri \$uri/ /index.html;
                   add_header Cache-Control "no-cache, no-store, must-revalidate";
               }
               
               # 백엔드 API, Admin, Static/Media 파일
               location ~ ^/(api|admin|static|media)/ {
                   proxy_pass http://127.0.0.1:8000;
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
               }
           }
 EOF
@@ -114,9 +118,9 @@ EOF
           
           if curl -f http://localhost/ > /dev/null 2>&1; then
               echo "✅ Success: Full stack deployment completed!"
-              echo "🌐 Frontend: http://${{ secrets.EC2_HOST }}/"
-              echo "🔧 Backend API: http://${{ secrets.EC2_HOST }}/api/"
-              echo "⚙️ Admin: http://${{ secrets.EC2_HOST }}/admin/"
+              echo "🌐 Frontend: http://$EC2_HOST_ENV/"
+              echo "🔧 Backend API: http://$EC2_HOST_ENV/api/"
+              echo "⚙️ Admin: http://$EC2_HOST_ENV/admin/"
           else
               echo "❌ ERROR: Nginx/Frontend is not responding."
               exit 1
