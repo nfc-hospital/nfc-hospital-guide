@@ -3,7 +3,7 @@ from django.urls import re_path
 from channels.routing import URLRouter
 
 # Consumer imports
-print("🔍 Importing consumers...")
+print("🔍 Importing consumers..")
 try:
     from p_queue.consumers import QueueConsumer
     print("✅ QueueConsumer imported")
