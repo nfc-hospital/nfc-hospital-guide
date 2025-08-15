@@ -44,7 +44,10 @@ urlpatterns = [
     # 환자 상태 조회 및 관리 API
     
     # URL: /api/v1/queue/patient/current-state/
-    path('patient/current-state/', views.patient_current_state, name='patient-current-state'),
+    path('patient/current-state/', views.PatientCurrentStateView.as_view(), name='patient-current-state'),
+    
+    # URL: /api/v1/queue/my-current/
+    path('my-current/', views.MyCurrentQueuesView.as_view(), name='my-current-queues'),
     
     # URL: /api/v1/queue/patient/daily-schedule/
     path('patient/daily-schedule/', views.patient_daily_schedule, name='patient-daily-schedule'),

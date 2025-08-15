@@ -1,4 +1,4 @@
-from rest_framework.generics import UpdateAPIView
+from rest_framework.generics import UpdateAPIView, ListAPIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -15,6 +15,7 @@ import logging
 from .models import Queue, QueueStatusLog
 from .serializers import QueueSerializer, MyPositionSerializer, QueueStatusUpdateSerializer
 from appointments.models import Appointment, Exam
+from appointments.serializers import AppointmentSerializer
 from authentication.models import User
 from nfc_hospital_system.utils import APIResponse
 
@@ -139,6 +140,23 @@ class MyPositionView(APIView):
             return Response({'message': '현재 대기열에 등록되지 않았습니다.'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MyCurrentQueuesView(ListAPIView):
+    """
+    현재 내 대기열 API
+    GET /api/v1/queues/my-current/
+    """
+    serializer_class = QueueSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Queue.objects.filter(
+            user=self.request.user
+        ).exclude(
+            state__in=['completed', 'cancelled', 'no_show']
+        ).select_related('exam', 'appointment').order_by('created_at')
+
 
 from rest_framework.generics import ListAPIView
 from django_filters.rest_framework import DjangoFilterBackend
@@ -871,6 +889,82 @@ def nfc_public_info(request):
             code="PUBLIC_INFO_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+class PatientCurrentStateView(APIView):
+    """
+    환자 현재 상태 조회 API (클래스 기반 뷰)
+    GET /api/v1/patient/current-state/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # PatientState 조회 또는 생성
+            try:
+                patient_state = PatientState.objects.get(user=user)
+            except PatientState.DoesNotExist:
+                # 기존 Queue 상태에서 생성
+                latest_queue = Queue.objects.filter(user=user).order_by('-updated_at').first()
+                if latest_queue:
+                    state_mapping = {
+                        'waiting': 'WAITING',
+                        'called': 'CALLED',
+                        'ongoing': 'ONGOING',
+                        'completed': 'COMPLETED',
+                        'cancelled': 'REGISTERED'
+                    }
+                    patient_state = PatientState.objects.create(
+                        user=user,
+                        current_state=state_mapping.get(latest_queue.state, 'REGISTERED'),
+                        current_exam=latest_queue.exam.exam_id if latest_queue.exam else None,
+                        is_logged_in=True
+                    )
+                else:
+                    patient_state = PatientState.objects.create(
+                        user=user,
+                        current_state='REGISTERED',
+                        is_logged_in=True
+                    )
+            
+            # 오늘 예약 조회
+            today = timezone.now().date()
+            today_appointments = Appointment.objects.filter(
+                user=user,
+                scheduled_date=today
+            ).select_related('exam').order_by('scheduled_time')
+            
+            # 현재 대기열 조회
+            current_queues = Queue.objects.filter(
+                user=user,
+                state__in=['waiting', 'called', 'ongoing']
+            ).select_related('exam')
+            
+            return APIResponse.success(
+                data={
+                    'patient_state': {
+                        'current_state': patient_state.current_state,
+                        'current_location': patient_state.current_location,
+                        'current_exam': patient_state.current_exam,
+                        'is_logged_in': patient_state.is_logged_in,
+                        'updated_at': patient_state.updated_at.isoformat()
+                    },
+                    'today_appointments': AppointmentSerializer(today_appointments, many=True).data,
+                    'current_queues': QueueSerializer(current_queues, many=True).data,
+                    'next_action': get_next_action_guide(patient_state)
+                },
+                message="환자 상태를 조회했습니다."
+            )
+            
+        except Exception as e:
+            logger.error(f"Patient state error: {str(e)}")
+            return APIResponse.error(
+                message="환자 상태 조회 중 오류가 발생했습니다.",
+                code="PATIENT_STATE_ERROR",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
