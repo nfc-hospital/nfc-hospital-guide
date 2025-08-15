@@ -15,7 +15,6 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        # 'env:'가 아닌 'envs:'가 올바른 옵션이며, '변수=값' 포맷의 문자열을 사용해야 합니다.
         envs: |
           EC2_HOST_ENV=${{ secrets.EC2_HOST }}
           FRONTEND_BUILD_PATH_ENV=${{ secrets.FRONTEND_BUILD_PATH }}
