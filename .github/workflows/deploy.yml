@@ -15,10 +15,10 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        # env 블록을 통해 GitHub Secrets를 원격 서버의 환경 변수로 전달합니다.
-        env:
-          EC2_HOST_ENV: ${{ secrets.EC2_HOST }}
-          FRONTEND_BUILD_PATH_ENV: ${{ secrets.FRONTEND_BUILD_PATH }}
+        # 'env:'가 아닌 'envs:'가 올바른 옵션이며, '변수=값' 포맷의 문자열을 사용해야 합니다.
+        envs: |
+          EC2_HOST_ENV=${{ secrets.EC2_HOST }}
+          FRONTEND_BUILD_PATH_ENV=${{ secrets.FRONTEND_BUILD_PATH }}
         script: |
           # --- 풀스택 자동 배포 스크립트 ---
           
