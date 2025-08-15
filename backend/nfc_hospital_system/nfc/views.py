@@ -189,6 +189,44 @@ class AdminNFCTagViewSet(ModelViewSet):
         permission_classes = [permissions.IsAuthenticated]
         return [permission() for permission in permission_classes]
     
+    def get_queryset(self):
+        """필터링을 지원하는 쿼리셋 반환"""
+        queryset = super().get_queryset()
+        
+        # 디버깅: 쿼리 파라미터 출력
+        logger.info(f"Query params: {self.request.query_params}")
+        
+        # is_active 필터
+        is_active = self.request.query_params.get('is_active', None)
+        logger.info(f"is_active filter: {is_active}")
+        
+        if is_active is not None and is_active != '':
+            if is_active.lower() == 'true':
+                queryset = queryset.filter(is_active=True)
+                logger.info(f"Filtering active tags, count: {queryset.count()}")
+            elif is_active.lower() == 'false':
+                queryset = queryset.filter(is_active=False)
+                logger.info(f"Filtering inactive tags, count: {queryset.count()}")
+        
+        # search 필터
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                models.Q(code__icontains=search) |
+                models.Q(location__icontains=search) |
+                models.Q(description__icontains=search)
+            )
+            logger.info(f"Search filter applied: {search}")
+        
+        # location 필터
+        location = self.request.query_params.get('location', None)
+        if location:
+            queryset = queryset.filter(location__icontains=location)
+            logger.info(f"Location filter applied: {location}")
+        
+        logger.info(f"Final queryset count: {queryset.count()}")
+        return queryset.order_by('-created_at')
+    
     def check_admin_permission(self):
         """관리자 권한 확인"""
         try:

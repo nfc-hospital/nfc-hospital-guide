@@ -119,142 +119,142 @@ cancelled  → 취소
 
 ### 🔐 인증 API (`/api/v1/auth/`)
 ```bash
-POST   /api/v1/auth/simple-login         # 전화번호+생년월일 간편 로그인 ✅
-POST   /api/v1/auth/kakao                # 카카오 OAuth 로그인 ✅
-POST   /api/v1/auth/pass                 # PASS 앱 본인인증 ❌
-POST   /api/v1/auth/sms-verify           # SMS 인증번호 발송/검증 ❌
-POST   /api/v1/auth/token/refresh/       # JWT 토큰 갱신 ✅
-POST   /api/v1/auth/logout               # 로그아웃 및 토큰 무효화 ✅
-GET    /api/v1/auth/profile/             # 환자 프로필 조회 ❌
-PUT    /api/v1/users/profile             # 환자 개인정보 수정 ❌
+POST   /api/v1/auth/simple-login         # 전화번호+생년월일 간편 로그인 
+POST   /api/v1/auth/kakao                # 카카오 OAuth 로그인 
+POST   /api/v1/auth/pass                 # PASS 앱 본인인증 
+POST   /api/v1/auth/sms-verify           # SMS 인증번호 발송/검증 
+POST   /api/v1/auth/token/refresh/       # JWT 토큰 갱신 
+POST   /api/v1/auth/logout               # 로그아웃 및 토큰 무효화 
+GET    /api/v1/auth/profile/             # 환자 프로필 조회 
+PUT    /api/v1/users/profile             # 환자 개인정보 수정 
 ```
 
 ### 🔗 가상 DB (EMR 중계) API (`/api/v1/virtual-db/`)
 ```bash
-GET    /api/v1/virtual-db/patient/{emrId}      # EMR 환자 정보 조회 (READ-ONLY) ❌
-GET    /api/v1/virtual-db/sync-status          # EMR 동기화 상태 확인 ❌
-POST   /api/v1/virtual-db/refresh/{emrId}      # 특정 환자 EMR 재동기화 ❌
+GET    /api/v1/virtual-db/patient/{emrId}      # EMR 환자 정보 조회 (READ-ONLY) 
+GET    /api/v1/virtual-db/sync-status          # EMR 동기화 상태 확인 
+POST   /api/v1/virtual-db/refresh/{emrId}      # 특정 환자 EMR 재동기화 
 ```
 
 ### 🏥 병원 정보 API (`/api/v1/hospital/`)
 ```bash
-GET    /api/v1/hospital/info                   # 병원 기본 정보 ❌
-GET    /api/v1/hospital/departments            # 진료과 목록 및 위치 ❌
-GET    /api/v1/hospital/map                    # 병원 내부 지도 데이터 ❌
-GET    /api/v1/hospital/facilities             # 편의시설 위치 ❌
-GET    /api/v1/hospital/floors/{floorId}       # 층별 안내 정보 ❌
-GET    /api/v1/hospital/voice-guide/{locationId} # 위치별 음성 안내 ❌
+GET    /api/v1/hospital/info                   # 병원 기본 정보 
+GET    /api/v1/hospital/departments            # 진료과 목록 및 위치 
+GET    /api/v1/hospital/map                    # 병원 내부 지도 데이터 
+GET    /api/v1/hospital/facilities             # 편의시설 위치 
+GET    /api/v1/hospital/floors/{floorId}       # 층별 안내 정보 
+GET    /api/v1/hospital/voice-guide/{locationId} # 위치별 음성 안내 
 ```
 
 ### 📱 NFC 태그 관리 (`/api/v1/nfc/`)
 ```bash
 # 환자용 NFC API
-POST   /api/v1/nfc/public-info              # 비로그인 NFC 공개 정보 ❌
-POST   /api/v1/nfc/scan/                    # 로그인 사용자 NFC 스캔 🚧
-POST   /api/v1/nfc/scan-log                 # NFC 스캔 로그 기록 ❌
-GET    /api/v1/nfc/qr-backup/{tagId}        # QR 코드 백업 생성 ❌
+POST   /api/v1/nfc/public-info              # 비로그인 NFC 공개 정보 
+POST   /api/v1/nfc/scan/                    # 로그인 사용자 NFC 스캔 
+POST   /api/v1/nfc/scan-log                 # NFC 스캔 로그 기록 
+GET    /api/v1/nfc/qr-backup/{tagId}        # QR 코드 백업 생성 
 
 # 관리자용 NFC API  
-GET    /api/v1/dashboard/nfc/tags           # 태그 목록 조회 ✅
-POST   /api/v1/dashboard/nfc/tags           # 새 태그 등록 ✅
-PUT    /api/v1/dashboard/nfc/tags/{tagId}   # 태그 정보 수정 ✅
-DELETE /api/v1/dashboard/nfc/tags/{tagId}   # 태그 비활성화 ✅
-POST   /api/v1/dashboard/nfc/tag-exam-mapping # 태그-검사 매핑 ❌
+GET    /api/v1/dashboard/nfc/tags           # 태그 목록 조회
+POST   /api/v1/dashboard/nfc/tags           # 새 태그 등록 
+PUT    /api/v1/dashboard/nfc/tags/{tagId}   # 태그 정보 수정 
+DELETE /api/v1/dashboard/nfc/tags/{tagId}   # 태그 비활성화 
+POST   /api/v1/dashboard/nfc/tag-exam-mapping # 태그-검사 매핑 
 ```
 
 ### 🔗 환자용 (PWA) API
 ```bash
-GET    /api/v1/schedule/today               # 당일 일정 조회 🚧
-GET    /api/v1/queue/my-position            # 내 대기 순서 조회 🚧
-POST   /api/v1/queue/checkin               # 검사실 도착 체크인 ❌
-PUT    /api/v1/status/update               # 환자 상태 수동 업데이트 ❌
-GET    /api/v1/payment/status              # 결제 상태 조회 ❌
-POST   /api/v1/appointment/complete        # 진료 완료 처리 ❌
-GET    /api/v1/exam/progress               # 검사 진행 상태 ❌
-PUT    /api/v1/queue/acknowledge-call      # 환자 호출 확인 응답 ❌
+GET    /api/v1/schedule/today               # 당일 일정 조회 
+GET    /api/v1/queue/my-position            # 내 대기 순서 조회 
+POST   /api/v1/queue/checkin               # 검사실 도착 체크인 
+PUT    /api/v1/status/update               # 환자 상태 수동 업데이트 
+GET    /api/v1/payment/status              # 결제 상태 조회 
+POST   /api/v1/appointment/complete        # 진료 완료 처리 
+GET    /api/v1/exam/progress               # 검사 진행 상태 
+PUT    /api/v1/queue/acknowledge-call      # 환자 호출 확인 응답 
 ```
 
 ### 📋 예약 및 진료 (`/api/v1/appointments/`)
 ```bash
-GET    /api/v1/appointments/today          # 당일 예약 목록 🚧
-GET    /api/v1/appointments/{appointmentId} # 예약 상세 정보 🚧
-PUT    /api/v1/appointments/{appointmentId}/status # 예약 상태 업데이트 ❌
-POST   /api/v1/appointments/{appointmentId}/arrive # 검사실 도착 확인 ❌
-POST   /api/v1/appointments/{appointmentId}/complete # 검사 완료 처리 ❌
-GET    /api/v1/appointments/{appointmentId}/preparation # 검사 준비사항 🚧
-POST   /api/v1/appointments/emr-arrival    # EMR 도착 처리 연동 ❌
+GET    /api/v1/appointments/today          # 당일 예약 목록 
+GET    /api/v1/appointments/{appointmentId} # 예약 상세 정보
+PUT    /api/v1/appointments/{appointmentId}/status # 예약 상태 업데이트 
+POST   /api/v1/appointments/{appointmentId}/arrive # 검사실 도착 확인 
+POST   /api/v1/appointments/{appointmentId}/complete # 검사 완료 처리 
+GET    /api/v1/appointments/{appointmentId}/preparation # 검사 준비사항 
+POST   /api/v1/appointments/emr-arrival    # EMR 도착 처리 연동 
 ```
 
 ### ⏱️ 대기열 관리 (`/api/v1/queue/`)
 ```bash
 # 환자용 대기열 API
-GET    /api/v1/queue/status                # 실시간 대기 현황 🚧
-POST   /api/v1/queue/join                  # 대기열 등록 🚧
-GET    /api/v1/queue/my-position           # 내 대기 순서 조회 🚧
-POST   /api/v1/queue/notification-settings # 대기 알림 설정 ❌
+GET    /api/v1/queue/status                # 실시간 대기 현황 
+POST   /api/v1/queue/join                  # 대기열 등록 
+GET    /api/v1/queue/my-position           # 내 대기 순서 조회 
+POST   /api/v1/queue/notification-settings # 대기 알림 설정 
 
 # 관리자용 대기열 API
-GET    /api/v1/queue/dashboard/realtime-data/    # 실시간 대기열 데이터 ✅
-GET    /api/v1/queue/dashboard/by-department/    # 부서별 대기열 ✅
-POST   /api/v1/queue/medical/call-patient/       # 환자 호출 ✅
-PUT    /api/v1/queue/dashboard/{queueId}         # 대기열 수동 수정 🚧
-GET    /api/v1/queue/dashboard/logs              # 대기열 로그 조회 ❌
+GET    /api/v1/queue/dashboard/realtime-data/    # 실시간 대기열 데이터 
+GET    /api/v1/queue/dashboard/by-department/    # 부서별 대기열 
+POST   /api/v1/queue/medical/call-patient/       # 환자 호출 
+PUT    /api/v1/queue/dashboard/{queueId}         # 대기열 수동 수정 
+GET    /api/v1/queue/dashboard/logs              # 대기열 로그 조회 
 ```
 
 ### 🗺 경로 안내 (`/api/v1/navigation/`)
 ```bash
-POST   /api/v1/navigation/route             # 최적 경로 계산 ❌
-POST   /api/v1/navigation/accessible-route  # 접근성 경로 조회 ❌
-POST   /api/v1/navigation/route-refresh     # 경로 재확인 ❌
-GET    /api/v1/navigation/voice-guide/{routeId} # 음성 경로 안내 ❌
-GET    /api/v1/navigation/congestion-aware-route # 혼잡도 반영 경로 ❌
+POST   /api/v1/navigation/route             # 최적 경로 계산 
+POST   /api/v1/navigation/accessible-route  # 접근성 경로 조회 
+POST   /api/v1/navigation/route-refresh     # 경로 재확인 
+GET    /api/v1/navigation/voice-guide/{routeId} # 음성 경로 안내
+GET    /api/v1/navigation/congestion-aware-route # 혼잡도 반영 경로
 ```
 
 ### 🤖 AI 챗봇 (`/api/chatbot/`)
 ```bash
-POST   /api/chatbot/query                   # 텍스트 질문 처리 🚧
-POST   /api/chatbot/voice-query             # 음성 질문 처리 ❌
-GET    /api/v1/chatbot/faq                  # FAQ 목록 조회 ❌
-GET    /api/v1/chatbot/suggestions          # 맞춤 질문 추천 ❌
-POST   /api/chatbot/medical-terms           # 의료용어 쉬운 설명 ❌
-GET    /api/v1/chatbot/guide                # 챗봇 사용 가이드 ❌
+POST   /api/chatbot/query                   # 텍스트 질문 처리 
+POST   /api/chatbot/voice-query             # 음성 질문 처리 
+GET    /api/v1/chatbot/faq                  # FAQ 목록 조회 
+GET    /api/v1/chatbot/suggestions          # 맞춤 질문 추천 
+POST   /api/chatbot/medical-terms           # 의료용어 쉬운 설명 
+GET    /api/v1/chatbot/guide                # 챗봇 사용 가이드 
 ```
 
 ### 📊 분석 API (`/api/v1/analytics/`)
 ```bash
-GET    /api/v1/analytics/patient-flow       # 환자 동선 분석 🚧
-GET    /api/v1/analytics/waiting-time       # 대기시간 통계 🚧
-GET    /api/v1/analytics/congestion-heatmap # 혼잡도 히트맵 ❌
-GET    /api/v1/analytics/chatbot-queries    # 챗봇 질문 분석 ❌
-GET    /api/v1/analytics/nfc-usage          # NFC 태그 사용 통계 ❌
-GET    /api/v1/analytics/bottlenecks        # 병목 구간 식별 ❌
-POST   /api/v1/analytics/custom-report      # 커스텀 보고서 생성 ❌
-GET    /api/v1/analytics/export             # 데이터 내보내기 ❌
+GET    /api/v1/analytics/patient-flow       # 환자 동선 분석 
+GET    /api/v1/analytics/waiting-time       # 대기시간 통계 
+GET    /api/v1/analytics/congestion-heatmap # 혼잡도 히트맵 
+GET    /api/v1/analytics/chatbot-queries    # 챗봇 질문 분석 
+GET    /api/v1/analytics/nfc-usage          # NFC 태그 사용 통계 
+GET    /api/v1/analytics/bottlenecks        # 병목 구간 식별 
+POST   /api/v1/analytics/custom-report      # 커스텀 보고서 생성 
+GET    /api/v1/analytics/export             # 데이터 내보내기 
 ```
 
 ### 🚨 관리자 대시보드 (`/api/v1/dashboard/`)
 ```bash
 # 콘텐츠 관리 (Dept-Admin 이상)
-GET    /api/v1/dashboard/content/exams      # 검사/진료 목록 ❌
-POST   /api/v1/dashboard/content/exams      # 새 검사/진료 등록 ❌
-PUT    /api/v1/dashboard/content/exams/{examId} # 검사/진료 수정 ❌
-DELETE /api/v1/dashboard/content/exams/{examId} # 검사/진료 비활성화 ❌
+GET    /api/v1/dashboard/content/exams      # 검사/진료 목록 
+POST   /api/v1/dashboard/content/exams      # 새 검사/진료 등록 
+PUT    /api/v1/dashboard/content/exams/{examId} # 검사/진료 수정 
+DELETE /api/v1/dashboard/content/exams/{examId} # 검사/진료 비활성화 
 
 # 알림 및 모니터링 (Super/Dept-Admin)
-GET    /api/v1/dashboard/monitor/hospital-status # 실시간 병원 현황 ❌
-GET    /api/v1/dashboard/monitor/system-alerts   # 시스템 알림 조회 ❌
-POST   /api/v1/dashboard/announcements           # 공지사항 발송 ❌
+GET    /api/v1/dashboard/monitor/hospital-status # 실시간 병원 현황 
+GET    /api/v1/dashboard/monitor/system-alerts   # 시스템 알림 조회 
+POST   /api/v1/dashboard/announcements           # 공지사항 발송 
 
 # 감사 로그 (Super-Admin 전용)
-GET    /api/v1/dashboard/audit/logs          # 감사 로그 조회 ❌
-GET    /api/v1/dashboard/audit/logs/filter   # 로그 필터링 ❌
-GET    /api/v1/dashboard/audit/export        # 로그 내보내기 ❌
+GET    /api/v1/dashboard/audit/logs          # 감사 로그 조회 
+GET    /api/v1/dashboard/audit/logs/filter   # 로그 필터링 
+GET    /api/v1/dashboard/audit/export        # 로그 내보내기 
 ```
 
 ### 🌐 실시간 갱신 (WebSocket)
 ```bash
-ws://api.nfc-hospital.kr/ws/queue/    # 환자 대기 상태 실시간 업데이트 🚧
-ws://api.nfc-hospital.kr/ws/admin/    # 관리자 대시보드 실시간 모니터링 🚧
+ws://api.nfc-hospital.kr/ws/queue/    # 환자 대기 상태 실시간 업데이트 
+ws://api.nfc-hospital.kr/ws/admin/    # 관리자 대시보드 실시간 모니터링 
 ```
 
 ## 역할 기반 접근 제어 (RBAC)
@@ -298,28 +298,6 @@ System:      /api/v1/virtual-db/, 내부 동기화 API
 4. **역할 기반 접근**: patient, staff, dept-admin, super-admin
 5. **자동 인증**: 디바이스 UUID 기반 재로그인
 
-## 현재 구현 상태 및 우선순위
-
-### ✅ 완전 구현 (36%)
-- **인증 시스템**: 간편 로그인, 카카오 OAuth, JWT 토큰 관리
-- **관리자 NFC 관리**: 태그 CRUD, 통계
-- **관리자 대기열 관리**: 실시간 조회, 환자 호출
-- **기본 RBAC**: 역할별 권한 제어
-
-### 🚧 부분 구현/Mock 데이터 (26%)
-- **환자 메인 기능**: 일정 조회, 대기 위치 확인 (Mock 데이터 사용)
-- **검사 정보**: 검사 상세, 준비사항 조회 (Mock 데이터 사용)
-- **분석 대시보드**: 차트 UI만 구현, 실제 데이터 연동 필요
-- **WebSocket**: 연결 로직 존재하나 안정화 필요
-
-### ❌ 미구현 (38%)
-- **Web NFC API**: NFC 태그 스캔 기능 미작동
-- **EMR 연동**: 가상 DB API 전체
-- **병원 정보 API**: 지도, 편의시설, 음성 안내
-- **경로 안내**: 네비게이션 전체 기능
-- **AI 챗봇**: 실제 Python 서버 연동
-- **알림 시스템**: FCM 푸시 알림
-- **예약 시스템**: 예약 생성/수정/취소
 
 
 ## 보안 및 성능 고려사항

@@ -24,14 +24,22 @@ const NFCTagManagement = () => {
   const loadTags = async () => {
     try {
       setLoading(true);
+      const limit = 10; // limit 변수 정의
       const params = {
         page: currentPage,
-        limit: 10,
+        limit: limit,
         ...filters
       };
       
       const response = await adminAPI.nfc.getAllTags(params);
-      if (response.success) {
+      // DRF 기본 응답 형식 처리
+      if (response.results) {
+        setTags(response.results);
+        const totalCount = response.count || 0;
+        const totalPages = Math.ceil(totalCount / limit);
+        setTotalPages(totalPages || 1);
+      } else if (response.success) {
+        // APIResponse 형식 처리 (나중에 수정될 때를 위해)
         setTags(response.data?.items || []);
         setTotalPages(response.data?.pagination?.totalPages || 1);
       }

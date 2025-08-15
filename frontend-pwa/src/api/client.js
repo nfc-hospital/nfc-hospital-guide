@@ -297,16 +297,16 @@ export const chatbotAPI = {
 export const adminAPI = {
   // NFC 태그 관리
   nfc: {
-    getAllTags: (params) => api.get('/admin/nfc/tags/list/', { params }),
-    createTag: (data) => api.post('/admin/nfc/tags/', data),
-    updateTag: (tagId, data) => api.put(`/admin/nfc/tags/${tagId}/`, data),
-    deleteTag: (tagId) => api.delete(`/admin/nfc/tags/${tagId}/`),
-    bulkOperation: (data) => api.post('/admin/nfc/tags/bulk/', data),
-    getTagStatistics: (params) => api.get('/admin/nfc/tags/statistics/', { params }),
-    getTagStatus: () => api.get('/admin/tags/status/'),
-    getTagHistory: (tagId) => api.get(`/admin/nfc/tags/${tagId}/history/`),
-    createTagExamMapping: (data) => api.post('/admin/nfc/tag-exam-mapping/', data),
-    deleteTagExamMapping: (mappingId) => api.delete(`/tags/mapping/${mappingId}`),
+    getAllTags: (params) => api.get('/dashboard/nfc/tags/', { params }),
+    createTag: (data) => api.post('/dashboard/nfc/tags/', data),
+    updateTag: (tagId, data) => api.put(`/dashboard/nfc/tags/${tagId}/`, data),
+    deleteTag: (tagId) => api.delete(`/dashboard/nfc/tags/${tagId}/`),
+    bulkOperation: (data) => api.post('/dashboard/nfc/tags/bulk/', data),
+    getTagStatistics: (params) => api.get('/dashboard/nfc/tags/statistics/', { params }),
+    getTagStatus: () => api.get('/dashboard/tags/status/'),
+    getTagHistory: (tagId) => api.get(`/dashboard/nfc/tags/${tagId}/history/`),
+    createTagExamMapping: (data) => api.post('/dashboard/nfc/tag-exam-mapping/', data),
+    deleteTagExamMapping: (mappingId) => api.delete(`/dashboard/tags/mapping/${mappingId}`),
   },
 
   // 대기열 모니터링

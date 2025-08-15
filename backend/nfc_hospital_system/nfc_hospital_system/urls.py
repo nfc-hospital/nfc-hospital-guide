@@ -54,7 +54,7 @@ urlpatterns = [
     # path('api/v1/appointments/', include('appointments.urls')), # 예약/진료
     path('api/v1/', include('appointments.urls')),
     path('api/v1/queue/', include('p_queue.urls')),              # 대기열 
-    path('api/v1/admin_dashboard/', include('admin_dashboard.urls')),    # 관리자 대시보드 (알림 API 포함)
+    path('api/v1/dashboard/', include('admin_dashboard.urls')),    # 관리자 대시보드 (알림 API 포함)
     
     # Phase 2 확장 기능
     # path('api/v1/chatbot/', include('chatbot.urls')),         # AI 챗봇

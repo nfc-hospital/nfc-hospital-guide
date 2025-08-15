@@ -22,11 +22,27 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       // 여러 API를 병렬로 호출
-      const [queueData, nfcStatus, analytics] = await Promise.all([
+      const [queueData, allTags, analytics] = await Promise.all([
         adminAPI.queue.getRealTimeData().catch(() => ({ summary: {} })),
-        adminAPI.nfc.getTagStatus().catch(() => ({ summary: {} })),
+        adminAPI.nfc.getAllTags({ limit: 100 }).catch(() => ({ results: [], count: 0 })),
         adminAPI.analytics.getBottlenecks().catch(() => ({ summary: {} }))
       ]);
+
+      // 활성 태그만 카운트 (results 배열에서 직접 필터링)
+      const activeCount = allTags.results ? 
+        allTags.results.filter(tag => tag.is_active === true).length : 
+        0;
+      
+      const totalCount = allTags.count || 0;
+      
+      // NFC 태그 통계 계산
+      const nfcStatus = {
+        summary: {
+          healthyCount: activeCount,  // 활성 태그 개수
+          totalCount: totalCount,      // 전체 태그 개수
+          errorCount: 0
+        }
+      };
 
       setDashboardData({
         queue: queueData,
