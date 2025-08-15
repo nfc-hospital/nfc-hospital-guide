@@ -39,15 +39,18 @@ jobs:
           source venv/bin/activate
           pip install -r nfc_hospital_system/requirements.txt
           
-          # Django 서버 재시작
+          # Django 서버 재시작 (새로운 방법)
           pkill -f "manage.py runserver" || true
-          sleep 2
-          cd nfc_hospital_system
+          sleep 3
           
-          # 백그라운드에서 Django 서버 시작
-          nohup python manage.py runserver 0.0.0.0:8000 --settings=nfc_hospital_system.settings.development > ../logs/django.log 2>&1 &
+          # screen 세션으로 Django 실행
+          cd nfc_hospital_system
+          screen -dmS django python manage.py runserver 0.0.0.0:8000 --settings=nfc_hospital_system.settings.development
           
           # 서버 시작 확인
           sleep 5
-          ps aux | grep "manage.py runserver" | grep -v grep
-          echo "Django server deployment completed!"
+          screen -ls
+          ps aux | grep "manage.py runserver" | grep -v grep || echo "Django process not found"
+          
+          # 최종 확인
+          curl -f http://localhost:8000/ > /dev/null 2>&1 && echo "Django server is running!" || echo "Django server failed to start"
