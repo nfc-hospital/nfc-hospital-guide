@@ -2,13 +2,16 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.generics import ListAPIView
+from datetime import date
+from django.utils import timezone
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 
-from .models import Exam, ExamPreparation 
-from .serializers import ExamSerializer, ExamPreparationSerializer
+from .models import Exam, ExamPreparation, Appointment
+from .serializers import ExamSerializer, ExamPreparationSerializer, AppointmentSerializer
 
 # 페이지네이션 설정
 class StandardResultsSetPagination(PageNumberPagination):
@@ -115,3 +118,19 @@ class ExamViewSet(viewsets.ModelViewSet):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except ExamPreparation.DoesNotExist:
             return Response({"detail": "Preparation not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+class TodaysAppointmentsView(ListAPIView):
+    """
+    오늘의 예약 목록 API
+    GET /api/v1/appointments/today/
+    """
+    serializer_class = AppointmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        today = timezone.now().date()
+        return Appointment.objects.filter(
+            user=self.request.user,
+            scheduled_date=today
+        ).select_related('exam').order_by('scheduled_time')

@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import Exam, ExamPreparation
+from .models import Exam, ExamPreparation, Appointment
 from p_queue.models import Queue 
+from authentication.serializers import UserSerializer # 사용자 정보를 위해 추가
 
 # ExamPreparation 정보를 위한 Serializer
 class ExamPreparationSerializer(serializers.ModelSerializer):
@@ -105,3 +106,14 @@ class ExamSerializer(serializers.ModelSerializer):
             if Exam.objects.filter(title=value).exists():
                 raise serializers.ValidationError("This exam title already exists.")
         return value
+    
+class AppointmentSerializer(serializers.ModelSerializer):
+    # 'exam'과 'user' 필드는 ID값만 보이는 대신, 관련된 정보(객체)를 함께 보여주기 위해
+    # 각자의 Serializer를 중첩하여 사용합니다. (read_only=True는 이 Serializer를 통해 User나 Exam을 수정할 수 없게 함)
+    exam = ExamSerializer(read_only=True)
+    user = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Appointment
+        # API 응답에 포함될 필드들을 명시합니다.
+        fields = ['id', 'user', 'exam', 'appointment_time', 'status', 'created_at', 'updated_at']
