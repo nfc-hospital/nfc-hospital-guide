@@ -54,47 +54,37 @@ jobs:
           
           # 5. Nginx 설치 및 설정
           echo ">>> 5. Setting up Nginx..."
-          sudo apt update
-          sudo apt install -y nginx
+          sudo apt-get update
+          sudo apt-get install -y nginx
           
           # Nginx 설정 파일 생성
-          sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<EOF
+          sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
           server {
               listen 80;
-              server_name 15.164.94.194;
+              server_name ${{ secrets.EC2_HOST }}; # 서버 IP 또는 도메인
               
               # 프론트엔드 (React PWA)
               location / {
-                  root $FRONTEND_DIR/dist;
-                  try_files \$uri \$uri/ /index.html;
+                  root ${{ secrets.FRONTEND_BUILD_PATH }}; # 예: /home/ubuntu/nfc-hospital/frontend-pwa/dist
+                  try_files $uri $uri/ /index.html;
                   add_header Cache-Control "no-cache, no-store, must-revalidate";
               }
               
-              # 백엔드 API
-              location /api/ {
+              # 백엔드 API, Admin, Static/Media 파일
+              location ~ ^/(api|admin|static|media)/ {
                   proxy_pass http://127.0.0.1:8000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-              
-              # Django Admin
-              location /admin/ {
-                  proxy_pass http://127.0.0.1:8000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
               }
           }
-          EOF
+EOF
           
           # Nginx 사이트 활성화
           sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
           sudo rm -f /etc/nginx/sites-enabled/default
-          sudo nginx -t && sudo systemctl reload nginx
-          sudo systemctl enable nginx
+          sudo nginx -t && sudo systemctl restart nginx
           
           # 6. 백엔드 서버 시작
           echo ">>> 6. Starting backend server with Gunicorn..."
@@ -117,146 +107,16 @@ jobs:
           if screen -list | grep -q "django"; then
             echo "✅ Backend server is running."
           else
-            echo "❌ Backend server failed to start."
+            echo "❌ Backend server failed to start. Check Gunicorn logs."
+            cat $GUNICORN_LOG_FILE
             exit 1
           fi
           
           if curl -f http://localhost/ > /dev/null 2>&1; then
               echo "✅ Success: Full stack deployment completed!"
-              echo "🌐 Frontend: http://15.164.94.194/"
-              echo "🔧 Backend API: http://15.164.94.194/api/"
-              echo "⚙️  Admin: http://15.164.94.194/admin/"
-          else
-              echo "❌ ERROR: Nginx/Frontend is not responding."
-              exit 1
-          finame: Deploy Full Stack to EC2
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Deploy Full Stack to EC2
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USER }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          # --- 풀스택 자동 배포 스크립트 ---
-          
-          PROJECT_DIR="$HOME/nfc-hospital"
-          BACKEND_DIR="$PROJECT_DIR/backend"
-          FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
-          VENV_GUNICORN="$BACKEND_DIR/venv/bin/gunicorn"
-          VENV_PIP="$BACKEND_DIR/venv/bin/pip"
-          DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
-          PID_FILE="$BACKEND_DIR/gunicorn.pid"
-          GUNICORN_LOG_FILE="$BACKEND_DIR/gunicorn.error.log"
-          
-          # 1. 코드 업데이트
-          echo ">>> 1. Pulling latest code..."
-          cd $PROJECT_DIR
-          git pull origin main
-          
-          # 2. 백엔드 의존성 설치
-          echo ">>> 2. Installing Backend dependencies..."
-          $VENV_PIP install -r $DJANGO_DIR/requirements.txt
-          
-          # 3. 프론트엔드 빌드
-          echo ">>> 3. Building Frontend..."
-          cd $FRONTEND_DIR
-          npm install
-          npm run build
-          
-          # 4. 백엔드 서버 안전하게 종료
-          echo ">>> 4. Safely stopping the old backend server..."
-          if [ -f $PID_FILE ]; then
-            kill $(cat $PID_FILE)
-            rm -f $PID_FILE
-          else
-            pkill -f "^$VENV_GUNICORN" || true
-          fi
-          sleep 2
-          
-          # 5. Nginx 설치 및 설정
-          echo ">>> 5. Setting up Nginx..."
-          sudo apt update
-          sudo apt install -y nginx
-          
-          # Nginx 설정 파일 생성
-          sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<EOF
-          server {
-              listen 80;
-              server_name 15.164.94.194;
-              
-              # 프론트엔드 (React PWA)
-              location / {
-                  root $FRONTEND_DIR/dist;
-                  try_files \$uri \$uri/ /index.html;
-                  add_header Cache-Control "no-cache, no-store, must-revalidate";
-              }
-              
-              # 백엔드 API
-              location /api/ {
-                  proxy_pass http://127.0.0.1:8000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-              
-              # Django Admin
-              location /admin/ {
-                  proxy_pass http://127.0.0.1:8000;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-          }
-          EOF
-          
-          # Nginx 사이트 활성화
-          sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
-          sudo rm -f /etc/nginx/sites-enabled/default
-          sudo nginx -t && sudo systemctl reload nginx
-          sudo systemctl enable nginx
-          
-          # 6. 백엔드 서버 시작
-          echo ">>> 6. Starting backend server with Gunicorn..."
-          rm -f $GUNICORN_LOG_FILE
-          cd $DJANGO_DIR
-          
-          screen -dmS django bash -c "export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.development'; \
-            exec $VENV_GUNICORN \
-              --workers 3 \
-              --bind 127.0.0.1:8000 \
-              --pid $PID_FILE \
-              --log-level=info \
-              --error-logfile $GUNICORN_LOG_FILE \
-              nfc_hospital_system.wsgi:application"
-          
-          # 7. 최종 상태 검증
-          echo ">>> 7. Verifying deployment..."
-          sleep 5
-          
-          if screen -list | grep -q "django"; then
-            echo "✅ Backend server is running."
-          else
-            echo "❌ Backend server failed to start."
-            exit 1
-          fi
-          
-          if curl -f http://localhost/ > /dev/null 2>&1; then
-              echo "✅ Success: Full stack deployment completed!"
-              echo "🌐 Frontend: http://15.164.94.194/"
-              echo "🔧 Backend API: http://15.164.94.194/api/"
-              echo "⚙️  Admin: http://15.164.94.194/admin/"
+              echo "🌐 Frontend: http://${{ secrets.EC2_HOST }}/"
+              echo "🔧 Backend API: http://${{ secrets.EC2_HOST }}/api/"
+              echo "⚙️ Admin: http://${{ secrets.EC2_HOST }}/admin/"
           else
               echo "❌ ERROR: Nginx/Frontend is not responding."
               exit 1
