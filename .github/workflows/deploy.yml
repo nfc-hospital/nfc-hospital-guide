@@ -25,7 +25,23 @@ jobs:
           # 1. 스크립트 안정성 강화 (명령어 실패 시 즉시 중단)
           set -e
           
-          # 2. 주요 경로 변수 정의
+          # 2. 환경변수 검증
+          echo ">>> 0. Validating environment variables..."
+          if [ -z "$EC2_HOST_ENV" ]; then
+            echo "❌ ERROR: EC2_HOST_ENV is not set"
+            exit 1
+          fi
+          
+          if [ -z "$FRONTEND_BUILD_PATH_ENV" ]; then
+            echo "❌ ERROR: FRONTEND_BUILD_PATH_ENV is not set"
+            echo "Using default path: /var/www/nfc-hospital"
+            FRONTEND_BUILD_PATH_ENV="/var/www/nfc-hospital"
+          fi
+          
+          echo "✅ EC2_HOST_ENV: $EC2_HOST_ENV"
+          echo "✅ FRONTEND_BUILD_PATH_ENV: $FRONTEND_BUILD_PATH_ENV"
+          
+          # 3. 주요 경로 변수 정의
           PROJECT_DIR="$HOME/nfc-hospital"
           BACKEND_DIR="$PROJECT_DIR/backend"
           FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
@@ -33,7 +49,7 @@ jobs:
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
           DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
           
-          # 3. 코드 업데이트, 의존성 설치, 프론트엔드 빌드
+          # 4. 코드 업데이트, 의존성 설치, 프론트엔드 빌드
           echo ">>> 1. Pulling, Installing, and Building..."
           cd $PROJECT_DIR
           git pull origin main
@@ -42,12 +58,12 @@ jobs:
           npm install
           npm run build
           
-          # 4. 이전 백엔드 서버(Daphne) 종료
+          # 5. 이전 백엔드 서버(Daphne) 종료
           echo ">>> 2. Safely stopping the old backend server..."
           pkill -f "^$VENV_DAPHNE" || true
           sleep 2
           
-          # 5. Nginx 설정 및 프론트엔드 파일 복사/권한 설정
+          # 6. Nginx 설정 및 프론트엔드 파일 복사/권한 설정
           echo ">>> 3. Setting up Nginx and copying files..."
           sudo apt-get update
           sudo apt-get -y install nginx
@@ -75,11 +91,12 @@ jobs:
                   proxy_set_header X-Forwarded-Proto \$scheme;
               }
           }
-          
           EOF
           
           # 프론트엔드 빌드 결과물을 웹 서버 경로로 복사 및 권한 설정
+          echo "Creating directory: $FRONTEND_BUILD_PATH_ENV"
           sudo mkdir -p $FRONTEND_BUILD_PATH_ENV
+          echo "Copying files from $FRONTEND_DIR/dist/* to $FRONTEND_BUILD_PATH_ENV"
           sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH_ENV
           sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH_ENV
           
@@ -91,12 +108,12 @@ jobs:
           echo ">>> Restarting Nginx..."
           sudo systemctl restart nginx
           
-          # 6. 새 백엔드 서버를 Daphne로 시작
+          # 7. 새 백엔드 서버를 Daphne로 시작
           echo ">>> 4. Starting backend server with Daphne..."
           cd $DJANGO_DIR
           screen -dmS django $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
           
-          # 7. 최종 상태 검증
+          # 8. 최종 상태 검증
           echo ">>> 5. Verifying deployment..."
           sleep 5
           
