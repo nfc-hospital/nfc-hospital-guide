@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Queue, QueueStatusLog, PatientState, StateTransition, DailySchedule
+from .models import Queue, QueueStatusLog, PatientState, StateTransition
 
 
 # QueueStatusLog를 Queue Admin에 인라인으로 추가 (선택 사항)
@@ -342,76 +342,3 @@ class StateTransitionAdmin(admin.ModelAdmin):
         return request.user.is_superuser  # 슈퍼유저만 삭제 가능
 
 
-@admin.register(DailySchedule)
-class DailyScheduleAdmin(admin.ModelAdmin):
-    """환자 일일 스케줄"""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.model._meta.verbose_name = "일일 스케줄"
-        self.model._meta.verbose_name_plural = "일일 스케줄 목록"
-
-    list_display = (
-        'user', 'schedule_date', 'sequence_order', 'exam_id',
-        'emr_department', 'our_queue_status', 'estimated_start_time'
-    )
-    list_filter = (
-        'schedule_date', 'our_queue_status', 'emr_department',
-        'created_at'
-    )
-    search_fields = (
-        'user__name', 'exam_id',
-        'emr_appointment_id', 'emr_doctor_name'
-    )
-    raw_id_fields = ('user',)
-    date_hierarchy = 'schedule_date'
-    ordering = ('schedule_date', 'sequence_order')
-    
-    fieldsets = (
-        (None, {
-            'fields': ('user', 'schedule_date', 'exam_id', 'sequence_order')
-        }),
-        ('EMR 연동 정보', {
-            'fields': (
-                'emr_appointment_id', 'emr_status_code', 'emr_department',
-                'emr_doctor_name', 'emr_room_number', 'emr_last_sync'
-            )
-        }),
-        ('우리 시스템 상태', {
-            'fields': (
-                'our_queue_status', 'estimated_start_time',
-                'actual_start_time', 'actual_end_time'
-            )
-        }),
-        ('결과 정보', {
-            'fields': ('result_ready_time', 'result_location'),
-            'classes': ('collapse',)
-        }),
-        ('시간 정보', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-    
-    readonly_fields = ('created_at', 'updated_at', 'emr_last_sync')
-    
-    # 액션 추가
-    actions = ['mark_as_waiting', 'mark_as_ongoing', 'mark_as_completed']
-    
-    def mark_as_waiting(self, request, queryset):
-        """선택된 스케줄을 '대기중'으로 변경"""
-        updated = queryset.update(our_queue_status='waiting')
-        self.message_user(request, f'{updated}개의 스케줄을 대기중으로 변경했습니다.')
-    mark_as_waiting.short_description = "선택된 스케줄을 '대기중'으로 표시"
-    
-    def mark_as_ongoing(self, request, queryset):
-        """선택된 스케줄을 '진행중'으로 변경"""
-        updated = queryset.update(our_queue_status='ongoing')
-        self.message_user(request, f'{updated}개의 스케줄을 진행중으로 변경했습니다.')
-    mark_as_ongoing.short_description = "선택된 스케줄을 '진행중'으로 표시"
-    
-    def mark_as_completed(self, request, queryset):
-        """선택된 스케줄을 '완료'로 변경"""
-        updated = queryset.update(our_queue_status='completed')
-        self.message_user(request, f'{updated}개의 스케줄을 완료로 변경했습니다.')
-    mark_as_completed.short_description = "선택된 스케줄을 '완료'로 표시"

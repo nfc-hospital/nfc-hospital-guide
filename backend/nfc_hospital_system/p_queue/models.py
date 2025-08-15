@@ -101,16 +101,6 @@ class Queue(models.Model):
         verbose_name='대기열 상태 변경 시간'
     )
 
-    # 새로운 필드 추가
-    schedule = models.ForeignKey(
-        'DailySchedule', 
-        on_delete=models.CASCADE, 
-        null=True, 
-        blank=True,
-        related_name='related_queues',
-        verbose_name='일일 스케줄 연결',
-        db_column='schedule_id'
-    )
 
     class Meta:
         db_table = 'queues'
@@ -462,48 +452,3 @@ class StateTransition(models.Model):
         return f"{self.user.name}: {self.from_state} → {self.to_state}"
 
 
-class DailySchedule(models.Model):
-    """환자 일일 스케줄"""
-    schedule_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='daily_schedules')  # 'users.User' → User
-    schedule_date = models.DateField()
-    exam_id = models.CharField(max_length=50)
-    sequence_order = models.IntegerField()
-    
-    # EMR 연동 정보
-    emr_appointment_id = models.CharField(max_length=100, null=True, blank=True)
-    emr_status_code = models.CharField(max_length=50, null=True, blank=True)
-    emr_department = models.CharField(max_length=50, null=True, blank=True)
-    emr_doctor_name = models.CharField(max_length=100, null=True, blank=True)
-    emr_room_number = models.CharField(max_length=20, null=True, blank=True)
-    emr_last_sync = models.DateTimeField(null=True, blank=True)
-    
-    # 우리 시스템 상태
-    QUEUE_STATUS_CHOICES = [
-        ('not_started', 'Not Started'),
-        ('waiting', 'Waiting'),
-        ('called', 'Called'),
-        ('ongoing', 'Ongoing'),
-        ('completed', 'Completed'),
-    ]
-    our_queue_status = models.CharField(max_length=20, choices=QUEUE_STATUS_CHOICES, default='not_started')
-    estimated_start_time = models.TimeField(null=True, blank=True)
-    actual_start_time = models.DateTimeField(null=True, blank=True)
-    actual_end_time = models.DateTimeField(null=True, blank=True)
-    result_ready_time = models.DateTimeField(null=True, blank=True)
-    result_location = models.CharField(max_length=200, null=True, blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'daily_schedules'
-        indexes = [
-            models.Index(fields=['user', 'schedule_date']),
-            models.Index(fields=['schedule_date', 'sequence_order']),
-            models.Index(fields=['emr_appointment_id']),
-        ]
-        ordering = ['schedule_date', 'sequence_order']
-        
-    def __str__(self):
-        return f"{self.user.name} - {self.schedule_date} ({self.sequence_order})"

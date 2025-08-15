@@ -808,8 +808,9 @@ def queue_performance_metrics(request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
     
-from .models import PatientState, StateTransition, DailySchedule
+from .models import PatientState, StateTransition
 from integrations.models import EmrSyncStatus
+from appointments.models import Appointment
 
 # 환자 상태 관리 API 추가
 
@@ -911,12 +912,12 @@ def patient_current_state(request):
                     is_logged_in=True
                 )
         
-        # 오늘 일정 조회
+        # 오늘 일정 조회 - Appointment 모델 사용
         today = timezone.now().date()
-        today_schedules = DailySchedule.objects.filter(
+        today_appointments = Appointment.objects.filter(
             user=user,
-            schedule_date=today
-        ).order_by('sequence_order')
+            scheduled_date=today
+        ).select_related('exam').order_by('scheduled_time')
         
         # 기존 Queue 정보도 함께 제공 (호환성)
         current_queue = Queue.objects.filter(
@@ -936,12 +937,12 @@ def patient_current_state(request):
                 },
                 'current_queue': QueueSerializer(current_queue).data if current_queue else None,
                 'today_schedules': [{
-                    'sequence_order': ds.sequence_order,
-                    'exam_id': ds.exam_id,
-                    'emr_department': ds.emr_department,
-                    'our_queue_status': ds.our_queue_status,
-                    'estimated_start_time': ds.estimated_start_time.strftime('%H:%M') if ds.estimated_start_time else None
-                } for ds in today_schedules],
+                    'sequence_order': idx + 1,
+                    'exam_id': appt.exam.exam_id,
+                    'emr_department': appt.exam.department,
+                    'status': appt.status,
+                    'scheduled_time': appt.scheduled_time.strftime('%H:%M') if appt.scheduled_time else None
+                } for idx, appt in enumerate(today_appointments)],
                 'next_action': get_next_action_guide(patient_state)
             },
             message="환자 상태를 조회했습니다."
@@ -1270,23 +1271,24 @@ def patient_daily_schedule(request):
         user = request.user
         target_date = request.GET.get('date', timezone.now().date().isoformat())
         
-        schedules = DailySchedule.objects.filter(
+        # Appointment 모델에서 직접 조회
+        appointments = Appointment.objects.filter(
             user=user,
-            schedule_date=target_date
-        ).order_by('sequence_order')
+            scheduled_date=target_date
+        ).select_related('exam').order_by('scheduled_time')
         
         return APIResponse.success(
             data={
                 'date': target_date,
                 'schedules': [{
-                    'sequence_order': s.sequence_order,
-                    'exam_id': s.exam_id,
-                    'emr_department': s.emr_department,
-                    'emr_doctor_name': s.emr_doctor_name,
-                    'estimated_start_time': s.estimated_start_time.strftime('%H:%M') if s.estimated_start_time else None,
-                    'our_queue_status': s.our_queue_status,
-                    'emr_status_code': s.emr_status_code
-                } for s in schedules]
+                    'sequence_order': idx + 1,
+                    'exam_id': appt.exam.exam_id,
+                    'exam_name': appt.exam.title,
+                    'department': appt.exam.department,
+                    'scheduled_time': appt.scheduled_time.strftime('%H:%M') if appt.scheduled_time else None,
+                    'status': appt.status,
+                    'emr_appointment_id': appt.emr_appointment_id
+                } for idx, appt in enumerate(appointments)]
             },
             message="일일 스케줄을 조회했습니다."
         )
