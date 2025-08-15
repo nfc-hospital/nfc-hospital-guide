@@ -68,7 +68,7 @@ jobs:
                   proxy_set_header X-Forwarded-Proto \$scheme;
               }
           }
-          
+
           EOF
 
           sudo mkdir -p $FRONTEND_BUILD_PATH_ENV
@@ -79,7 +79,7 @@ jobs:
           echo ">>> Testing Nginx configuration..."
           sudo nginx -t
           echo ">>> Restarting Nginx..."
-          sudo systemctl restart nginx
+          sudo systemctl restart nginx 
           
           # 4. 새 백엔드 서버를 Daphne로 시작
           echo ">>> 4. Starting backend server with Daphne..."
