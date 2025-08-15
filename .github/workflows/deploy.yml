@@ -65,7 +65,7 @@ jobs:
               
               # 프론트엔드 (React PWA)
               location / {
-                  root $FRONTEND_DIR/dist;
+                  root /var/www/nfc-hospital;
                   try_files \$uri \$uri/ /index.html;
                   add_header Cache-Control "no-cache, no-store, must-revalidate";
               }
@@ -89,6 +89,14 @@ jobs:
               }
           }
           EOF
+
+
+          # 파일을 웹 디렉토리로 복사
+          sudo mkdir -p /var/www/nfc-hospital
+          sudo cp -r $FRONTEND_DIR/dist/* /var/www/nfc-hospital/
+          sudo chown -R www-data:www-data /var/www/nfc-hospital/
+          sudo chmod -R 755 /var/www/nfc-hospital/
+
           
           # Nginx 사이트 활성화
           sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
