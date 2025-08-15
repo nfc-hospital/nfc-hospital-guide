@@ -364,17 +364,45 @@ def queue_realtime_data(request):
                 status_code=status.HTTP_403_FORBIDDEN
             )
 
-        # 현재 대기열 상태 조회
+        # PatientState 모델 import 확인
+        from p_queue.models import PatientState
+        from appointments.models import Exam
+        
+        # 디버깅: PatientState 전체 개수 확인
+        total_patient_states = PatientState.objects.count()
+        logger.info(f"Total PatientState records: {total_patient_states}")
+        
+        # 각 상태별로 개별 쿼리로 확인 (디버깅용)
+        waiting_count = PatientState.objects.filter(current_state='WAITING').count()
+        called_count = PatientState.objects.filter(current_state='CALLED').count()
+        ongoing_count = PatientState.objects.filter(current_state='ONGOING').count()
+        completed_count = PatientState.objects.filter(current_state='COMPLETED').count()
+        payment_count = PatientState.objects.filter(current_state='PAYMENT').count()
+        finished_count = PatientState.objects.filter(current_state='FINISHED').count()
+        registered_count = PatientState.objects.filter(current_state='REGISTERED').count()
+        
+        logger.info(f"State counts - WAITING: {waiting_count}, CALLED: {called_count}, ONGOING: {ongoing_count}")
+        logger.info(f"Other states - COMPLETED: {completed_count}, PAYMENT: {payment_count}, FINISHED: {finished_count}, REGISTERED: {registered_count}")
+        
+        # aggregate 대신 개별 count 사용 (더 확실한 방법)
+        patient_stats = {
+            'total_waiting': waiting_count,
+            'total_called': called_count,
+            'total_ongoing': ongoing_count,
+            'total_completed': completed_count,
+            'total_payment': payment_count,
+            'total_finished': finished_count,
+            'total_registered': registered_count
+        }
+        
+        # Queue 모델에서 평균 대기시간 계산
         queue_stats = Queue.objects.filter(
-            state__in=['waiting', 'called', 'in_progress']
+            state='waiting'
         ).aggregate(
-            total_waiting=Count('queue_id', filter=Q(state='waiting')),
-            total_called=Count('queue_id', filter=Q(state='called')),
-            total_in_progress=Count('queue_id', filter=Q(state='in_progress')),
-            avg_wait_time=Avg('estimated_wait_time', filter=Q(state='waiting'))
+            avg_wait_time=Avg('estimated_wait_time')
         )
         
-        # 부서별 대기열 현황
+        # 부서별 대기열 현황 - Queue 모델 사용 (기존 로직 유지)
         dept_queues = []
         for exam in Exam.objects.filter(is_active=True):
             dept_stat = Queue.objects.filter(
@@ -386,16 +414,20 @@ def queue_realtime_data(request):
                 avg_wait=Avg('estimated_wait_time')
             )
             
+            # 실제 대기 인원 수 개별 쿼리로도 확인
+            actual_waiting = Queue.objects.filter(exam=exam, state='waiting').count()
+            actual_called = Queue.objects.filter(exam=exam, state='called').count()
+            
             dept_queues.append({
-                'examId': exam.exam_id,
+                'examId': str(exam.exam_id),
                 'examName': exam.title,
                 'department': exam.department,
-                'waitingCount': dept_stat['waiting_count'] or 0,
-                'calledCount': dept_stat['called_count'] or 0,
+                'waitingCount': actual_waiting,  # 직접 count 사용
+                'calledCount': actual_called,    # 직접 count 사용
                 'avgWaitTime': round(dept_stat['avg_wait'] or 0, 2)
             })
         
-        # 최근 호출된 환자
+        # 최근 호출된 환자 - Queue 모델 사용
         recent_called = Queue.objects.filter(
             state='called',
             called_at__isnull=False
@@ -411,14 +443,33 @@ def queue_realtime_data(request):
         data = {
             'timestamp': timezone.now().isoformat(),
             'summary': {
-                'totalWaiting': queue_stats['total_waiting'] or 0,
-                'totalCalled': queue_stats['total_called'] or 0,
-                'totalInProgress': queue_stats['total_in_progress'] or 0,
-                'avgWaitTime': round(queue_stats['avg_wait_time'] or 0, 2)
+                'totalWaiting': patient_stats['total_waiting'],
+                'totalCalled': patient_stats['total_called'],
+                'totalInProgress': patient_stats['total_ongoing'],  # ongoing -> totalInProgress
+                'totalCompleted': patient_stats['total_completed'],
+                'totalPayment': patient_stats['total_payment'],
+                'totalFinished': patient_stats['total_finished'],
+                'totalRegistered': patient_stats['total_registered'],
+                'avgWaitTime': round(queue_stats['avg_wait_time'] or 0, 2) if queue_stats['avg_wait_time'] else 0
             },
             'departments': dept_queues,
-            'recentCalled': recent_called_list
+            'recentCalled': recent_called_list,
+            'debug': {  # 디버깅 정보 추가
+                'totalPatientStates': total_patient_states,
+                'stateCounts': {
+                    'WAITING': waiting_count,
+                    'CALLED': called_count,
+                    'ONGOING': ongoing_count,
+                    'COMPLETED': completed_count,
+                    'PAYMENT': payment_count,
+                    'FINISHED': finished_count,
+                    'REGISTERED': registered_count
+                }
+            }
         }
+        
+        # 로깅 추가 (디버깅용)
+        logger.info(f"API Response Summary: {data['summary']}")
         
         return APIResponse.success(
             data=data,
@@ -426,13 +477,13 @@ def queue_realtime_data(request):
         )
         
     except Exception as e:
-        logger.error(f"Queue realtime data error: {str(e)}")
+        logger.error(f"Queue realtime data error: {str(e)}", exc_info=True)
         return APIResponse.error(
-            message="실시간 대기열 데이터 조회 중 오류가 발생했습니다.",
+            message=f"실시간 대기열 데이터 조회 중 오류가 발생했습니다: {str(e)}",
             code="INTERNAL_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
+    
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def queue_by_department(request):
@@ -978,7 +1029,7 @@ def patient_current_state(request):
         
         # PatientState 조회
         try:
-            patient_state = PatientState.objects.get(user=user)
+            patient_state = PatientState.objects.select_related('current_exam').get(user=user)
         except PatientState.DoesNotExist:
             # PatientState가 없으면 기존 Queue에서 생성
             latest_queue = Queue.objects.filter(user=user).order_by('-updated_at').first()
@@ -995,7 +1046,7 @@ def patient_current_state(request):
                 patient_state = PatientState.objects.create(
                     user=user,
                     current_state=state_mapping.get(latest_queue.state, 'REGISTERED'),
-                    current_exam=latest_queue.exam.exam_id,
+                    current_exam=latest_queue.exam,  # 이제 직접 Exam 객체 할당 가능
                     is_logged_in=True
                 )
             else:
@@ -1024,7 +1075,9 @@ def patient_current_state(request):
                 'patient_state': {
                     'current_state': patient_state.current_state,
                     'current_location': patient_state.current_location,
-                    'current_exam': patient_state.current_exam,
+                    'current_exam_id': patient_state.current_exam.exam_id if patient_state.current_exam else None,
+                    'current_exam_name': patient_state.current_exam.title if patient_state.current_exam else None,
+                    'current_exam_department': patient_state.current_exam.department if patient_state.current_exam else None,
                     'is_logged_in': patient_state.is_logged_in,
                     'emr_department': patient_state.emr_department,
                     'updated_at': patient_state.updated_at.isoformat()
@@ -1033,6 +1086,7 @@ def patient_current_state(request):
                 'today_schedules': [{
                     'sequence_order': idx + 1,
                     'exam_id': appt.exam.exam_id,
+                    'exam_name': appt.exam.title,
                     'emr_department': appt.exam.department,
                     'status': appt.status,
                     'scheduled_time': appt.scheduled_time.strftime('%H:%M') if appt.scheduled_time else None
@@ -1050,6 +1104,8 @@ def patient_current_state(request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+
+# nfc_checkin 함수 수정 부분
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
 def nfc_checkin(request):
@@ -1060,6 +1116,7 @@ def nfc_checkin(request):
     try:
         user = request.user
         tag_id = request.data.get('tag_id')
+        exam_id = request.data.get('exam_id')  # 검사 ID 추가 가능
         
         if not tag_id:
             return APIResponse.error(
@@ -1076,6 +1133,15 @@ def nfc_checkin(request):
                 'is_logged_in': True
             }
         )
+        
+        # exam_id가 제공된 경우 Exam 객체로 설정
+        if exam_id:
+            try:
+                from appointments.models import Exam
+                exam = Exam.objects.get(exam_id=exam_id)
+                patient_state.current_exam = exam
+            except Exam.DoesNotExist:
+                logger.warning(f"Exam {exam_id} not found for NFC checkin")
         
         # 위치 업데이트
         old_location = patient_state.current_location
@@ -1095,7 +1161,8 @@ def nfc_checkin(request):
                 to_state=new_state,
                 trigger_type='nfc_tag',
                 trigger_source=tag_id,
-                location_at_transition=tag_id
+                location_at_transition=tag_id,
+                exam_id=patient_state.current_exam.exam_id if patient_state.current_exam else None
             )
         
         patient_state.save()
@@ -1107,6 +1174,11 @@ def nfc_checkin(request):
                 'state_changed': old_state != new_state,
                 'current_state': patient_state.current_state,
                 'current_location': patient_state.current_location,
+                'current_exam': {
+                    'exam_id': patient_state.current_exam.exam_id,
+                    'exam_name': patient_state.current_exam.title,
+                    'department': patient_state.current_exam.department
+                } if patient_state.current_exam else None,
                 'next_action': get_next_action_guide(patient_state)
             },
             message="체크인이 완료되었습니다."

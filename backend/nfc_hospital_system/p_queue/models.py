@@ -353,11 +353,12 @@ class QueueStatusLog(models.Model):
     def __str__(self):
         return f"{self.queue.queue_id} - {self.previous_state} → {self.new_state}"
 
+
 # 환자 상태 관리 모델 추가
 class PatientState(models.Model):
     """환자별 현재 상태 관리"""
     state_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='patient_state')  # 'users.User' → User
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='patient_state')
     
     STATE_CHOICES = [
         ('UNREGISTERED', 'Unregistered'),
@@ -372,7 +373,19 @@ class PatientState(models.Model):
     ]
     current_state = models.CharField(max_length=20, choices=STATE_CHOICES, default='UNREGISTERED')
     current_location = models.CharField(max_length=36, null=True, blank=True)
-    current_exam = models.CharField(max_length=50, null=True, blank=True)
+    
+    # CharField에서 ForeignKey로 변경
+    current_exam = models.ForeignKey(
+        'appointments.Exam',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='patient_states',
+        verbose_name='현재 검사',
+        to_field='exam_id',  # exam_id를 참조
+        db_column='current_exam_id'  # DB 컬럼명 명시
+    )
+    
     emr_patient_id = models.CharField(max_length=100, null=True, blank=True)
     
     # EMR 정보
@@ -394,10 +407,12 @@ class PatientState(models.Model):
             models.Index(fields=['current_state']),
             models.Index(fields=['emr_patient_id']),
             models.Index(fields=['emr_appointment_time']),
+            models.Index(fields=['current_exam']),  # 외래키 인덱스 추가
         ]
         
     def __str__(self):
-        return f"{self.user.name} - {self.current_state}"
+        exam_name = self.current_exam.title if self.current_exam else "검사 없음"
+        return f"{self.user.name} - {self.current_state} - {exam_name}"
 
 
 class StateTransition(models.Model):

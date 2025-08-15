@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import Queue
+from .models import Queue, PatientState, StateTransition
+from appointments.models import Exam
+from appointments.serializers import ExamSerializer
 
 class QueueSerializer(serializers.ModelSerializer):
     """
@@ -59,4 +61,71 @@ class QueueStatusUpdateSerializer(serializers.Serializer):
             return True
 
         return new_state in rules.get(current_state, [])
+
+# PatientState 관련 시리얼라이저 추가
+class PatientStateSerializer(serializers.ModelSerializer):
+    """
+    환자 상태 시리얼라이저
+    """
+    # current_exam을 중첩된 객체로 표현
+    current_exam_detail = ExamSerializer(source='current_exam', read_only=True)
     
+    # current_exam_id를 직접 받을 수 있도록 추가
+    current_exam_id = serializers.CharField(
+        write_only=True, 
+        required=False, 
+        allow_null=True,
+        help_text='검사 ID (exam_id)'
+    )
+    
+    # 읽기 전용 필드들
+    exam_id = serializers.CharField(source='current_exam.exam_id', read_only=True)
+    exam_name = serializers.CharField(source='current_exam.title', read_only=True)
+    exam_department = serializers.CharField(source='current_exam.department', read_only=True)
+    
+    class Meta:
+        model = PatientState
+        fields = [
+            'state_id', 'user', 'current_state', 'current_location',
+            'current_exam', 'current_exam_detail', 'current_exam_id',
+            'exam_id', 'exam_name', 'exam_department',
+            'emr_patient_id', 'emr_raw_status', 'emr_department',
+            'emr_appointment_time', 'emr_latest_update',
+            'is_logged_in', 'login_method',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['state_id', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        # current_exam_id로 Exam 객체 찾기
+        exam_id = validated_data.pop('current_exam_id', None)
+        if exam_id:
+            try:
+                validated_data['current_exam'] = Exam.objects.get(exam_id=exam_id)
+            except Exam.DoesNotExist:
+                raise serializers.ValidationError(f"Exam with id {exam_id} does not exist")
+        
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        # current_exam_id로 Exam 객체 찾기
+        exam_id = validated_data.pop('current_exam_id', None)
+        if exam_id:
+            try:
+                validated_data['current_exam'] = Exam.objects.get(exam_id=exam_id)
+            except Exam.DoesNotExist:
+                raise serializers.ValidationError(f"Exam with id {exam_id} does not exist")
+        
+        return super().update(instance, validated_data)
+
+
+class StateTransitionSerializer(serializers.ModelSerializer):
+    """
+    상태 전환 히스토리 시리얼라이저
+    """
+    user_name = serializers.CharField(source='user.name', read_only=True)
+    
+    class Meta:
+        model = StateTransition
+        fields = '__all__'
+        read_only_fields = ['transition_id', 'created_at']

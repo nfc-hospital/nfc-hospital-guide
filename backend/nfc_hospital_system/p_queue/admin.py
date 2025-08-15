@@ -214,7 +214,6 @@ class QueueStatusLogAdmin(admin.ModelAdmin):
     )
 
 # 환자 관리 상태 모델 추가
-
 @admin.register(PatientState)
 class PatientStateAdmin(admin.ModelAdmin):
     """환자별 현재 상태 관리"""
@@ -225,20 +224,42 @@ class PatientStateAdmin(admin.ModelAdmin):
         self.model._meta.verbose_name_plural = "환자 상태 목록"
 
     list_display = (
-        'user', 'current_state', 'current_exam', 'emr_department',
-        'is_logged_in', 'updated_at'
+        'user', 'current_state', 'get_current_exam', 'get_exam_department',
+        'emr_department', 'is_logged_in', 'updated_at'
     )
     list_filter = (
         'current_state', 'is_logged_in', 'emr_department',
-        'login_method', 'created_at'
+        'login_method', 'current_exam__department',  # 외래키 필터 추가
+        'created_at'
     )
     search_fields = (
         'user__name', 'emr_patient_id',
-        'current_exam', 'emr_department'
+        'current_exam__exam_id', 'current_exam__title',  # 외래키 검색 수정
+        'current_exam__department', 'emr_department'
     )
-    raw_id_fields = ('user',)
+    raw_id_fields = ('user', 'current_exam')  # current_exam도 raw_id_field로 추가
     date_hierarchy = 'updated_at'
     ordering = ('-updated_at',)
+    
+    # select_related 추가로 쿼리 최적화
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('user', 'current_exam')
+    
+    # 커스텀 디스플레이 메서드들
+    def get_current_exam(self, obj):
+        if obj.current_exam:
+            return f"{obj.current_exam.title} ({obj.current_exam.exam_id})"
+        return "-"
+    get_current_exam.short_description = "현재 검사"
+    get_current_exam.admin_order_field = 'current_exam__title'
+    
+    def get_exam_department(self, obj):
+        if obj.current_exam:
+            return obj.current_exam.department
+        return "-"
+    get_exam_department.short_description = "검사 부서"
+    get_exam_department.admin_order_field = 'current_exam__department'
     
     fieldsets = (
         (None, {
@@ -263,7 +284,7 @@ class PatientStateAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at', 'emr_latest_update')
     
     # 액션 추가
-    actions = ['mark_as_waiting', 'mark_as_called', 'mark_as_completed', 'reset_login_status']
+    actions = ['mark_as_waiting', 'mark_as_called', 'mark_as_completed', 'reset_login_status', 'assign_exam']
     
     def mark_as_waiting(self, request, queryset):
         """선택된 환자를 '대기중' 상태로 변경"""
@@ -288,6 +309,18 @@ class PatientStateAdmin(admin.ModelAdmin):
         updated = queryset.update(is_logged_in=False, login_method=None)
         self.message_user(request, f'{updated}명의 환자 로그인 상태를 초기화했습니다.')
     reset_login_status.short_description = "로그인 상태 초기화"
+    
+    def assign_exam(self, request, queryset):
+        """선택된 환자에게 검사 할당 (예시)"""
+        from appointments.models import Exam
+        # 첫 번째 활성 검사를 할당 (예시)
+        first_exam = Exam.objects.filter(is_active=True).first()
+        if first_exam:
+            updated = queryset.update(current_exam=first_exam)
+            self.message_user(request, f'{updated}명의 환자에게 {first_exam.title} 검사를 할당했습니다.')
+        else:
+            self.message_user(request, '할당 가능한 검사가 없습니다.', level='WARNING')
+    assign_exam.short_description = "검사 할당 (테스트용)"
 
 
 @admin.register(StateTransition)

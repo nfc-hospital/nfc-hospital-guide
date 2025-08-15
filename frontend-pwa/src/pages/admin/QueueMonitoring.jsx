@@ -34,8 +34,27 @@ const QueueMonitoring = () => {
         adminAPI.queue.getMissingPatients().catch(() => ({ data: { missingPatients: [] } }))
       ]);
       
-      if (queueStats.success) {
+      // API 응답 구조 확인을 위한 상세 로깅
+      console.log('=== Queue Stats Full Response ===', queueStats);
+      console.log('=== Response Data ===', queueStats.data);
+      console.log('=== Summary Data ===', queueStats.data?.summary);
+      console.log('=== Debug Info ===', queueStats.data?.debug);
+      
+      // 각 필드별 값 확인
+      if (queueStats.data?.summary) {
+        console.log('totalWaiting:', queueStats.data.summary.totalWaiting);
+        console.log('totalCalled:', queueStats.data.summary.totalCalled);
+        console.log('totalInProgress:', queueStats.data.summary.totalInProgress);
+        console.log('avgWaitTime:', queueStats.data.summary.avgWaitTime);
+      }
+      
+      if (queueStats.success || queueStats.data) {
         setQueueData(queueStats.data);
+        
+        // 데이터 설정 후 state 확인
+        console.log('QueueData set to:', queueStats.data);
+      } else {
+        console.error('API 응답 실패:', queueStats);
       }
       
       if (missing.success || missing.data) {
@@ -45,6 +64,7 @@ const QueueMonitoring = () => {
     } catch (err) {
       setError(err.message);
       console.error('Queue data loading error:', err);
+      console.error('Error details:', err.response || err);
     } finally {
       setLoading(false);
     }
@@ -68,68 +88,79 @@ const QueueMonitoring = () => {
       wsClient.connect(
         '/admin/dashboard',
         (data) => {
-          console.log('Real-time queue update:', data);
+          console.log('Real-time update received:', data);
           
           // WebSocket 데이터 구조에 따라 처리
-          if (data.type === 'dashboard_update') {
+          if (data.type === 'dashboard_update' && data.data) {
             setQueueData(prevData => {
               if (!prevData) return prevData;
               
-              // queue_stats가 있는 경우
-              if (data.data?.queue_stats) {
-                return {
-                  ...prevData,
-                  summary: {
-                    ...prevData.summary,
-                    ...data.data.queue_stats
-                  }
-                };
-              }
+              const newData = data.data;
               
-              // 직접 summary 데이터가 오는 경우
-              if (data.data?.summary) {
-                return {
-                  ...prevData,
-                  summary: {
-                    ...prevData.summary,
-                    ...data.data.summary
-                  }
-                };
-              }
+              // summary 데이터 업데이트 (PatientState 기반)
+              const updatedSummary = {
+                ...prevData.summary,
+                totalWaiting: newData.summary?.totalWaiting ?? prevData.summary?.totalWaiting,
+                totalCalled: newData.summary?.totalCalled ?? prevData.summary?.totalCalled,
+                totalInProgress: newData.summary?.totalInProgress ?? prevData.summary?.totalInProgress,
+                totalCompleted: newData.summary?.totalCompleted ?? prevData.summary?.totalCompleted,
+                avgWaitTime: newData.summary?.avgWaitTime ?? prevData.summary?.avgWaitTime
+              };
               
-              // 전체 데이터 업데이트
-              if (data.data) {
-                return {
-                  ...prevData,
-                  ...data.data,
-                  summary: {
-                    ...prevData.summary,
-                    ...(data.data.summary || {})
-                  }
-                };
-              }
+              // departments 데이터 업데이트 (Queue 기반)
+              const updatedDepartments = newData.departments || prevData.departments;
               
-              return prevData;
+              return {
+                ...prevData,
+                summary: updatedSummary,
+                departments: updatedDepartments,
+                timestamp: newData.timestamp || prevData.timestamp
+              };
             });
+            
+            console.log('Dashboard updated with PatientState and Queue data');
           }
           
           // queue_update 타입 처리 (대기열 상태 변경 시)
-          if (data.type === 'queue_update' && data.data) {
-            // 대기열 업데이트 시 데이터 새로고침
+          if (data.type === 'queue_update' || data.type === 'queue_updated') {
+            // 개별 큐 업데이트 시 전체 데이터 새로고침
             loadQueueData();
+            console.log('Queue updated, reloading data');
+          }
+          
+          // patient_state_update 타입 처리
+          if (data.type === 'patient_state_updated') {
+            // PatientState 변경 시에도 데이터 새로고침
+            loadQueueData();
+            console.log('Patient state updated, reloading data');
           }
         },
         (error) => {
           console.error('WebSocket connection error:', error);
           setRealTimeConnected(false);
+          
+          // 연결 실패 시 5초 후 재연결 시도
+          setTimeout(() => {
+            console.log('Attempting to reconnect WebSocket...');
+            connectRealTime();
+          }, 5000);
         },
         () => {
           console.log('WebSocket connected successfully');
           setRealTimeConnected(true);
+          
+          // 연결 성공 시 최신 데이터 로드
+          loadQueueData();
         },
         () => {
           console.log('WebSocket disconnected');
           setRealTimeConnected(false);
+          
+          // 연결 끊김 시 3초 후 재연결 시도
+          setTimeout(() => {
+            console.log('WebSocket disconnected, attempting to reconnect...');
+            connectRealTime();
+          }, 3000);
         }
       );
     } catch (err) {
@@ -321,7 +352,7 @@ const QueueMonitoring = () => {
           </div>
         </div>
 
-        {/* 전체 통계 카드 */}
+        {/* 전체 통계 카드 - PatientState 기반 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <StatCard 
             title="전체 대기" 
@@ -427,7 +458,7 @@ const QueueMonitoring = () => {
                 </div>
               )) || (
                 <div className="text-center py-8">
-                  <span className="text-4xl">📭</span>
+                  <span className="text-4xl">🔭</span>
                   <p className="text-gray-500 mt-2">최근 호출 내역이 없습니다.</p>
                 </div>
               )}
