@@ -84,3 +84,4 @@ API 문서는 [docs/api/swagger.yaml](docs/api/swagger.yaml)에서 확인할 수
 ## 라이선스
 
 이 프로젝트는 MIT 라이선스를 따릅니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+# CI/CD 자동 배포 테스트
