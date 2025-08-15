@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import { initializeCSRFToken } from './api/client';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import Layout from './components/common/Layout';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -33,7 +35,42 @@ function App() {
   return (
     <AuthProvider>
       <Router>
-        <Routes>
+        <ErrorBoundary>
+          {/* 전역 토스트 알림 */}
+          <Toaster 
+            position="top-center"
+            reverseOrder={false}
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#333',
+                color: '#fff',
+                fontSize: '16px',
+                padding: '16px',
+                borderRadius: '12px',
+              },
+              success: {
+                style: {
+                  background: '#10b981',
+                },
+                iconTheme: {
+                  primary: '#fff',
+                  secondary: '#10b981',
+                },
+              },
+              error: {
+                style: {
+                  background: '#ef4444',
+                },
+                iconTheme: {
+                  primary: '#fff',
+                  secondary: '#ef4444',
+                },
+              },
+            }}
+          />
+          
+          <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/oauth/kakao" element={<KakaoOAuth />} />
           <Route path="/public-guide" element={<PublicGuide />} />
@@ -112,6 +149,7 @@ function App() {
         
         {/* 새로운 챗봇 시스템 */}
         <ChatbotSystem elderlyMode={elderlyMode} />
+        </ErrorBoundary>
       </Router>
     </AuthProvider>
   );

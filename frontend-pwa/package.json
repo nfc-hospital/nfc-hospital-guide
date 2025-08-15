@@ -20,7 +20,9 @@
     "jwt-decode": "^4.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.22.2"
+    "react-hot-toast": "^2.5.2",
+    "react-router-dom": "^6.22.2",
+    "zustand": "^5.0.7"
   },
   "devDependencies": {
     "@tailwindcss/aspect-ratio": "^0.4.2",
