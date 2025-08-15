@@ -48,7 +48,7 @@ jobs:
           sleep 2
           
           # 5. Nginx 설정 및 프론트엔드 파일 복사/권한 설정
-          echo ">>> 3. Setting up Nginx and copying files...."
+          echo ">>> 3. Setting up Nginx and copying files..."
           sudo apt-get update
           sudo apt-get -y install nginx
           
