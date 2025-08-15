@@ -16,7 +16,7 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          # --- (디버깅 강화) Django 배포 스크립트 ---
+          # --- (명령어 오류 수정) 최종 배포 스크립트 ---
 
           # 경로 변수 정의
           PROJECT_DIR="$HOME/nfc-hospital"
@@ -25,7 +25,7 @@ jobs:
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
           DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
           PID_FILE="$BACKEND_DIR/gunicorn.pid"
-          GUNICORN_LOG_FILE="$BACKEND_DIR/gunicorn.error.log" # 에러 로그 파일 경로
+          GUNICORN_LOG_FILE="$BACKEND_DIR/gunicorn.error.log"
 
           # 1. 코드 업데이트
           echo ">>> 1. Pulling latest code..."
@@ -46,19 +46,20 @@ jobs:
           fi
           sleep 2
           
-          # 4. 새 서버 시작 (로그 생성 옵션 추가)
+          # 4. 새 서버 시작 (올바른 Gunicorn 실행 방식으로 수정)
           echo ">>> 4. Starting new server with Gunicorn..."
-          # 이전 로그 파일 삭제하여 항상 새로운 로그만 확인
           rm -f $GUNICORN_LOG_FILE
           cd $DJANGO_DIR
-          screen -dmS django $VENV_GUNICORN \
-            --workers 3 \
-            --bind 0.0.0.0:8000 \
-            --pid $PID_FILE \
-            --log-level=info \
-            --error-logfile $GUNICORN_LOG_FILE \
-            nfc_hospital_system.wsgi:application \
-            --settings=nfc_hospital_system.settings.development
+
+          # --settings 옵션 대신 DJANGO_SETTINGS_MODULE 환경변수를 설정하는 것이 올바른 방법입니다.
+          screen -dmS django bash -c "export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.development'; \
+            exec $VENV_GUNICORN \
+              --workers 3 \
+              --bind 0.0.0.0:8000 \
+              --pid $PID_FILE \
+              --log-level=info \
+              --error-logfile $GUNICORN_LOG_FILE \
+              nfc_hospital_system.wsgi:application"
           
           # 5. 서버 상태 검증 및 실패 시 로그 출력
           echo ">>> 5. Verifying server status..."
@@ -68,7 +69,6 @@ jobs:
             echo "✅ Screen session 'django' is running."
           else
             echo "❌ ERROR: Screen session failed to start. This is likely a Gunicorn/Django error."
-            # Gunicorn 에러 로그가 존재하면 출력
             if [ -f $GUNICORN_LOG_FILE ]; then
               echo "--- Gunicorn Error Log ---"
               cat $GUNICORN_LOG_FILE
