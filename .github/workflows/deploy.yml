@@ -30,7 +30,6 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        daemon-mode: true
         script: |
           cd ~/nfc-hospital
           git pull origin main
@@ -45,13 +44,24 @@ jobs:
           sleep 3
           
           # screen 세션으로 Django 실행
+          # -dmS: detach 모드로 (백그라운드에서) 실행하고, 세션 이름을 'django'로 지정
           cd nfc_hospital_system
           screen -dmS django python manage.py runserver 0.0.0.0:8000 --settings=nfc_hospital_system.settings.development
           
-          # 서버 시작 확인
+          # screen 세션이 정상적으로 시작되었는지 확인
           sleep 5
-          screen -ls
-          ps aux | grep "manage.py runserver" | grep -v grep || echo "Django process not found"
+          if screen -list | grep -q "django"; then
+            echo "Django screen session is running."
+          else
+            echo "Django screen session failed to start."
+            exit 1
+          fi
           
-          # 최종 확인
-          curl -f http://localhost:8000/ > /dev/null 2>&1 && echo "Django server is running!" || echo "Django server failed to start"
+          # 서버 시작 확인
+          # curl 요청이 성공하면 'Django server is running!' 출력, 실패하면 'Django server failed to start' 출력
+          if curl -f http://localhost:8000/ > /dev/null 2>&1; then
+              echo "Django server is running!"
+          else
+              echo "Django server failed to start"
+              exit 1
+          fi
