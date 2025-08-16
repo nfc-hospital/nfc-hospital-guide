@@ -37,6 +37,7 @@ jobs:
           # 1. 코드 업데이트, 의존성 설치, 프론트엔드 빌드
           echo ">>> 1. Pulling, Installing, and Building..."
           cd $PROJECT_DIR
+          git reset --hard HEAD
           git pull origin main
           $VENV_PIP install -r $DJANGO_DIR/requirements.txt
           cd $FRONTEND_DIR
