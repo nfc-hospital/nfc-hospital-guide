@@ -16,17 +16,18 @@ jobs:
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
         script: |
-          # --- 완전한 풀스택 자동 배포 스크립트 ---
+          # --- 최적화된 풀스택 자동 배포 스크립트 ---
           
           # 스크립트 안정성 강화 (명령어 실패 시 즉시 중단)
           set -e
           
-          # 주요 경로 변수 정의 (직접 값 사용)
+          # 주요 경로 변수 정의
           PROJECT_DIR="$HOME/nfc-hospital"
           BACKEND_DIR="$PROJECT_DIR/backend"
           FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
           VENV_DAPHNE="$BACKEND_DIR/venv/bin/daphne"
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
+          VENV_PYTHON="$BACKEND_DIR/venv/bin/python"
           DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
           FRONTEND_BUILD_PATH="/var/www/nfc-hospital"
           EC2_HOST="15.164.94.194"
@@ -34,37 +35,141 @@ jobs:
           echo "✅ Using EC2_HOST: $EC2_HOST"
           echo "✅ Using FRONTEND_BUILD_PATH: $FRONTEND_BUILD_PATH"
           
-          # 1. 코드 업데이트, 의존성 설치, 프론트엔드 빌드
-          echo ">>> 1. Pulling, Installing, and Building..."
+          # 1. 현재 HEAD 저장하고 코드 업데이트
+          echo ">>> 1. Checking for changes..."
           cd $PROJECT_DIR
+          
+          # 현재 커밋 해시 저장
+          CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "none")
+          echo "Current commit: $CURRENT_COMMIT"
+          
+          # 코드 업데이트
           git reset --hard HEAD
           git pull origin main
-          $VENV_PIP install -r $DJANGO_DIR/requirements.txt
+          
+          # 새 커밋 해시
+          NEW_COMMIT=$(git rev-parse HEAD)
+          echo "New commit: $NEW_COMMIT"
+          
+          # 변경된 파일 목록 확인
+          if [ "$CURRENT_COMMIT" != "none" ] && [ "$CURRENT_COMMIT" != "$NEW_COMMIT" ]; then
+              echo ">>> Analyzing changes..."
+              CHANGED_FILES=$(git diff --name-only $CURRENT_COMMIT $NEW_COMMIT)
+              echo "Changed files:"
+              echo "$CHANGED_FILES"
+              
+              # 변경 플래그 설정
+              BACKEND_DEPS_CHANGED=$(echo "$CHANGED_FILES" | grep -E "(requirements\.txt|requirements-.*\.txt)" || true)
+              FRONTEND_DEPS_CHANGED=$(echo "$CHANGED_FILES" | grep -E "frontend-pwa/package(-lock)?\.json" || true)
+              FRONTEND_SRC_CHANGED=$(echo "$CHANGED_FILES" | grep -E "frontend-pwa/(src/|public/|index\.html|vite\.config|tsconfig)" || true)
+              BACKEND_CODE_CHANGED=$(echo "$CHANGED_FILES" | grep -E "backend/.*\.py" || true)
+              NGINX_CONFIG_CHANGED=$(echo "$CHANGED_FILES" | grep -E "nginx|deploy\.yml" || true)
+          else
+              echo ">>> First deployment or no previous commit found. Running full deployment."
+              BACKEND_DEPS_CHANGED="true"
+              FRONTEND_DEPS_CHANGED="true"
+              FRONTEND_SRC_CHANGED="true"
+              BACKEND_CODE_CHANGED="true"
+              NGINX_CONFIG_CHANGED="true"
+          fi
+          
+          # 2. 조건부 백엔드 의존성 설치
+          if [ -n "$BACKEND_DEPS_CHANGED" ]; then
+              echo ">>> 2. Backend dependencies changed. Installing..."
+              $VENV_PIP install -r $DJANGO_DIR/requirements.txt
+          else
+              echo ">>> 2. Skipping backend dependency installation (no changes)"
+          fi
+          
+          # 3. 조건부 프론트엔드 의존성 설치
           cd $FRONTEND_DIR
-          npm install
-          npm run build
+          if [ -n "$FRONTEND_DEPS_CHANGED" ]; then
+              echo ">>> 3. Frontend dependencies changed. Installing..."
+              npm install
+          else
+              echo ">>> 3. Skipping frontend dependency installation (no changes)"
+          fi
           
-          # 2. 이전 백엔드 서버(Daphne) 종료
-          echo ">>> 2. Safely stopping the old backend server..."
-          pkill -f "^$VENV_DAPHNE" || true
-          sleep 2
+          # 4. 조건부 프론트엔드 빌드
+          if [ -n "$FRONTEND_SRC_CHANGED" ] || [ -n "$FRONTEND_DEPS_CHANGED" ]; then
+              echo ">>> 4. Frontend source changed. Building..."
+              npm run build
+              
+              # 빌드 타임스탬프 추가 (캐시 무효화용)
+              BUILD_TIMESTAMP=$(date +%s)
+              echo "{\"buildTime\": \"$BUILD_TIMESTAMP\"}" > dist/build-info.json
+          else
+              echo ">>> 4. Skipping frontend build (no source changes)"
+          fi
           
-          # 3. Nginx 설정 및 프론트엔드 파일 복사/권한 설정
-          echo ">>> 3. Setting up Nginx and copying files..."
-          sudo apt-get update
-          sudo apt-get -y install nginx
+          # 5. Django 정적 파일 수집 (필요한 경우만)
+          if [ -n "$BACKEND_CODE_CHANGED" ]; then
+              echo ">>> 5. Collecting Django static files..."
+              cd $DJANGO_DIR
+              $VENV_PYTHON manage.py collectstatic --noinput || true
+          else
+              echo ">>> 5. Skipping Django static file collection"
+          fi
           
-          # Nginx 설정 파일 자동 생성 (웹소켓 지원 포함)
-          sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<EOF
+          # 6. 백엔드 서버 재시작 (코드 변경이 있을 때만)
+          if [ -n "$BACKEND_CODE_CHANGED" ] || [ -n "$BACKEND_DEPS_CHANGED" ]; then
+              echo ">>> 6. Backend code changed. Restarting Daphne..."
+              pkill -f "^$VENV_DAPHNE" || true
+              sleep 2
+              
+              # 마이그레이션 실행
+              cd $DJANGO_DIR
+              $VENV_PYTHON manage.py migrate --noinput || true
+              
+              # Daphne 재시작
+              screen -dmS django $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
+          else
+              echo ">>> 6. Backend unchanged. Keeping current server running."
+          fi
+          
+          # 7. Nginx 설정 (필요한 경우만)
+          echo ">>> 7. Configuring Nginx..."
+          
+          # Nginx 설치 확인 및 조건부 설치
+          if ! command -v nginx &> /dev/null; then
+              echo "Nginx not found. Installing..."
+              sudo apt-get update
+              sudo apt-get -y install nginx
+          else
+              echo "Nginx already installed."
+          fi
+          
+          # Nginx 설정 파일 업데이트 (설정이 변경되었거나 파일이 없을 때)
+          if [ -n "$NGINX_CONFIG_CHANGED" ] || [ ! -f /etc/nginx/sites-available/nfc-hospital ]; then
+              echo "Updating Nginx configuration..."
+              
+              # Nginx 설정 파일 생성 (캐시 무효화 헤더 추가)
+              sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<EOF
           server {
               listen 80;
               server_name $EC2_HOST;
               
-              # 프론트엔드 (React PWA)
+              # 프론트엔드 (React PWA) - 캐시 제어 강화
               location / {
                   root $FRONTEND_BUILD_PATH;
                   try_files \$uri \$uri/ /index.html;
-                  add_header Cache-Control "no-cache, no-store, must-revalidate";
+                  
+                  # HTML 파일은 캐시 하지 않음
+                  location ~ \.html$ {
+                      add_header Cache-Control "no-cache, no-store, must-revalidate";
+                      add_header Pragma "no-cache";
+                      add_header Expires "0";
+                  }
+                  
+                  # JS, CSS 파일은 파일명에 해시가 있으므로 장기간 캐시
+                  location ~ \.(js|css)$ {
+                      add_header Cache-Control "public, max-age=31536000, immutable";
+                  }
+                  
+                  # 기타 정적 파일
+                  location ~ \.(jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf|eot)$ {
+                      add_header Cache-Control "public, max-age=86400";
+                  }
               }
               
               # 백엔드 API + 웹소켓 지원
@@ -78,48 +183,92 @@ jobs:
                   proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
                   proxy_set_header X-Forwarded-Proto \$scheme;
                   proxy_read_timeout 86400;
+                  
+                  # API 응답 캐시 방지
+                  add_header Cache-Control "no-cache, no-store, must-revalidate";
+                  add_header Pragma "no-cache";
+                  add_header Expires "0";
+              }
+              
+              # Django 정적 파일
+              location /static/ {
+                  alias $DJANGO_DIR/staticfiles/;
+                  add_header Cache-Control "public, max-age=86400";
               }
           }
           EOF
-          
-          # 프론트엔드 빌드 결과물을 웹 서버 경로로 복사 및 권한 설정
-          echo "Creating directory: $FRONTEND_BUILD_PATH"
-          sudo mkdir -p $FRONTEND_BUILD_PATH
-          echo "Copying files from $FRONTEND_DIR/dist/* to $FRONTEND_BUILD_PATH"
-          sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH
-          sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH
-          sudo chmod -R 755 $FRONTEND_BUILD_PATH
-          
-          # Nginx 사이트 활성화 및 재시작
-          sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
-          sudo rm -f /etc/nginx/sites-enabled/default
-          echo ">>> Testing Nginx configuration..."
-          sudo nginx -t
-          echo ">>> Restarting Nginx..."
-          sudo systemctl restart nginx
-          sudo systemctl enable nginx
-          
-          # 4. 새 백엔드 서버를 Daphne로 시작
-          echo ">>> 4. Starting backend server with Daphne..."
-          cd $DJANGO_DIR
-          screen -dmS django $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
-          
-          # 5. 최종 상태 검증
-          echo ">>> 5. Verifying deployment..."
-          sleep 5
-          
-          if ! screen -list | grep -q "django"; then
-            echo "❌ Backend server failed to start. Check server logs."
-            exit 1
+              
+              # Nginx 사이트 활성화
+              sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
+              sudo rm -f /etc/nginx/sites-enabled/default
           fi
           
+          # 8. 프론트엔드 파일 복사 (빌드가 있었을 때만)
+          if [ -n "$FRONTEND_SRC_CHANGED" ] || [ -n "$FRONTEND_DEPS_CHANGED" ]; then
+              echo ">>> 8. Copying new frontend build..."
+              sudo mkdir -p $FRONTEND_BUILD_PATH
+              
+              # 기존 파일 삭제 (캐시 방지)
+              sudo rm -rf $FRONTEND_BUILD_PATH/*
+              
+              # 새 파일 복사
+              sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH
+              sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH
+              sudo chmod -R 755 $FRONTEND_BUILD_PATH
+              
+              echo "Frontend files updated with timestamp"
+          else
+              echo ">>> 8. Skipping frontend file copy (no build changes)"
+          fi
+          
+          # 9. Nginx 재시작 (설정이나 파일이 변경되었을 때)
+          if [ -n "$NGINX_CONFIG_CHANGED" ] || [ -n "$FRONTEND_SRC_CHANGED" ] || [ -n "$FRONTEND_DEPS_CHANGED" ]; then
+              echo ">>> 9. Restarting Nginx..."
+              sudo nginx -t
+              sudo systemctl reload nginx
+              sudo systemctl enable nginx
+          else
+              echo ">>> 9. Nginx configuration unchanged."
+          fi
+          
+          # 10. 캐시 무효화 작업
+          echo ">>> 10. Invalidating caches..."
+          
+          # CloudFront 캐시 무효화 (있는 경우)
+          # aws cloudfront create-invalidation --distribution-id YOUR_DISTRIBUTION_ID --paths "/*" || true
+          
+          # Redis 캐시 클리어 (있는 경우)
+          if command -v redis-cli &> /dev/null; then
+              redis-cli FLUSHDB || true
+          fi
+          
+          # 11. 최종 상태 검증
+          echo ">>> 11. Verifying deployment..."
+          sleep 5
+          
+          # 백엔드 서버 확인
+          if [ -n "$BACKEND_CODE_CHANGED" ] || [ -n "$BACKEND_DEPS_CHANGED" ]; then
+              if ! screen -list | grep -q "django"; then
+                  echo "❌ Backend server failed to start. Check server logs."
+                  exit 1
+              fi
+          fi
+          
+          # 웹사이트 응답 확인
           if curl -f http://localhost/ > /dev/null 2>&1; then
-              echo "✅ Success: Full stack deployment completed!"
+              echo "✅ Success: Deployment completed!"
               echo "🌐 Frontend: http://$EC2_HOST/"
               echo "🔧 Backend API: http://$EC2_HOST/api/"
               echo "⚙️  Admin: http://$EC2_HOST/admin/"
               echo "🔌 WebSocket: http://$EC2_HOST/ws/"
+              echo ""
+              echo "📊 Deployment Summary:"
+              echo "- Backend deps updated: $([ -n "$BACKEND_DEPS_CHANGED" ] && echo "Yes" || echo "No")"
+              echo "- Frontend deps updated: $([ -n "$FRONTEND_DEPS_CHANGED" ] && echo "Yes" || echo "No")"
+              echo "- Frontend rebuilt: $([ -n "$FRONTEND_SRC_CHANGED" ] && echo "Yes" || echo "No")"
+              echo "- Backend restarted: $([ -n "$BACKEND_CODE_CHANGED" ] && echo "Yes" || echo "No")"
+              echo "- Nginx updated: $([ -n "$NGINX_CONFIG_CHANGED" ] && echo "Yes" || echo "No")"
           else
-              echo "❌ ERROR: Nginx/Frontend is not responding."
+              echo "❌ ERROR: Website is not responding."
               exit 1
           fi
