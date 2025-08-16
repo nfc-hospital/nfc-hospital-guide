@@ -198,3 +198,19 @@ input, textarea, select {
 @media (prefers-color-scheme: dark) {
   /* 다크모드 스타일은 향후 추가 예정 */
 }
+
+/* Modal 애니메이션 */
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-modal-enter {
+  animation: modal-enter 0.3s ease-out;
+}

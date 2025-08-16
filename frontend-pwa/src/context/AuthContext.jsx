@@ -2,6 +2,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { getCSRFToken, debugCSRFToken } from '../utils/csrf';
 import { authAPI } from '../api/client';
+import useJourneyStore from '../store/journeyStore';
 
 // 인증 컨텍스트 생성
 const AuthContext = createContext(null);
@@ -91,6 +92,17 @@ export function AuthProvider({ children }) {
         
         setUser(userData);
         console.log('✅ JWT 토큰 및 사용자 정보 저장 완료');
+        
+        // 로그인 성공 후 환자 여정 데이터 가져오기
+        try {
+          console.log('🔄 환자 여정 데이터 가져오는 중...');
+          await useJourneyStore.getState().fetchJourneyData();
+          console.log('✅ 환자 여정 데이터 로드 완료');
+        } catch (error) {
+          console.error('⚠️ 환자 여정 데이터 로드 실패:', error);
+          // 여정 데이터 로드 실패해도 로그인은 성공으로 처리
+        }
+        
         return true;
       } else {
         console.log('❌ 예상하지 못한 응답 구조:', data);
@@ -138,6 +150,17 @@ export function AuthProvider({ children }) {
         
         setUser(userData);
         console.log('✅ JWT 토큰 및 사용자 정보 저장 완료');
+        
+        // 로그인 성공 후 환자 여정 데이터 가져오기
+        try {
+          console.log('🔄 환자 여정 데이터 가져오는 중...');
+          await useJourneyStore.getState().fetchJourneyData();
+          console.log('✅ 환자 여정 데이터 로드 완료');
+        } catch (error) {
+          console.error('⚠️ 환자 여정 데이터 로드 실패:', error);
+          // 여정 데이터 로드 실패해도 로그인은 성공으로 처리
+        }
+        
         return true;
       } else {
         throw new Error('서버 응답에서 토큰을 찾을 수 없습니다.');
@@ -171,6 +194,10 @@ export function AuthProvider({ children }) {
       localStorage.removeItem('user');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
+      
+      // journeyStore 데이터 초기화
+      useJourneyStore.getState().clearJourneyData();
+      
       console.log('✅ 로그아웃 및 토큰 정리 완료');
     }
   };

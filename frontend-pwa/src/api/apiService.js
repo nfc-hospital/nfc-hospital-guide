@@ -5,6 +5,9 @@ const apiService = {
   // 환자 현재 상태 조회 (핵심 API)
   getPatientCurrentState: async () => {
     try {
+      console.log('🔍 getPatientCurrentState 호출됨');
+      console.log('📍 현재 토큰:', localStorage.getItem('access_token')?.substring(0, 20) + '...');
+      
       // 병렬로 여러 API를 호출하여 전체 환자 여정 데이터 수집
       const [userProfile, myQueue, todaySchedule] = await Promise.all([
         authAPI.getProfile(),
@@ -144,6 +147,42 @@ const apiService = {
   analytics: {
     getMyPatientFlow: () => api.get('/analytics/patient-flow/me'),
     getMyWaitingHistory: () => api.get('/analytics/waiting-time/me'),
+  },
+
+  // 관리자 대시보드 API
+  adminDashboard: {
+    // 병원 전체 현황 요약 데이터
+    getHospitalStatus: () => api.get('/dashboard/monitor/hospital-status'),
+    
+    // 시스템 알림 조회
+    getSystemAlerts: () => api.get('/dashboard/monitor/system-alerts'),
+    
+    // 실시간 대기열 요약
+    getQueueSummary: () => api.get('/queue/dashboard/realtime-data'),
+    
+    // 종합 대시보드 데이터 (여러 API를 한번에 호출)
+    getSummary: async () => {
+      try {
+        const [hospitalStatus, systemAlerts, queueData] = await Promise.all([
+          api.get('/dashboard/monitor/hospital-status').catch(() => null),
+          api.get('/dashboard/monitor/system-alerts').catch(() => null),
+          api.get('/queue/dashboard/realtime-data').catch(() => null),
+        ]);
+
+        // 데이터 통합 및 가공
+        return {
+          totalPatients: hospitalStatus?.data?.totalPatients || 0,
+          avgWaitTime: queueData?.data?.averageWaitTime || 0,
+          systemStatus: hospitalStatus?.data?.systemStatus || 'unknown',
+          urgentAlerts: systemAlerts?.data?.alerts || [],
+          queueSummary: queueData?.data || {},
+          lastUpdated: new Date().toISOString(),
+        };
+      } catch (error) {
+        console.error('Failed to fetch admin dashboard summary:', error);
+        throw error;
+      }
+    },
   },
 };
 

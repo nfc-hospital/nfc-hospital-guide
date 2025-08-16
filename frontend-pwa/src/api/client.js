@@ -18,6 +18,9 @@ apiClient.interceptors.request.use(
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('🔑 JWT 토큰 헤더에 추가됨:', config.url);
+    } else {
+      console.log('⚠️ JWT 토큰이 없음:', config.url);
     }
     
     // CSRF 토큰 추가 (POST, PUT, PATCH, DELETE 요청에만)

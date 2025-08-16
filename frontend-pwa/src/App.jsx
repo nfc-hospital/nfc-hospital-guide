@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { initializeCSRFToken } from './api/client';
+import useJourneyStore from './store/journeyStore';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import LoadingSpinner from './components/common/LoadingSpinner';
 import Layout from './components/common/Layout';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -24,20 +26,39 @@ import ChatbotTest from './pages/ChatbotTest';
 import ChatbotSystem from './components/chatbot-v2';
 import './styles/global.css';
 
-function App() {
+// 메인 앱 컴포넌트
+function AppContent() {
   const [elderlyMode, setElderlyMode] = useState(false);
+  const { isAuthenticated } = useAuth();
+  const { isLoading, fetchJourneyData } = useJourneyStore();
 
-  // 앱 시작 시 CSRF 토큰 초기화
+  // 앱 시작 시 토큰 확인 및 데이터 로딩
   useEffect(() => {
-    initializeCSRFToken();
-  }, []);
+    const loadUserData = async () => {
+      const token = localStorage.getItem('access_token');
+      if (token && isAuthenticated) {
+        console.log('🔄 기존 로그인 세션 감지, 환자 데이터 로딩...');
+        try {
+          await fetchJourneyData();
+          console.log('✅ 환자 데이터 로드 완료');
+        } catch (error) {
+          console.error('❌ 환자 데이터 로드 실패:', error);
+        }
+      }
+    };
+    
+    loadUserData();
+  }, [isAuthenticated]);
+
+  // 전역 로딩 상태 표시
+  if (isLoading) {
+    return <LoadingSpinner fullScreen={true} message="정보를 불러오고 있습니다..." />;
+  }
 
   return (
-    <AuthProvider>
-      <Router>
-        <ErrorBoundary>
-          {/* 전역 토스트 알림 */}
-          <Toaster 
+    <>
+      {/* 전역 토스트 알림 */}
+      <Toaster 
             position="top-center"
             reverseOrder={false}
             toastOptions={{
@@ -147,8 +168,24 @@ function App() {
           </>
         )}
         
-        {/* 새로운 챗봇 시스템 */}
-        <ChatbotSystem elderlyMode={elderlyMode} />
+      {/* 새로운 챗봇 시스템 */}
+      <ChatbotSystem elderlyMode={elderlyMode} />
+    </>
+  );
+}
+
+// App 래퍼 컴포넌트
+function App() {
+  // 앱 시작 시 CSRF 토큰 초기화
+  useEffect(() => {
+    initializeCSRFToken();
+  }, []);
+
+  return (
+    <AuthProvider>
+      <Router>
+        <ErrorBoundary>
+          <AppContent />
         </ErrorBoundary>
       </Router>
     </AuthProvider>

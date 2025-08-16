@@ -330,14 +330,14 @@ def profile(request):
                 }
             }, status=404)
         
+        # ProfileSerializer를 사용하여 사용자 정보 직렬화
+        from .serializers import ProfileSerializer
+        serializer = ProfileSerializer(user)
+        
         return JsonResponse({
             "success": True,
             "data": {
-                "user": {
-                    "id": str(user.pk),
-                    "name": user.name,
-                    "phoneNumber": getattr(user, 'phone_number', ''),
-                }
+                "user": serializer.data
             },
             "message": "프로필 조회 성공",
             "timestamp": datetime.now().isoformat()

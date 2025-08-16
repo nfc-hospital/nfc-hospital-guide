@@ -5,9 +5,19 @@ from .models import User
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name', 'state']
+        fields = ['id', 'username', 'first_name', 'last_name', 'state', 'role']
 
 class ProfileSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(source='user_id', read_only=True)
+    phoneNumber = serializers.CharField(source='phone_number', read_only=True)
+    birthDate = serializers.DateField(source='birth_date', read_only=True)
+    patientId = serializers.CharField(source='patient_id', read_only=True)
+    emergencyContact = serializers.CharField(source='emergency_contact', read_only=True)
+    lastLoginAt = serializers.DateTimeField(source='last_login_at', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'state']
+        fields = ['id', 'email', 'role', 'name', 'phoneNumber', 'birthDate', 
+                  'patientId', 'emergencyContact', 'allergies', 'lastLoginAt', 
+                  'createdAt', 'is_active']

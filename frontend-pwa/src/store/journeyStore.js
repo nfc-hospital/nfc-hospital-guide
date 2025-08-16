@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import apiService from '../api/apiService';
+import { authAPI } from '../api/client';
 
 const useJourneyStore = create(
   devtools(
@@ -36,31 +37,71 @@ const useJourneyStore = create(
         // 실시간 업데이트를 위한 폴링 ID
         pollingInterval: null,
 
-        // 메인 데이터 페칭 함수
+        // 관리자 대시보드 데이터
+        adminDashboardData: null,
+        isAdminLoading: false,
+        adminError: null,
+
+        // 메인 데이터 페칭 함수 - 역할에 따른 선택적 로딩
         fetchJourneyData: async () => {
           set({ isLoading: true, error: null });
           
           try {
-            // API 호출하여 환자의 전체 여정 데이터 가져오기
-            const response = await apiService.getPatientCurrentState();
+            // 1. 먼저 사용자 프로필만 가져오기
+            console.log('🔄 사용자 프로필 로딩 중...');
+            const profileResponse = await authAPI.getProfile();
             
-            set({
-              user: response.user,
-              patientState: response.state,
-              appointments: response.appointments,
-              currentAppointment: response.currentAppointment,
-              queues: response.queues,
-              currentQueue: response.currentQueue,
-              queuePosition: response.queuePosition,
-              estimatedWaitTime: response.estimatedWaitTime,
+            // API 응답 구조에 맞게 user 데이터 추출
+            const userData = profileResponse.data?.user || profileResponse.user || profileResponse;
+            
+            if (!userData) {
+              throw new Error("API 응답에서 사용자 정보를 찾을 수 없습니다.");
+            }
+            
+            set({ user: userData });
+            console.log('✅ 사용자 프로필 로드 완료:', userData.role);
+
+            // 2. 역할에 따른 추가 데이터 로딩
+            if (userData.role === 'patient') {
+              // 환자인 경우에만 여정 데이터 로드
+              console.log('🔄 환자 여정 데이터 로딩 중...');
+              try {
+                const patientData = await apiService.getPatientCurrentState();
+                
+                set({
+                  patientState: patientData.state,
+                  appointments: patientData.appointments,
+                  currentAppointment: patientData.currentAppointment,
+                  queues: patientData.queues,
+                  currentQueue: patientData.currentQueue,
+                  queuePosition: patientData.queuePosition,
+                  estimatedWaitTime: patientData.estimatedWaitTime,
+                });
+                
+                console.log('✅ 환자 여정 데이터 로드 완료');
+              } catch (patientError) {
+                console.warn('⚠️ 환자 데이터 로드 실패 (정상적일 수 있음):', patientError);
+                // 환자 데이터 로드 실패는 에러로 처리하지 않음
+              }
+            } else if (['staff', 'dept', 'super'].includes(userData.role)) {
+              // 관리자 역할인 경우 - 추후 관리자용 데이터 로드 로직 추가 가능
+              console.log('✅ 관리자 계정 확인됨:', userData.role);
+              // 관리자용 대시보드 데이터는 별도로 로드하지 않음
+              // 필요시 여기에 관리자용 통계 데이터 등을 로드할 수 있음
+            }
+            
+            set({ 
               isLoading: false,
               lastFetchTime: new Date().toISOString(),
             });
 
-            return response;
+            return { user: userData };
           } catch (error) {
-            console.error('Failed to fetch journey data:', error);
-            set({ error: error.message, isLoading: false });
+            console.error('❌ 데이터 로드 실패:', error);
+            set({ 
+              error: error.message || '데이터를 불러올 수 없습니다',
+              isLoading: false 
+            });
             throw error;
           }
         },
@@ -172,6 +213,41 @@ const useJourneyStore = create(
         // 에러 상태 클리어
         clearError: () => {
           set({ error: null });
+        },
+
+        // 관리자 대시보드 데이터 가져오기
+        fetchAdminDashboardData: async () => {
+          set({ isAdminLoading: true, adminError: null });
+          
+          try {
+            console.log('🔄 관리자 대시보드 데이터 로딩 중...');
+            const dashboardData = await apiService.adminDashboard.getSummary();
+            
+            set({
+              adminDashboardData: dashboardData,
+              isAdminLoading: false,
+              adminError: null,
+            });
+            
+            console.log('✅ 관리자 대시보드 데이터 로드 완료');
+            return dashboardData;
+          } catch (error) {
+            console.error('❌ 관리자 대시보드 데이터 로드 실패:', error);
+            set({
+              adminError: error.message || '대시보드 데이터를 불러올 수 없습니다',
+              isAdminLoading: false,
+            });
+            throw error;
+          }
+        },
+
+        // 관리자 대시보드 데이터 초기화
+        clearAdminDashboardData: () => {
+          set({
+            adminDashboardData: null,
+            isAdminLoading: false,
+            adminError: null,
+          });
         },
       }),
       {
