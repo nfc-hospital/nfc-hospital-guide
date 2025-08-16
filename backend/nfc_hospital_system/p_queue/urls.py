@@ -73,9 +73,12 @@ if settings.DEBUG:
         # 테스트용 환자 상태 설정
         path('test/set-patient-state/', test_views.set_patient_state, name='test-set-patient-state'),
         
-        # 테스트용 예약 생성
-        path('test/create-appointment/', test_views.create_test_appointment, name='test-create-appointment'),
+        # 테스트용 큐 상태 설정
+        path('test/set-queue-state/', test_views.set_queue_state, name='test-set-queue-state'),
         
-        # 테스트 환경 초기화
-        path('test/reset-environment/', test_views.reset_test_environment, name='test-reset-environment'),
+        # 테스트용 예약 설정
+        path('test/set-appointments/', test_views.set_appointments, name='test-set-appointments'),
+        
+        # 테스트 데이터 초기화
+        path('test/reset-test-data/', test_views.reset_test_data, name='test-reset-test-data'),
     ]
