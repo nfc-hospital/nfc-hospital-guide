@@ -50,32 +50,38 @@ const useJourneyStore = create(
             // 1. 먼저 사용자 프로필만 가져오기
             console.log('🔄 사용자 프로필 로딩 중...');
             const profileResponse = await authAPI.getProfile();
+            console.log('📦 프로필 API 응답:', profileResponse);
             
-            // API 응답 구조에 맞게 user 데이터 추출
-            const userData = profileResponse.data?.user || profileResponse.user || profileResponse;
+            // API 응답 구조에 맞게 user 데이터 추출 - 실제 사용자 데이터는 data.user에 있음
+            const userData = profileResponse.data?.user;
             
             if (!userData) {
               throw new Error("API 응답에서 사용자 정보를 찾을 수 없습니다.");
             }
             
-            set({ user: userData });
-            console.log('✅ 사용자 프로필 로드 완료:', userData.role);
+            // user와 patientState를 올바르게 설정
+            set({ 
+              user: userData,
+              patientState: userData.state || 'UNREGISTERED'
+            });
+            console.log('✅ 사용자 프로필 로드 완료:', userData.role, '상태:', userData.state);
 
             // 2. 역할에 따른 추가 데이터 로딩
             if (userData.role === 'patient') {
               // 환자인 경우에만 여정 데이터 로드
               console.log('🔄 환자 여정 데이터 로딩 중...');
               try {
-                const patientData = await apiService.getPatientCurrentState();
-                
+                // 개별 API 호출로 환자 데이터 가져오기
+                const [appointmentsRes, queuesRes] = await Promise.all([
+                  appointmentAPI.getTodaysAppointments().catch(() => ({ data: [] })),
+                  queueAPI.getMyQueue().catch(() => ({ data: [] }))
+                ]);
+
                 set({
-                  patientState: patientData.state,
-                  appointments: patientData.appointments,
-                  currentAppointment: patientData.currentAppointment,
-                  queues: patientData.queues,
-                  currentQueue: patientData.currentQueue,
-                  queuePosition: patientData.queuePosition,
-                  estimatedWaitTime: patientData.estimatedWaitTime,
+                  todaysAppointments: appointmentsRes.data || [],
+                  currentQueues: queuesRes.data || [],
+                  appointments: appointmentsRes.data || [],
+                  queues: queuesRes.data || []
                 });
                 
                 console.log('✅ 환자 여정 데이터 로드 완료');

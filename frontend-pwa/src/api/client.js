@@ -148,7 +148,7 @@ export const appointmentAPI = {
 
 // 대기열 관련 API
 export const queueAPI = {
-  getMyQueue: () => api.get('/queue/my-queue/'),
+  getMyQueue: () => api.get('/queue/my-current/'),
   joinQueue: (departmentId) => api.post('/queue/join/', { department_id: departmentId }),
   leaveQueue: (queueId) => api.post(`/queue/${queueId}/leave/`),
   getQueueStatus: (departmentId) => api.get(`/queue/status/${departmentId}/`),

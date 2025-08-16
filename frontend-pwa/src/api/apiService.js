@@ -12,7 +12,7 @@ const apiService = {
       const [userProfile, myQueue, todaySchedule] = await Promise.all([
         authAPI.getProfile(),
         queueAPI.getMyQueue().catch(() => null),
-        api.get('/schedule/today').catch(() => ({ appointments: [] })),
+        api.get('/appointments/today').catch(() => ({ appointments: [] })),
       ]);
 
       // 현재 진행 중인 예약 찾기
@@ -35,7 +35,7 @@ const apiService = {
 
       return {
         user: userProfile.user,
-        state: userProfile.patient_state || 'UNREGISTERED',
+        state: userProfile.state || 'UNREGISTERED',
         appointments: todaySchedule.appointments || [],
         currentAppointment,
         ...queueInfo,
@@ -64,7 +64,7 @@ const apiService = {
 
   // 당일 일정 조회
   getTodaySchedule: async () => {
-    return api.get('/schedule/today');
+    return api.get('/appointments/today');
   },
 
   // 내 대기 순서 조회

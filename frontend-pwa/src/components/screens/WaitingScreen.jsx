@@ -7,17 +7,18 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
 export default function WaitingScreen() {
-  const { user, currentQueues, todaysAppointments } = useJourneyStore();
+  // 기본값으로 빈 배열을 설정하여 'find' 오류를 방지
+  const { user, currentQueues = [], todaysAppointments = [] } = useJourneyStore();
   const [showPreparation, setShowPreparation] = useState(false);
   const { refresh } = useRealtimeQueues(true);
 
-  // 현재 대기 중인 큐 찾기
+  // 현재 대기 중인 큐 찾기 - currentQueues가 undefined여도 안전
   const activeQueue = currentQueues.find(
     q => q.state === 'waiting' || q.state === 'ongoing'
   );
 
-  // 진행 중인 검사 찾기
-  const ongoingAppointment = todaysAppointments?.find(
+  // 진행 중인 검사 찾기 - todaysAppointments가 undefined여도 안전
+  const ongoingAppointment = todaysAppointments.find(
     apt => apt.status === 'ongoing'
   );
 

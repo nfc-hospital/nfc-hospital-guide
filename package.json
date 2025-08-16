@@ -4,16 +4,14 @@
   "private": true,
   "workspaces": [
     "frontend-pwa",
-    "admin-dashboard",
     "backend",
     "chatbot-server"
   ],
   "scripts": {
-    "dev": "concurrently -n \"Django+WS,React,Admin,Chatbot\" -c \"yellow,cyan,green,magenta\" --kill-others-on-fail \"npm run dev:backend:daphne\" \"npm run dev:frontend\" \"npm run dev:admin\" \"npm run dev:chatbot\"",
-    "dev:all": "concurrently -n \"Django+WS,React,Admin,Chat\" -c \"yellow,cyan,green,magenta\" --kill-others-on-fail \"npm run dev:backend:daphne\" \"npm run dev:frontend\" \"npm run dev:admin\" \"npm run dev:chatbot\"",
+    "dev": "concurrently -n \"Django+WS,React,Chatbot\" -c \"yellow,cyan,magenta\" --kill-others-on-fail \"npm run dev:backend:daphne\" \"npm run dev:frontend\" \"npm run dev:chatbot\"",
+    "dev:all": "concurrently -n \"Django+WS,React,Chat\" -c \"yellow,cyan,magenta\" --kill-others-on-fail \"npm run dev:backend:daphne\" \"npm run dev:frontend\" \"npm run dev:chatbot\"",
     "dev:clean": "npm run kill-ports && npm run dev",
     "dev:frontend": "npx pnpm --filter frontend-pwa dev",
-    "dev:admin": "npx pnpm --filter admin-dashboard dev",
     "dev:backend": "cd backend/nfc_hospital_system && set PYTHONPATH=%CD% && set PYTHONIOENCODING=utf-8 && echo Starting Django + WebSocket server... && python manage.py runserver --asgi 8000",
     "dev:backend:simple": "cd backend/nfc_hospital_system && set PYTHONIOENCODING=utf-8 && python manage.py runserver 8000",
     "dev:backend:daphne": "cd backend/nfc_hospital_system && set PYTHONPATH=%CD% && set PYTHONIOENCODING=utf-8 && echo Starting Django + WebSocket server with Daphne... && ..\\venv\\Scripts\\python.exe -m daphne -p 8000 --bind 0.0.0.0 nfc_hospital_system.asgi:application",
@@ -38,6 +36,7 @@
     "dev:backend:unix": "cd backend/nfc_hospital_system && export PYTHONPATH=$PWD && export PYTHONIOENCODING=utf-8 && echo 'Starting Django + WebSocket server...' && python manage.py runserver --asgi 8000",
     "dev:backend:unix:daphne": "cd backend/nfc_hospital_system && export PYTHONPATH=$PWD && export PYTHONIOENCODING=utf-8 && echo 'Starting Django + WebSocket server with Daphne...' && ../venv/bin/python -m daphne -p 8000 --bind 0.0.0.0 nfc_hospital_system.asgi:application",
     "dev:backend:daphne-simple": "cd backend/nfc_hospital_system && daphne -b 0.0.0.0 -p 8000 nfc_hospital_system.asgi:application"
+  
   },
   "devDependencies": {
     "@types/node": "^20.11.24",
