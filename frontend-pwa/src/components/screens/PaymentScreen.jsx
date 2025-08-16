@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
+import Modal from '../common/Modal';
 
-export default function PaymentScreen() {
+export default function PaymentScreen({ taggedLocation }) {
   const { user, todaysAppointments } = useJourneyStore();
+  const [showLocationModal, setShowLocationModal] = useState(false);
   
   // 완료된 검사 목록
   const completedExams = todaysAppointments?.filter(
@@ -23,6 +25,29 @@ export default function PaymentScreen() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {/* NFC 태그 위치 정보 표시 */}
+        {taggedLocation && (
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📍</span>
+              <div className="flex-1">
+                <p className="font-semibold text-purple-900">
+                  현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
+                </p>
+                {taggedLocation.room?.includes('원무') ? (
+                  <p className="text-purple-700 mt-1">
+                    💳 이곳에서 수납하실 수 있습니다. 대기번호표를 뽑고 순서를 기다려주세요.
+                  </p>
+                ) : (
+                  <p className="text-purple-700 mt-1">
+                    💡 수납은 본관 1층 원무과에서 하실 수 있습니다.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 수납 안내 카드 */}
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
           <div className="flex items-start gap-4">
@@ -89,7 +114,12 @@ export default function PaymentScreen() {
               </p>
             </div>
 
-            <button className="w-full bg-blue-600 text-white rounded-xl py-4 text-lg 
+            <button 
+              onClick={() => {
+                setShowLocationModal(true);
+                // TODO: [NAVIGATION-API] 원무과 길안내 API 연동 필요
+              }}
+              className="w-full bg-blue-600 text-white rounded-xl py-4 text-lg 
                            font-semibold hover:bg-blue-700 transition-colors duration-200
                            flex items-center justify-center gap-2">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,6 +186,79 @@ export default function PaymentScreen() {
           </p>
         </div>
       </div>
+
+      {/* 원무과 위치 안내 모달 */}
+      <Modal
+        isOpen={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        title="원무과 위치 안내"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-4xl">💳</span>
+              <div>
+                <h3 className="text-xl font-bold text-blue-900">
+                  원무과 수납창구
+                </h3>
+                <p className="text-lg text-blue-700">
+                  본관 1층 중앙홀 우측
+                </p>
+              </div>
+            </div>
+            
+            {/* TODO: [NAVIGATION-COMPONENT] 실시간 길안내 컴포넌트로 교체 필요 */}
+            <div className="bg-white rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-bold">1</span>
+                </div>
+                <p className="text-gray-700">중앙 엘리베이터에서 1층으로 내려오세요</p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-bold">2</span>
+                </div>
+                <p className="text-gray-700">
+                  중앙홀에서 우측으로 돌아보세요
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-bold">3</span>
+                </div>
+                <p className="text-gray-700">
+                  '수납/원무과' 표지판을 따라가세요
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">💡</span>
+              <div>
+                <p className="font-medium text-amber-900">수납 팁</p>
+                <p className="text-amber-800 text-sm mt-1">
+                  대기번호표를 뽑고, 전광판에서 번호를 확인하세요. 
+                  신용카드, 체크카드, 현금 모두 사용 가능합니다.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => setShowLocationModal(false)}
+            className="w-full bg-blue-600 text-white rounded-xl py-4 text-lg font-semibold
+                     hover:bg-blue-700 transition-colors duration-200"
+          >
+            확인했습니다
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

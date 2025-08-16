@@ -62,10 +62,12 @@ const checkmarkAnimation = {
   }]
 };
 
-export default function RegisteredScreen() {
+export default function RegisteredScreen({ taggedLocation }) {
   const { user, todaysAppointments } = useJourneyStore();
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showAnimation, setShowAnimation] = useState(true);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [locationAppointment, setLocationAppointment] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowAnimation(false), 3000);
@@ -134,6 +136,59 @@ export default function RegisteredScreen() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {/* NFC 태그 위치에 따른 맞춤형 안내 */}
+        {taggedLocation && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📍</span>
+              <div className="flex-1">
+                <p className="font-semibold text-green-900">
+                  현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
+                </p>
+                {(() => {
+                  // 다음 검사 확인
+                  const nextAppointment = todaysAppointments?.find(apt => 
+                    apt.status === 'pending' || apt.status === 'waiting'
+                  );
+                  
+                  if (nextAppointment?.exam) {
+                    const isSameLocation = 
+                      taggedLocation.building === nextAppointment.exam.building &&
+                      taggedLocation.floor === parseInt(nextAppointment.exam.floor);
+                    
+                    const timeUntil = differenceInMinutes(
+                      new Date(nextAppointment.scheduled_at),
+                      new Date()
+                    );
+                    
+                    if (isSameLocation) {
+                      return (
+                        <p className="text-green-700 mt-1">
+                          ✅ 다음 검사실이 같은 층에 있습니다. 
+                          {timeUntil > 10 ? `약 ${timeUntil}분 후에 검사가 시작됩니다.` : '곧 검사가 시작됩니다.'}
+                        </p>
+                      );
+                    } else {
+                      return (
+                        <p className="text-green-700 mt-1">
+                          다음 검사는 {nextAppointment.exam.building} {nextAppointment.exam.floor}층에 있습니다.
+                          {timeUntil > 20 ? ' 여유롭게 이동하셔도 됩니다.' : ' 곧 이동하셔야 합니다.'}
+                        </p>
+                      );
+                    }
+                  } else {
+                    return (
+                      <p className="text-green-700 mt-1">
+                        접수가 완료되었습니다. 검사 일정을 확인해주세요.
+                      </p>
+                    );
+                  }
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
           <div className="flex items-start gap-3">
             <span className="text-3xl">ℹ️</span>
@@ -245,15 +300,105 @@ export default function RegisteredScreen() {
               </div>
             </div>
 
-            <button 
-              onClick={() => setSelectedAppointment(null)}
-              className="w-full bg-blue-600 text-white rounded-xl py-4 text-lg font-semibold
-                       hover:bg-blue-700 transition-colors duration-200"
-            >
-              확인했습니다
-            </button>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  setLocationAppointment(selectedAppointment);
+                  setShowLocationModal(true);
+                  setSelectedAppointment(null);
+                  // TODO: [NAVIGATION-API] 검사실 길안내 API 연동 필요
+                }}
+                className="flex-1 bg-green-600 text-white rounded-xl py-4 text-lg font-semibold
+                         hover:bg-green-700 transition-colors duration-200 flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                </svg>
+                검사실 위치 보기
+              </button>
+              <button 
+                onClick={() => setSelectedAppointment(null)}
+                className="flex-1 bg-blue-600 text-white rounded-xl py-4 text-lg font-semibold
+                         hover:bg-blue-700 transition-colors duration-200"
+              >
+                확인했습니다
+              </button>
+            </div>
           </div>
         )}
+      </Modal>
+
+      {/* 검사실 위치 정보 모달 */}
+      <Modal
+        isOpen={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+        title="검사실 위치 안내"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-4xl">🏥</span>
+              <div>
+                <h3 className="text-xl font-bold text-blue-900">
+                  {locationAppointment?.exam?.title || '검사실'}
+                </h3>
+                <p className="text-lg text-blue-700">
+                  {locationAppointment?.exam?.building} {locationAppointment?.exam?.floor}층 {locationAppointment?.exam?.room}
+                </p>
+              </div>
+            </div>
+            
+            {/* TODO: [NAVIGATION-COMPONENT] 실시간 길안내 컴포넌트로 교체 필요 */}
+            <div className="bg-white rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-bold">1</span>
+                </div>
+                <p className="text-gray-700">현재 위치에서 엘리베이터로 이동</p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-bold">2</span>
+                </div>
+                <p className="text-gray-700">
+                  {locationAppointment?.exam?.floor}층에서 하차
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 font-bold">3</span>
+                </div>
+                <p className="text-gray-700">
+                  복도를 따라 {locationAppointment?.exam?.room}호로 이동
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">💡</span>
+              <div>
+                <p className="font-medium text-amber-900">도움이 필요하신가요?</p>
+                <p className="text-amber-800 text-sm mt-1">
+                  각 층 엘리베이터 앞에 있는 안내 데스크에서 도움을 받으실 수 있습니다.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => setShowLocationModal(false)}
+            className="w-full bg-blue-600 text-white rounded-xl py-4 text-lg font-semibold
+                     hover:bg-blue-700 transition-colors duration-200"
+          >
+            확인했습니다
+          </button>
+        </div>
       </Modal>
     </div>
   );

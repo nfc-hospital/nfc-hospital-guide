@@ -99,6 +99,23 @@ export default function CalledScreen() {
           </div>
         )}
 
+        {/* NFC 태그 위치 정보가 있으면 현재 위치 표시 */}
+        {taggedLocation && (
+          <div className="bg-green-50 border border-green-300 rounded-2xl p-4 mb-6 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📍</span>
+              <div>
+                <p className="font-semibold text-green-900">현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}</p>
+                {examInfo && taggedLocation.building === examInfo.building && taggedLocation.floor === parseInt(examInfo.floor) ? (
+                  <p className="text-green-700 text-sm mt-1">✅ 같은 층에 있습니다. 가까운 곳에 검사실이 있어요!</p>
+                ) : (
+                  <p className="text-green-700 text-sm mt-1">검사실까지 안내해 드릴게요.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6
                       flex items-start gap-4">
           <span className="text-4xl">⏰</span>

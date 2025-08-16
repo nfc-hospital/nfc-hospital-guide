@@ -12,6 +12,11 @@ const useJourneyStore = create(
         error: null,
         lastFetchTime: null,
 
+        // NFC 태그된 장소 정보
+        taggedLocationInfo: null,
+        isTagLoading: false,
+        tagError: null,
+
         // 사용자 정보
         user: null,
         patientState: null,
@@ -43,14 +48,42 @@ const useJourneyStore = create(
         adminError: null,
 
         // 메인 데이터 페칭 함수 - 역할에 따른 선택적 로딩
-        fetchJourneyData: async () => {
-          set({ isLoading: true, error: null });
+        fetchJourneyData: async (tagId = null) => {
+          set({ isLoading: true, error: null, taggedLocationInfo: null });
           
           try {
-            // 1. 먼저 사용자 프로필만 가져오기
-            console.log('🔄 사용자 프로필 로딩 중...');
-            const profileResponse = await authAPI.getProfile();
+            // 1. 병렬로 사용자 프로필과 NFC 태그 정보 가져오기
+            console.log('🔄 데이터 로딩 중...', tagId ? `태그 ID: ${tagId}` : '태그 없음');
+            
+            const apiCalls = [authAPI.getProfile()];
+            
+            // tagId가 있으면 태그 정보도 병렬로 조회
+            if (tagId) {
+              set({ isTagLoading: true, tagError: null });
+              apiCalls.push(
+                apiService.nfc.getTagInfo(tagId)
+                  .catch(error => {
+                    console.error('⚠️ NFC 태그 정보 조회 실패:', error);
+                    set({ tagError: error.message });
+                    return null;
+                  })
+              );
+            }
+            
+            const responses = await Promise.all(apiCalls);
+            const profileResponse = responses[0];
             console.log('📦 프로필 API 응답:', profileResponse);
+            
+            // NFC 태그 정보가 있다면 상태에 저장
+            if (tagId && responses.length > 1 && responses[1]) {
+              set({ 
+                taggedLocationInfo: responses[1].data,
+                isTagLoading: false
+              });
+              console.log('✅ NFC 태그 정보 로드 완료:', responses[1].data);
+            } else if (tagId) {
+              set({ isTagLoading: false });
+            }
             
             // API 응답 구조에 맞게 user 데이터 추출 - 실제 사용자 데이터는 data.user에 있음
             const userData = profileResponse.data?.user;
@@ -200,6 +233,9 @@ const useJourneyStore = create(
             isLoading: false,
             error: null,
             lastFetchTime: null,
+            taggedLocationInfo: null,
+            isTagLoading: false,
+            tagError: null,
             user: null,
             patientState: null,
             appointments: [],
@@ -219,6 +255,39 @@ const useJourneyStore = create(
         // 에러 상태 클리어
         clearError: () => {
           set({ error: null });
+        },
+
+        // NFC 태그 정보만 별도로 가져오기
+        fetchTagInfo: async (tagId) => {
+          if (!tagId) return null;
+          
+          set({ isTagLoading: true, tagError: null });
+          
+          try {
+            const response = await apiService.nfc.getTagInfo(tagId);
+            set({ 
+              taggedLocationInfo: response.data,
+              isTagLoading: false
+            });
+            console.log('✅ NFC 태그 정보 로드 완료:', response.data);
+            return response.data;
+          } catch (error) {
+            console.error('❌ NFC 태그 정보 로드 실패:', error);
+            set({ 
+              tagError: error.message || 'NFC 태그 정보를 불러올 수 없습니다',
+              isTagLoading: false 
+            });
+            throw error;
+          }
+        },
+
+        // NFC 태그 정보 초기화
+        clearTagInfo: () => {
+          set({ 
+            taggedLocationInfo: null,
+            isTagLoading: false,
+            tagError: null 
+          });
         },
 
         // 관리자 대시보드 데이터 가져오기

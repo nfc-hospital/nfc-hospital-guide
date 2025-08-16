@@ -118,10 +118,47 @@ const apiService = {
 
   // NFC 관련 API (공개 정보)
   nfc: {
+    // 공개 정보 조회 (비로그인 사용자용)
     getPublicInfo: (tagId) => api.post('/nfc/public-info', { tag_id: tagId }),
+    
+    // NFC 스캔 (로그인 사용자용) - 이미 nfcAPI.scan으로 정의됨
     scan: nfcAPI.scan,
+    
+    // 스캔 로그 기록
     logScan: (data) => api.post('/nfc/scan-log', data),
+    
+    // QR 백업 생성
     getQRBackup: (tagId) => api.get(`/nfc/qr-backup/${tagId}`),
+    
+    // 태그 정보 조회 - 인증 상태에 따라 적절한 API 사용
+    getTagInfo: async (tagId) => {
+      try {
+        const token = localStorage.getItem('access_token');
+        
+        if (token) {
+          // 로그인한 사용자는 scan API 사용 (더 많은 정보 제공)
+          console.log('🔐 로그인 사용자 - NFC scan API 호출');
+          const response = await nfcAPI.scan({ tag_id: tagId });
+          
+          // 스캔 로그도 함께 기록
+          api.post('/nfc/scan-log', { 
+            tag_id: tagId, 
+            timestamp: new Date().toISOString(),
+            action_type: 'scan'
+          }).catch(err => console.warn('스캔 로그 기록 실패:', err));
+          
+          return response;
+        } else {
+          // 비로그인 사용자는 공개 정보 API 사용
+          console.log('👤 비로그인 사용자 - public-info API 호출');
+          return api.post('/nfc/public-info', { tag_id: tagId });
+        }
+      } catch (error) {
+        // 에러 발생 시 공개 정보 API로 폴백
+        console.warn('NFC 태그 정보 조회 실패, 공개 API로 재시도:', error);
+        return api.post('/nfc/public-info', { tag_id: tagId });
+      }
+    },
   },
 
   // 인증 관련 (authAPI 래핑)

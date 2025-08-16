@@ -2,13 +2,26 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import useJourneyStore from '../../store/journeyStore';
 
-export default function UnregisteredScreen() {
+export default function UnregisteredScreen({ taggedLocation }) {
   const navigate = useNavigate();
   const { user } = useJourneyStore();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* NFC 태그 위치 정보 표시 */}
+        {taggedLocation && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📍</span>
+              <div>
+                <p className="font-semibold text-blue-900">현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}</p>
+                <p className="text-blue-700 text-sm mt-1">{taggedLocation.description || '안내 데스크에서 도움을 받으실 수 있습니다.'}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 환영 메시지 */}
         <div className="text-center mb-8">
           <div className="text-7xl mb-4">🏥</div>

@@ -10,7 +10,11 @@
     "preview": "vite preview",
     "lint": "eslint src",
     "clean": "rimraf dist",
-    "kill-port": "npx kill-port 5174 || true"
+    "kill-port": "npx kill-port 5174 || true",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "test:e2e": "cypress run --headless",
+    "test:e2e:watch": "cypress open"
   },
   "dependencies": {
     "@headlessui/react": "^1.7.18",
@@ -33,6 +37,7 @@
     "@types/react-dom": "^18.2.19",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
+    "cypress": "^14.5.4",
     "eslint-plugin-react-refresh": "^0.4.5",
     "kill-port": "^2.0.1",
     "postcss": "^8.4.35",

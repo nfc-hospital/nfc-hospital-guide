@@ -102,6 +102,11 @@ function AppContent() {
                 <Home />
               </PrivateRoute>
             } />
+            <Route path="/nfc/:tagId" element={
+              <PrivateRoute>
+                <Home />
+              </PrivateRoute>
+            } />
             <Route path="/exam/:examId" element={
               <PrivateRoute>
                 <Exam />

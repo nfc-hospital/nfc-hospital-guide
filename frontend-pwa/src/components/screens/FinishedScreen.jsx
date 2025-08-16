@@ -52,7 +52,7 @@ const celebrationAnimation = {
   }]
 };
 
-export default function FinishedScreen() {
+export default function FinishedScreen({ taggedLocation }) {
   const { user, todaysAppointments } = useJourneyStore();
   const navigate = useNavigate();
   const [showSurvey, setShowSurvey] = useState(false);
@@ -87,6 +87,54 @@ export default function FinishedScreen() {
           </p>
         </div>
 
+        {/* NFC 태그 위치에 따른 맞춤형 안내 */}
+        {taggedLocation && (
+          <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 mb-6 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📍</span>
+              <div className="flex-1">
+                <p className="font-semibold text-purple-900">
+                  현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
+                </p>
+                {(() => {
+                  // 특정 위치에 따른 안내
+                  if (taggedLocation.room?.includes('원무') || taggedLocation.room?.includes('수납')) {
+                    return (
+                      <p className="text-purple-700 mt-1">
+                        💳 수납이 필요하신가요? 모든 검사가 완료되었으니 수납 후 귀가하시면 됩니다.
+                      </p>
+                    );
+                  } else if (taggedLocation.room?.includes('약국') || taggedLocation.room?.includes('처방')) {
+                    return (
+                      <p className="text-purple-700 mt-1">
+                        💊 처방전이 있으시다면 약국에서 약을 받아가세요.
+                      </p>
+                    );
+                  } else if (taggedLocation.room?.includes('주차') || taggedLocation.floor === '지하') {
+                    return (
+                      <p className="text-purple-700 mt-1">
+                        🚗 주차장으로 가시는군요. 안전운전하세요!
+                      </p>
+                    );
+                  } else if (taggedLocation.room?.includes('검사') || taggedLocation.room?.includes('진료')) {
+                    return (
+                      <p className="text-purple-700 mt-1">
+                        ✅ 여기는 {taggedLocation.room}입니다. 모든 진료가 완료되었으니 귀가하셔도 좋습니다.
+                      </p>
+                    );
+                  } else {
+                    return (
+                      <p className="text-purple-700 mt-1">
+                        🏠 모든 진료가 완료되었습니다. 필요하신 곳에 들르신 후 귀가하세요.
+                      </p>
+                    );
+                  }
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 오늘의 진료 요약 */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -116,6 +164,95 @@ export default function FinishedScreen() {
                 <span>{apt.exam?.title}</span>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* 귀가 동선 안내 카드 추가 */}
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-6 mb-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <span className="text-2xl">🚶‍♂️</span>
+            귀가 전 들르실 곳
+          </h3>
+          
+          <div className="space-y-3">
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                    <span className="text-xl">💳</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">원무과</h4>
+                    <p className="text-sm text-gray-600">본관 1층 중앙홀 좌측</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    // TODO: [NAVIGATION-API] 원무과 길안내 API 연동 필요
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <span className="text-xl">💊</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">약국</h4>
+                    <p className="text-sm text-gray-600">본관 1층 원무과 옆</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    // TODO: [NAVIGATION-API] 약국 길안내 API 연동 필요
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                    <span className="text-xl">🚗</span>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">주차장</h4>
+                    <p className="text-sm text-gray-600">지하 1-3층 / 야외 주차장</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    // TODO: [NAVIGATION-API] 주차장 길안내 API 연동 필요
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-4 p-3 bg-amber-50 rounded-lg">
+            <p className="text-sm text-amber-800 flex items-start gap-2">
+              <span>💡</span>
+              <span>수납이 필요한 경우 원무과에서 수납 후 약국에서 처방약을 받아가세요.</span>
+            </p>
           </div>
         </div>
 

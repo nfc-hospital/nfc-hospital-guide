@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import test_views
 
 urlpatterns = [
     # 대기열 추가 (POST)
@@ -64,3 +65,17 @@ urlpatterns = [
 
 
 ]
+
+# 테스트 환경용 URL (개발 환경에서만 활성화)
+from django.conf import settings
+if settings.DEBUG:
+    urlpatterns += [
+        # 테스트용 환자 상태 설정
+        path('test/set-patient-state/', test_views.set_patient_state, name='test-set-patient-state'),
+        
+        # 테스트용 예약 생성
+        path('test/create-appointment/', test_views.create_test_appointment, name='test-create-appointment'),
+        
+        # 테스트 환경 초기화
+        path('test/reset-environment/', test_views.reset_test_environment, name='test-reset-environment'),
+    ]

@@ -6,7 +6,7 @@ import { useRealtimeQueues } from '../../hooks/useRealtimeQueues';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 
-export default function WaitingScreen() {
+export default function WaitingScreen({ taggedLocation }) {
   // 기본값으로 빈 배열을 설정하여 'find' 오류를 방지
   const { user, currentQueues = [], todaysAppointments = [] } = useJourneyStore();
   const [showPreparation, setShowPreparation] = useState(false);
@@ -46,6 +46,56 @@ export default function WaitingScreen() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {/* NFC 태그 위치에 따른 맞춤형 안내 */}
+        {taggedLocation && activeQueue && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">📍</span>
+              <div className="flex-1">
+                <p className="font-semibold text-amber-900">
+                  현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
+                </p>
+                {(() => {
+                  const examLocation = activeQueue.exam;
+                  if (!examLocation) return null;
+                  
+                  const isSameLocation = 
+                    taggedLocation.building === examLocation.building &&
+                    taggedLocation.floor === parseInt(examLocation.floor);
+                  
+                  const isSameRoom = isSameLocation && 
+                    taggedLocation.room === examLocation.room;
+                  
+                  if (isSameRoom) {
+                    return (
+                      <p className="text-amber-700 mt-1">
+                        ✅ 검사실 앞에 계십니다. 대기 번호 {activeQueue.queue_number}번이 호출될 때까지 
+                        잠시만 기다려주세요. (예상 대기시간: {activeQueue.estimated_wait_time}분)
+                      </p>
+                    );
+                  } else if (isSameLocation) {
+                    return (
+                      <p className="text-amber-700 mt-1">
+                        🏃 검사실은 같은 층 {examLocation.room}입니다. 
+                        대기 시간이 {activeQueue.estimated_wait_time}분 정도 남았으니 
+                        검사실 앞으로 이동해주세요.
+                      </p>
+                    );
+                  } else {
+                    return (
+                      <p className="text-amber-700 mt-1">
+                        ⚠️ 검사실은 {examLocation.building} {examLocation.floor}층 {examLocation.room}입니다. 
+                        대기 시간이 {activeQueue.estimated_wait_time}분 정도 남았으니 
+                        서둘러 이동해주세요.
+                      </p>
+                    );
+                  }
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 대기/진행 상태 카드 */}
         {activeQueue && (
           <QueueStatus queue={activeQueue} />
@@ -117,7 +167,11 @@ export default function WaitingScreen() {
         {/* 대기 중 이용 가능한 옵션들 */}
         {!isOngoing && (
           <div className="grid grid-cols-2 gap-4">
-            <button className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
+            <button 
+              onClick={() => {
+                // TODO: [NAVIGATION-API] 화장실 길안내 API 연동 필요
+              }}
+              className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
                            hover:shadow-md transition-all duration-300 text-left group">
               <span className="text-3xl">🚻</span>
               <h3 className="text-lg font-semibold text-gray-900 mt-2 
@@ -127,7 +181,11 @@ export default function WaitingScreen() {
               <p className="text-gray-600 mt-1">가장 가까운 화장실 안내</p>
             </button>
             
-            <button className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
+            <button 
+              onClick={() => {
+                // TODO: [NAVIGATION-API] 편의시설 길안내 API 연동 필요
+              }}
+              className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
                            hover:shadow-md transition-all duration-300 text-left group">
               <span className="text-3xl">☕</span>
               <h3 className="text-lg font-semibold text-gray-900 mt-2 

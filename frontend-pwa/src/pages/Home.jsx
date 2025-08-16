@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import useJourneyStore from '../store/journeyStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import AdminHomeScreen from '../components/screens/AdminHomeScreen';
@@ -67,20 +68,41 @@ const ErrorScreen = ({ message }) => (
 
 // 메인 Home 컴포넌트 - 동적 라우팅 컨트롤러
 const Home = () => {
-  const { user, patientState, isLoading, error, fetchJourneyData } = useJourneyStore();
+  const { tagId } = useParams(); // URL에서 NFC 태그 ID 가져오기
+  const { 
+    user, 
+    patientState, 
+    taggedLocationInfo,
+    isLoading, 
+    error, 
+    fetchJourneyData,
+    clearTagInfo 
+  } = useJourneyStore();
 
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
     console.log('🏠 Home 컴포넌트 마운트됨');
     console.log('📍 현재 user:', user);
     console.log('📍 현재 patientState:', patientState);
+    console.log('🏷️ NFC 태그 ID:', tagId);
     
     // 사용자 정보가 없으면 데이터 로드
     if (!user && localStorage.getItem('access_token')) {
       console.log('🔄 토큰은 있지만 user 정보가 없어서 fetchJourneyData 호출');
-      fetchJourneyData();
+      fetchJourneyData(tagId); // NFC 태그 ID와 함께 데이터 로드
+    } else if (tagId && user) {
+      // 사용자 정보는 있지만 새로운 태그를 스캔한 경우
+      console.log('🏷️ 새로운 NFC 태그 스캔, 데이터 재로드');
+      fetchJourneyData(tagId);
     }
-  }, []);
+    
+    // 컴포넌트 언마운트 시 태그 정보 초기화
+    return () => {
+      if (tagId) {
+        clearTagInfo();
+      }
+    };
+  }, [tagId]);
 
   // 로딩 상태
   if (isLoading) {
@@ -115,38 +137,53 @@ const Home = () => {
 
     // 환자 상태에 따른 화면 렌더링
     const currentState = patientState?.current_state || patientState;
-  
-  switch (currentState) {
-    case 'UNREGISTERED':
-      return <UnregisteredScreen />;
+    const locationType = taggedLocationInfo?.type; // 'exam_room', 'reception', 'lobby' 등
     
-    case 'ARRIVED':
-      return <ArrivedScreen />;
+    // --- 분기 로직 시작 ---
     
-    case 'REGISTERED':
-      return <RegisteredScreen />;
+    // 1순위: 호출 상태는 항상 최우선으로 표시
+    if (currentState === 'CALLED') {
+      return <CalledScreen taggedLocation={taggedLocationInfo} />;
+    }
     
-    case 'WAITING':
-      return <WaitingScreen />;
+    // 2순위: 검사실 NFC를 태그했고, 대기 또는 진행중인 검사가 있는 경우
+    if (locationType === 'exam_room' && (currentState === 'WAITING' || currentState === 'ONGOING')) {
+      // 여기서 taggedLocationInfo.id와 currentAppointment.exam.id를 비교하여
+      // 올바른 검사실에 왔는지 확인하는 로직을 추가할 수 있습니다.
+      return <WaitingScreen taggedLocation={taggedLocationInfo} />;
+    }
     
-    case 'CALLED':
-      return <CalledScreen />;
-    
-    case 'ONGOING':
-      return <OngoingScreen />;
-    
-    case 'COMPLETED':
-      return <CompletedScreen />;
-    
-    case 'PAYMENT':
-      return <PaymentScreen />;
-    
-    case 'FINISHED':
-      return <FinishedScreen />;
-    
-    default:
-      console.warn('Unknown patient state:', currentState);
-      return <RegisteredScreen />; // 기본값으로 등록 완료 화면 표시
+    // 3순위: 그 외 상태별 기본 화면
+    switch (currentState) {
+      case 'UNREGISTERED':
+        return <UnregisteredScreen taggedLocation={taggedLocationInfo} />;
+      
+      case 'ARRIVED':
+        return <ArrivedScreen taggedLocation={taggedLocationInfo} />;
+      
+      case 'REGISTERED':
+        // 접수 완료 상태에서 로비 태그 -> 접수 완료 화면
+        // 접수 완료 상태에서 검사실 태그 -> 2순위에서 처리됨
+        return <RegisteredScreen taggedLocation={taggedLocationInfo} />;
+      
+      case 'WAITING': // 검사실 태그 없이 대기 상태일 경우 (예: 앱 재시작)
+        return <WaitingScreen taggedLocation={taggedLocationInfo} />;
+      
+      case 'ONGOING':
+        return <WaitingScreen taggedLocation={taggedLocationInfo} />; // ONGOING도 WaitingScreen 재사용
+      
+      case 'COMPLETED':
+        return <CompletedScreen taggedLocation={taggedLocationInfo} />;
+      
+      case 'PAYMENT':
+        return <PaymentScreen taggedLocation={taggedLocationInfo} />;
+      
+      case 'FINISHED':
+        return <FinishedScreen taggedLocation={taggedLocationInfo} />;
+      
+      default:
+        console.warn('Unknown patient state:', currentState);
+        return <RegisteredScreen taggedLocation={taggedLocationInfo} />; // 기본값으로 등록 완료 화면 표시
     }
   }
 
