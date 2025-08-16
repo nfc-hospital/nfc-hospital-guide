@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&amp;display=swap');
+            
+            /* 기본 스타일 */
+            .bg { fill: #ffffff; }
+            .room { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 2; }
+            .medical-room { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; }
+            .doorway { stroke: #ffffff; stroke-width: 8; }
+
+            /* 텍스트 스타일 */
+            .text-base { font-family: "Noto Sans KR", sans-serif; text-anchor: middle; fill: #1e293b; font-weight: 600; }
+            .text-large { font-size: 16px; }
+            .text-medium { font-size: 14px; }
+            .icon-text { font-size: 12px; fill: #475569; }
+        </style>
+    </defs>
+
+    <!-- 배경 -->
+    <rect width="900" height="600" class="bg"/>
+
+    <!-- 공간 배치 -->
+    <g id="floor-layout">
+        
+        <!-- 상단 좌측 - 접수 구역 (L자형) -->
+        <path d="M 50 80 L 250 80 L 250 140 L 150 140 L 150 200 L 50 200 Z" class="room"/>
+        <line x1="150" y1="200" x2="190" y2="200" class="doorway"/>
+        <text x="120" y="135" class="text-base text-large">영상의학과 접수</text>
+
+        <!-- 상단 중앙 - 판독실들 -->
+        <g id="reading-rooms">
+            <!-- 판독실 1 -->
+            <rect x="280" y="80" width="110" height="80" class="room"/>
+            <line x1="320" y1="160" x2="350" y2="160" class="doorway"/>
+            <text x="335" y="125" class="text-base text-medium">판독실 1</text>
+
+            <!-- 판독실 2 -->
+            <rect x="410" y="80" width="110" height="80" class="room"/>
+            <line x1="450" y1="160" x2="480" y2="160" class="doorway"/>
+            <text x="465" y="125" class="text-base text-medium">판독실 2</text>
+
+            <!-- 의사실 -->
+            <rect x="540" y="80" width="110" height="80" class="room"/>
+            <line x1="580" y1="160" x2="610" y2="160" class="doorway"/>
+            <text x="595" y="125" class="text-base text-medium">의사실</text>
+        </g>
+
+        <!-- 좌측 하단 - 대기실 -->
+        <rect x="50" y="230" width="200" height="130" class="room"/>
+        <line x1="150" y1="230" x2="190" y2="230" class="doorway"/>
+        <text x="150" y="300" class="text-base text-large">검사 대기실</text>
+
+        <!-- 중앙 - 큰 검사실들 -->
+        <g id="main-imaging-rooms">
+            <!-- CT실 -->
+            <rect x="280" y="190" width="160" height="160" class="medical-room"/>
+            <line x1="340" y1="190" x2="380" y2="190" class="doorway"/>
+            <text x="360" y="275" class="text-base text-large">CT실</text>
+
+            <!-- MRI실 -->
+            <rect x="470" y="190" width="180" height="160" class="medical-room"/>
+            <line x1="540" y1="190" x2="600" y2="190" class="doorway"/>
+            <text x="560" y="275" class="text-base text-large">MRI실</text>
+        </g>
+
+        <!-- 하단 - 일반 검사실들 -->
+        <g id="general-rooms">
+            <!-- X-ray실 -->
+            <rect x="50" y="390" width="190" height="90" class="medical-room"/>
+            <line x1="120" y1="390" x2="170" y2="390" class="doorway"/>
+            <text x="145" y="440" class="text-base text-large">X-ray실</text>
+
+            <!-- 초음파실 -->
+            <rect x="270" y="380" width="130" height="100" class="medical-room"/>
+            <line x1="320" y1="380" x2="350" y2="380" class="doorway"/>
+            <text x="335" y="435" class="text-base text-medium">초음파실</text>
+
+            <!-- 조영제 주사실 -->
+            <rect x="430" y="380" width="120" height="100" class="medical-room"/>
+            <line x1="470" y1="380" x2="510" y2="380" class="doorway"/>
+            <text x="490" y="425" class="text-base text-medium">조영제</text>
+            <text x="490" y="445" class="text-base text-medium">주사실</text>
+
+            <!-- 회복실 (부정형) -->
+            <path d="M 580 380 L 700 380 L 700 450 L 640 450 L 640 480 L 580 480 Z" class="medical-room"/>
+            <line x1="620" y1="380" x2="660" y2="380" class="doorway"/>
+            <text x="625" y="435" class="text-base text-medium">회복실</text>
+        </g>
+
+        <!-- 우측 - 탈의실 -->
+        <rect x="680" y="190" width="90" height="100" class="room"/>
+        <line x1="680" y1="230" x2="680" y2="250" class="doorway"/>
+        <text x="725" y="245" class="text-base text-medium">탈의실</text>
+
+        <!-- 시설들 -->
+        <g id="facilities">
+            <!-- 엘리베이터 -->
+            <g transform="translate(250, 520)">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-10 -8 L0 -15 L10 -8 M-10 8 L0 15 L10 8" stroke="#475569" stroke-width="2" fill="none"/>
+            </g>
+            <text x="250" y="560" class="text-base icon-text">엘리베이터</text>
+
+            <!-- 계단 -->
+            <g transform="translate(680, 320)">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-12 -10 L-12 -6 L-6 -6 L-6 -2 L0 -2 L0 2 L6 2 L6 6 L12 6 L12 10" stroke="#475569" stroke-width="2" fill="none"/>
+            </g>
+            <text x="680" y="360" class="text-base icon-text">계단</text>
+
+            <!-- 화장실 -->
+            <g transform="translate(725, 120)">
+                <circle cx="-8" cy="-8" r="4" fill="#475569"/>
+                <rect x="-10" y="-2" width="4" height="10" fill="#475569"/>
+                <circle cx="8" cy="-8" r="4" fill="#475569"/>
+                <path d="M 6 -2 L 10 -2 L 10 8 L 8 8 L 8 3 L 6 3 Z" fill="#475569"/>
+            </g>
+            <text x="725" y="160" class="text-base icon-text">화장실</text>
+        </g>
+    </g>
+</svg>

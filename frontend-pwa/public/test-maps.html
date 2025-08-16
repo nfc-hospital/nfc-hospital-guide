@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>병원 지도 테스트 - 개선된 4개층 평면도</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+        
+        .improvements {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .improvements h2 {
+            color: #2196F3;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+        
+        .improvement-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        
+        .improvement-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .improvement-card h3 {
+            color: #333;
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        
+        .improvement-card ul {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .improvement-card li {
+            padding: 3px 0;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .improvement-card li:before {
+            content: "✓ ";
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        
+        .floor-selector {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        
+        .floor-btn {
+            padding: 12px 24px;
+            background: #fff;
+            border: 2px solid #2196F3;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        
+        .floor-btn:hover {
+            background: #e3f2fd;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+        }
+        
+        .floor-btn.active {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .map-container {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .map-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .map-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .map-info {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .info-badge {
+            background: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            color: #666;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .svg-wrapper {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: auto;
+        }
+        
+        .svg-wrapper object {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+        }
+        
+        .floor-hidden {
+            display: none;
+        }
+        
+        .legend {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .legend h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+        
+        .legend-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .floor-btn {
+                padding: 10px 16px;
+                font-size: 0.9rem;
+            }
+            
+            .svg-wrapper object {
+                height: 400px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏥 NFC 병원 안내 시스템 - 개선된 지도</h1>
+        <p class="subtitle">Version 2.0 - U자형 동선 및 접근성 개선</p>
+        
+        <!-- 개선사항 요약 -->
+        <div class="improvements">
+            <h2>🔥 주요 개선사항</h2>
+            <div class="improvement-grid">
+                <div class="improvement-card">
+                    <h3>🚶 환자 동선 최적화</h3>
+                    <ul>
+                        <li>U자형 순환 동선 도입</li>
+                        <li>체크인/체크아웃 분리</li>
+                        <li>검사 존(Zone) 형성</li>
+                    </ul>
+                </div>
+                <div class="improvement-card">
+                    <h3>♿ 접근성 개선</h3>
+                    <ul>
+                        <li>엘리베이터 중앙 배치</li>
+                        <li>복도 폭 확대</li>
+                        <li>장애인 화장실 전층</li>
+                        <li>휴게실/대기실 추가</li>
+                    </ul>
+                </div>
+                <div class="improvement-card">
+                    <h3>🎨 시각 디자인</h3>
+                    <ul>
+                        <li>방 번호 체계 (101~409호)</li>
+                        <li>동선 화살표 및 유도선</li>
+                        <li>구역별 색상 구분</li>
+                        <li>표준 픽토그램 사용</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 층 선택 버튼 -->
+        <div class="floor-selector">
+            <button class="floor-btn active" onclick="showFloor('main_1f')">본관 1층</button>
+            <button class="floor-btn" onclick="showFloor('main_2f')">본관 2층</button>
+            <button class="floor-btn" onclick="showFloor('cancer_1f')">암센터 1층</button>
+            <button class="floor-btn" onclick="showFloor('cancer_2f')">암센터 2층</button>
+        </div>
+        
+        <!-- 본관 1층 -->
+        <div id="main_1f" class="map-container">
+            <div class="map-header">
+                <div class="map-title">본관 1층 - 접수/검사/수납</div>
+                <div class="map-info">
+                    <span class="info-badge">U자형 동선</span>
+                    <span class="info-badge">7개 주요 시설</span>
+                </div>
+            </div>
+            <div class="svg-wrapper">
+                <object data="images/maps/main_1f.svg" type="image/svg+xml">
+                    본관 1층 지도를 불러올 수 없습니다.
+                </object>
+            </div>
+            <div class="legend">
+                <h3>주요 시설</h3>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4CAF50;"></div>
+                        <span>정문/출입구</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2196F3;"></div>
+                        <span>접수처 (101호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #9C27B0;"></div>
+                        <span>채혈실 (102호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FF5722;"></div>
+                        <span>원무과 (104호)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 본관 2층 -->
+        <div id="main_2f" class="map-container floor-hidden">
+            <div class="map-header">
+                <div class="map-title">본관 2층 - 내과 진료</div>
+                <div class="map-info">
+                    <span class="info-badge">진료 존</span>
+                    <span class="info-badge">6개 진료실</span>
+                </div>
+            </div>
+            <div class="svg-wrapper">
+                <object data="images/maps/main_2f.svg" type="image/svg+xml">
+                    본관 2층 지도를 불러올 수 없습니다.
+                </object>
+            </div>
+            <div class="legend">
+                <h3>주요 시설</h3>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FF9800;"></div>
+                        <span>대기실 (201호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2196F3;"></div>
+                        <span>진료실 (202-204호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #9C27B0;"></div>
+                        <span>처치실 (205호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4CAF50;"></div>
+                        <span>상담실 (206호)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 암센터 1층 -->
+        <div id="cancer_1f" class="map-container floor-hidden">
+            <div class="map-header">
+                <div class="map-title">암센터 1층 - 치료/상담</div>
+                <div class="map-info">
+                    <span class="info-badge">방사형 배치</span>
+                    <span class="info-badge">7개 치료실</span>
+                </div>
+            </div>
+            <div class="svg-wrapper">
+                <object data="images/maps/cancer_1f.svg" type="image/svg+xml">
+                    암센터 1층 지도를 불러올 수 없습니다.
+                </object>
+            </div>
+            <div class="legend">
+                <h3>주요 시설</h3>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #00BCD4;"></div>
+                        <span>로비 (302호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #9C27B0;"></div>
+                        <span>방사선치료실 (303호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FF5722;"></div>
+                        <span>항암치료실 (304호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2196F3;"></div>
+                        <span>상담실 (305-306호)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 암센터 2층 -->
+        <div id="cancer_2f" class="map-container floor-hidden">
+            <div class="map-header">
+                <div class="map-title">암센터 2층 - 영상의학과</div>
+                <div class="map-info">
+                    <span class="info-badge">검사 클러스터</span>
+                    <span class="info-badge">9개 검사실</span>
+                </div>
+            </div>
+            <div class="svg-wrapper">
+                <object data="images/maps/cancer_2f.svg" type="image/svg+xml">
+                    암센터 2층 지도를 불러올 수 없습니다.
+                </object>
+            </div>
+            <div class="legend">
+                <h3>주요 시설</h3>
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #2196F3;"></div>
+                        <span>영상의학과 접수 (401호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #9C27B0;"></div>
+                        <span>CT실 (403호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #673AB7;"></div>
+                        <span>MRI실 (404호)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #00BCD4;"></div>
+                        <span>X-ray실 (405호)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 통계 정보 -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value">4</div>
+                <div class="stat-label">총 층수</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">21</div>
+                <div class="stat-label">주요 시설</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">100%</div>
+                <div class="stat-label">접근성 준수</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">v2.0</div>
+                <div class="stat-label">레이아웃 버전</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showFloor(floorId) {
+            // 모든 지도 숨기기
+            const maps = document.querySelectorAll('.map-container');
+            maps.forEach(map => {
+                map.classList.add('floor-hidden');
+            });
+            
+            // 모든 버튼 비활성화
+            const buttons = document.querySelectorAll('.floor-btn');
+            buttons.forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 선택된 지도 표시
+            document.getElementById(floorId).classList.remove('floor-hidden');
+            
+            // 선택된 버튼 활성화
+            event.target.classList.add('active');
+        }
+        
+        // 페이지 로드 시 API 테스트
+        fetch('/api/v1/navigation/maps/')
+            .then(response => response.json())
+            .then(data => {
+                console.log('지도 메타데이터 API 응답:', data);
+            })
+            .catch(error => {
+                console.error('API 호출 실패:', error);
+            });
+    </script>
+</body>
+</html>

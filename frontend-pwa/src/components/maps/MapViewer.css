@@ -1,0 +1,239 @@
+/* 지도 뷰어 컨테이너 */
+.map-viewer-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+/* 지도 헤더 */
+.map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.map-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.map-controls {
+  display: flex;
+  gap: 20px;
+}
+
+.control-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.control-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.control-checkbox span {
+  font-size: 0.95rem;
+}
+
+/* SVG 지도 컨테이너 */
+.map-svg-container {
+  position: relative;
+  width: 100%;
+  height: 600px;
+  background: #f8f9fa;
+  overflow: auto;
+}
+
+.base-map-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 마커 오버레이 */
+.marker-overlay {
+  pointer-events: none;
+}
+
+.marker-overlay g {
+  pointer-events: auto;
+}
+
+/* 네비게이션 오버레이 */
+.navigation-overlay {
+  pointer-events: none;
+}
+
+/* 로딩 상태 */
+.map-viewer-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.map-viewer-loading p {
+  color: #666;
+  font-size: 1.1rem;
+}
+
+/* 에러 상태 */
+.map-viewer-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 8px;
+  padding: 20px;
+}
+
+.map-viewer-error p {
+  margin: 0;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.error-message {
+  color: #ef4444;
+  font-size: 0.95rem;
+}
+
+/* 지도 범례 */
+.map-legend {
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+  background: white;
+}
+
+.map-legend h3 {
+  margin: 0 0 12px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.legend-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: white;
+}
+
+.legend-label {
+  font-size: 0.9rem;
+  color: #666;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+  .map-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .map-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .map-controls {
+    width: 100%;
+  }
+
+  .map-svg-container {
+    height: 450px;
+  }
+
+  .legend-items {
+    gap: 12px;
+  }
+
+  .legend-item {
+    font-size: 0.85rem;
+  }
+
+  .legend-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+}
+
+/* 다크 모드 지원 */
+@media (prefers-color-scheme: dark) {
+  .map-viewer-container {
+    background: #1e293b;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .map-header {
+    background: linear-gradient(135deg, #4c5fd5 0%, #5e3a9e 100%);
+  }
+
+  .map-svg-container {
+    background: #0f172a;
+  }
+
+  .map-legend {
+    background: #1e293b;
+    border-top-color: #334155;
+  }
+
+  .map-legend h3 {
+    color: #f1f5f9;
+  }
+
+  .legend-label {
+    color: #94a3b8;
+  }
+
+  .map-viewer-error p {
+    color: #f1f5f9;
+  }
+}

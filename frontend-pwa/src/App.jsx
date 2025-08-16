@@ -22,6 +22,7 @@ import NFCTagManagement from './pages/admin/NFCTagManagement';
 import QueueMonitoring from './pages/admin/QueueMonitoring';
 import AnalyticsDashboard from './pages/admin/AnalyticsDashboard';
 import ChatbotTest from './pages/ChatbotTest';
+import MapTest from './pages/MapTest';
 // New Chatbot System
 import ChatbotSystem from './components/chatbot-v2';
 import './styles/global.css';
@@ -96,6 +97,7 @@ function AppContent() {
           <Route path="/oauth/kakao" element={<KakaoOAuth />} />
           <Route path="/public-guide" element={<PublicGuide />} />
           <Route path="/chatbot-test" element={<ChatbotTest />} />
+          <Route path="/map-test" element={<MapTest />} />
           <Route element={<Layout />}>
             <Route path="/" element={
               <PrivateRoute>

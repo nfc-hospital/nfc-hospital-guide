@@ -1,0 +1,34 @@
+백업 일시: 2025-08-16 17:12:47.156327
+데이터베이스: nfc_hospital_db
+호스트: nfc-hospital-db-1.clku4gauwp7r.ap-northeast-2.rds.amazonaws.com
+테이블 수: 28
+
+테이블 목록:
+  - admin_logs
+  - appointment_histories
+  - appointments
+  - auth_device_tokens
+  - auth_group
+  - auth_group_permissions
+  - auth_login_attempts
+  - auth_permission
+  - django_admin_log
+  - django_content_type
+  - django_migrations
+  - django_session
+  - emr_sync_status
+  - exam_preparations
+  - exams
+  - feedbacks
+  - nfc_tag_exams
+  - nfc_tags
+  - notification_settings
+  - notifications
+  - patient_states
+  - queue_status_logs
+  - queues
+  - state_transitions
+  - tag_logs
+  - users
+  - users_groups
+  - users_user_permissions

@@ -38,6 +38,7 @@ LOCAL_APPS = [
     'p_queue',
     'admin_dashboard',
     'integrations',
+    'hospital_navigation',  # 경로 안내 앱 추가
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
