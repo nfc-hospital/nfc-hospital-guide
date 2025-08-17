@@ -1,0 +1,147 @@
+import React, { useState, useEffect } from 'react';
+import InteractiveMapViewer from '../components/maps/InteractiveMapViewer';
+import SimpleMapViewer from '../components/maps/SimpleMapViewer';
+import './MapTest.css';
+
+/**
+ * 병원 지도 테스트 페이지
+ * InteractiveMapViewer 컴포넌트를 사용하여 SVG 요소 직접 활용
+ */
+const MapTest = () => {
+  const [currentFloor, setCurrentFloor] = useState('main_1f');
+  const [selectedRoom, setSelectedRoom] = useState(null);
+  const [useSimple, setUseSimple] = useState(false);
+
+  // 층 정보 - interactive SVG 파일 경로 포함
+  const floors = [
+    { 
+      id: 'main_1f', 
+      building: '본관', 
+      floor: '1층', 
+      name: '본관 1층',
+      svgPath: '/images/maps/main_1f.interactive.svg'
+    },
+    { 
+      id: 'main_2f', 
+      building: '본관', 
+      floor: '2층', 
+      name: '본관 2층',
+      svgPath: '/images/maps/main_2f.interactive.svg'
+    },
+    { 
+      id: 'cancer_1f', 
+      building: '암센터', 
+      floor: '1층', 
+      name: '암센터 1층',
+      svgPath: '/images/maps/cancer_1f.interactive.svg'
+    },
+    { 
+      id: 'cancer_2f', 
+      building: '암센터', 
+      floor: '2층', 
+      name: '암센터 2층',
+      svgPath: '/images/maps/cancer_2f.interactive.svg'
+    }
+  ];
+
+  // 현재 선택된 층 정보 가져오기
+  const getCurrentFloor = () => {
+    return floors.find(f => f.id === currentFloor) || floors[0];
+  };
+
+  // 방 선택 핸들러
+  const handleRoomSelect = (roomInfo) => {
+    console.log('방 선택:', roomInfo);
+    setSelectedRoom(roomInfo);
+  };
+
+
+
+  return (
+    <div className="map-test-page">
+      {/* 페이지 헤더 */}
+      <div className="page-header">
+        <h1>🏥 병원 지도 시스템 테스트</h1>
+        <p>InteractiveMapViewer - SVG 요소 직접 활용</p>
+        <button 
+          onClick={() => setUseSimple(!useSimple)}
+          style={{ marginTop: '10px', padding: '10px', background: '#007bff', color: 'white', border: 'none', borderRadius: '5px' }}
+        >
+          {useSimple ? '고급 버전 사용' : '간단한 버전 사용'}
+        </button>
+      </div>
+
+      <div className="test-container">
+        {/* 층 선택 탭 */}
+        <div className="floor-tabs">
+          {floors.map(floor => (
+            <div
+              key={floor.id}
+              className={`floor-tab ${currentFloor === floor.id ? 'active' : ''}`}
+              onClick={() => {
+                setCurrentFloor(floor.id);
+                setSelectedRoom(null);
+              }}
+            >
+              <span className="building-badge">{floor.building}</span>
+              <span className="floor-name">{floor.floor}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 메인 콘텐츠 */}
+        <div className="main-content">
+          {/* 지도 섹션 */}
+          <div className="map-section">
+            {useSimple ? (
+              <SimpleMapViewer floorId={currentFloor} />
+            ) : (
+              <InteractiveMapViewer
+                mapUrl={getCurrentFloor().svgPath}
+                onRoomSelect={handleRoomSelect}
+              />
+            )}
+          </div>
+
+          {/* 정보 섹션 */}
+          <div className="info-section">
+            {/* 선택된 방 정보 */}
+            {selectedRoom && (
+              <div className="node-info-card">
+                <h3>📍 선택된 위치</h3>
+                <div className="info-content">
+                  <div className="info-row">
+                    <span className="info-label">ID:</span>
+                    <span className="info-value">{selectedRoom.id}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">이름:</span>
+                    <span className="info-value">{selectedRoom.name}</span>
+                  </div>
+                  <div className="info-row highlight">
+                    <span className="info-label">층:</span>
+                    <span className="info-value">{getCurrentFloor().name}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 디버그 정보 */}
+            <div className="debug-info">
+              <h3>🔧 디버그 정보</h3>
+              <div className="debug-content">
+                <p>현재 층: {currentFloor}</p>
+                <p>선택된 방: {selectedRoom?.id || '없음'}</p>
+                <p>SVG 파일: {getCurrentFloor().svgPath}</p>
+                <p>방식: Interactive SVG with Event Injection</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default MapTest;

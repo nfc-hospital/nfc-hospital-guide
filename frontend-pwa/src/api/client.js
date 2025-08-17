@@ -138,6 +138,7 @@ export const nfcAPI = {
 // 예약 관련 API
 export const appointmentAPI = {
   getAppointments: () => api.get('/appointments/'),
+  getTodaysAppointments: () => api.get('/appointments/today/'),
   getAppointmentById: (id) => api.get(`/appointments/${id}/`),
   createAppointment: (data) => api.post('/appointments/', data),
   updateAppointment: (id, data) => api.patch(`/appointments/${id}/`, data),

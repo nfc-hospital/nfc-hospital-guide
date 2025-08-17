@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import apiService from '../api/apiService';
-import { authAPI } from '../api/client';
+import { authAPI, appointmentAPI, queueAPI } from '../api/client';
 
 const useJourneyStore = create(
   devtools(
