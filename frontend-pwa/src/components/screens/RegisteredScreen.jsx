@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import useJourneyStore from '../../store/journeyStore';
 import Lottie from 'lottie-react';
 import AppointmentList from '../journey/AppointmentList';
+import ProgressBar from '../journey/ProgressBar';
+import SimpleProgressBar from '../journey/SimpleProgressBar';
 import Modal from '../common/Modal';
 import MapModal from '../common/MapModal';
 import { format, differenceInMinutes } from 'date-fns';
@@ -207,6 +209,23 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
             </div>
           </div>
         </div>
+
+        {/* 전체 진행 상황 표시 */}
+        <SimpleProgressBar 
+          patientState={user?.state || 'REGISTERED'} 
+          appointments={todaysAppointments}
+          showLabel={true}
+        />
+        
+        {/* 개별 검사 진행 상황 - 선택적 표시 */}
+        {todaysAppointments && todaysAppointments.length > 0 && (
+          <ProgressBar 
+            journeyData={{
+              patientState: user?.state || 'REGISTERED',
+              appointments: todaysAppointments
+            }}
+          />
+        )}
 
         {/* 현재 진행할 작업 카드 */}
         {current_task && (

@@ -147,14 +147,14 @@ function AppContent() {
           </Route>
         </Routes>
         
-        {/* 개발용 컴포넌트들 */}
-        {process.env.NODE_ENV === 'development' && (
+        {/* 개발용 컴포넌트들 - [테스트 버튼] */}
+        {/* {process.env.NODE_ENV === 'development' && (
           <>
-            {/* CSRF 상태 모니터 */}
-            <CSRFStatus />
+            {/* CSRF 상태 모니터 - [테스트 버튼] */}
+            {/* <CSRFStatus /> */}
             
-            {/* WebSocket 테스트 컴포넌트 */}
-            <div style={{ 
+            {/* WebSocket 테스트 컴포넌트 - [테스트 버튼] */}
+            {/* <div style={{ 
               position: 'fixed', 
               top: '10px', 
               right: '10px', 
@@ -179,7 +179,7 @@ function AppContent() {
               </details>
             </div>
           </>
-        )}
+        )} */}
         
       {/* 새로운 챗봇 시스템 */}
       <ChatbotSystem elderlyMode={elderlyMode} />

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import NFCStatus from '../NFCStatus';
+// import NFCStatus from '../NFCStatus'; // NFC 상태 표시 비활성화
 
 export default function Header() {
   const { user, logout } = useAuth();

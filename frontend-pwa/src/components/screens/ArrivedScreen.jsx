@@ -1,16 +1,26 @@
 import React, { useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
 import { useNavigate } from 'react-router-dom';
+import SimpleProgressBar from '../journey/SimpleProgressBar';
 import Modal from '../common/Modal';
 
 export default function ArrivedScreen({ taggedLocation }) {
-  const { user } = useJourneyStore();
+  const { user, todaysAppointments } = useJourneyStore();
   const navigate = useNavigate();
   const [showLocationModal, setShowLocationModal] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-20">
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* 전체 진행 상황 표시 */}
+        <div className="mb-6">
+          <SimpleProgressBar 
+            patientState={user?.state || 'ARRIVED'} 
+            appointments={todaysAppointments}
+            showLabel={true}
+          />
+        </div>
+
         {/* 환영 메시지 */}
         <div className="text-center mb-8">
           <div className="text-6xl mb-4">🏥</div>

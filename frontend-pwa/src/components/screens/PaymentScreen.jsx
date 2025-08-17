@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
+import SimpleProgressBar from '../journey/SimpleProgressBar';
 import Modal from '../common/Modal';
 
 export default function PaymentScreen({ taggedLocation }) {
@@ -25,6 +26,13 @@ export default function PaymentScreen({ taggedLocation }) {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {/* 전체 진행 상황 표시 */}
+        <SimpleProgressBar 
+          patientState={user?.state || 'PAYMENT'} 
+          appointments={todaysAppointments}
+          showLabel={true}
+        />
+
         {/* NFC 태그 위치 정보 표시 */}
         {taggedLocation && (
           <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 animate-fade-in">

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
 import QueueStatus from '../journey/QueueStatus';
 import ProgressBar from '../journey/ProgressBar';
+import SimpleProgressBar from '../journey/SimpleProgressBar';
 import MapModal from '../common/MapModal';
 import { useRealtimeQueues } from '../../hooks/useRealtimeQueues';
 import { format } from 'date-fns';
@@ -90,6 +91,13 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+        {/* 전체 진행 상황 표시 */}
+        <SimpleProgressBar 
+          patientState={user?.state || 'WAITING'} 
+          appointments={todaysAppointments}
+          showLabel={true}
+        />
+
         {/* NFC 태그 위치에 따른 맞춤형 안내 */}
         {taggedLocation && activeQueue && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 animate-fade-in">
@@ -145,8 +153,8 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
           <QueueStatus queue={activeQueue} />
         )}
 
-        {/* 진행 상황 */}
-        <ProgressBar appointments={todaysAppointments} />
+        {/* 개별 검사 진행 상황 - 필요시 주석 해제 */}
+        {/* <ProgressBar appointments={todaysAppointments} /> */}
 
         {/* 현재 진행 중인 작업 카드 */}
         {current_task ? (

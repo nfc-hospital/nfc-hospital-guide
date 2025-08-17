@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
+import SimpleProgressBar from '../journey/SimpleProgressBar';
 
 export default function CalledScreen() {
   const { user, currentQueues, todaysAppointments } = useJourneyStore();
@@ -56,6 +57,15 @@ export default function CalledScreen() {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* 전체 진행 상황 표시 */}
+        <div className="mb-6">
+          <SimpleProgressBar 
+            patientState={user?.state || 'CALLED'} 
+            appointments={todaysAppointments}
+            showLabel={true}
+          />
+        </div>
+
         {examInfo && (
           <div className="bg-white rounded-3xl shadow-xl p-8 mb-6 
                         transform scale-105 transition-transform">
