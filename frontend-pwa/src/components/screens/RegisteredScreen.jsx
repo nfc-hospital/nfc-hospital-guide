@@ -7,10 +7,12 @@ import ProgressBar from '../journey/ProgressBar';
 import SimpleProgressBar from '../journey/SimpleProgressBar';
 import Modal from '../common/Modal';
 import MapModal from '../common/MapModal';
+import SlideNavigation from '../common/SlideNavigation';
 import { format, differenceInMinutes } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import CurrentTaskCard from '../journey/CurrentTaskCard';
 import UpcomingTasksCard from '../journey/UpcomingTasksCard';
+import { calculateNFCDistance, getDestinationByState, getInitialSlideIndex, generateNavigationKeywords } from '../../utils/nfcLocation';
 
 // Lottie 애니메이션 데이터 (체크마크)
 const checkmarkAnimation = {
@@ -82,6 +84,13 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
     apt.status === 'pending' || apt.status === 'waiting'
   ) || current_task;
 
+  // NFC 위치 판별 및 슬라이드 설정
+  const nextExam = current_task?.exam || todaysAppointments?.[0]?.exam;
+  const destination = getDestinationByState('REGISTERED', nextExam);
+  const locationInfo = taggedLocation ? calculateNFCDistance(taggedLocation, destination) : { isNearby: false };
+  const initialSlide = getInitialSlideIndex(locationInfo.isNearby);
+  const navigationKeywords = generateNavigationKeywords(taggedLocation, destination);
+
   useEffect(() => {
     const timer = setTimeout(() => setShowAnimation(false), 3000);
     return () => clearTimeout(timer);
@@ -148,134 +157,150 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        {/* NFC 태그 위치에 따른 맞춤형 안내 */}
-        {taggedLocation && (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 animate-fade-in">
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">📍</span>
-              <div className="flex-1">
-                <p className="font-semibold text-green-900">
-                  현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
-                </p>
-                {(() => {
-                  // 다음 검사 확인
-                  const nextAppointment = todaysAppointments?.find(apt => 
-                    apt.status === 'pending' || apt.status === 'waiting'
-                  );
-                  
-                  if (nextAppointment?.exam) {
-                    const isSameLocation = 
-                      taggedLocation.building === nextAppointment.exam.building &&
-                      taggedLocation.floor === parseInt(nextAppointment.exam.floor);
-                    
-                    const timeUntil = differenceInMinutes(
-                      new Date(nextAppointment.scheduled_at),
-                      new Date()
-                    );
-                    
-                    if (isSameLocation) {
-                      return (
-                        <p className="text-green-700 mt-1">
-                          ✅ 다음 검사실이 같은 층에 있습니다. 
-                          {timeUntil > 10 ? `약 ${timeUntil}분 후에 검사가 시작됩니다.` : '곧 검사가 시작됩니다.'}
-                        </p>
-                      );
-                    } else {
-                      return (
-                        <p className="text-green-700 mt-1">
-                          다음 검사는 {nextAppointment.exam.building} {nextAppointment.exam.floor}층에 있습니다.
-                          {timeUntil > 20 ? ' 여유롭게 이동하셔도 됩니다.' : ' 곧 이동하셔야 합니다.'}
-                        </p>
-                      );
-                    }
-                  } else {
-                    return (
-                      <p className="text-green-700 mt-1">
-                        접수가 완료되었습니다. 검사 일정을 확인해주세요.
-                      </p>
-                    );
-                  }
-                })()}
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-3xl">ℹ️</span>
-            <div>
-              <h3 className="font-semibold text-blue-900">오늘의 안내</h3>
-              <p className="text-blue-800 mt-1">
-                각 검사 시간 10분 전까지 해당 검사실 앞에서 대기해주세요.
-                검사 준비사항은 아래 일정을 터치하여 확인하실 수 있습니다.
-              </p>
-            </div>
-          </div>
+      <div className="max-w-4xl mx-auto px-4 py-6">
+        {/* 전체 진행 상황 표시 - 고정 */}
+        <div className="mb-4">
+          <SimpleProgressBar 
+            patientState={user?.state || 'REGISTERED'} 
+            appointments={todaysAppointments}
+            showLabel={true}
+          />
         </div>
 
-        {/* 전체 진행 상황 표시 */}
-        <SimpleProgressBar 
-          patientState={user?.state || 'REGISTERED'} 
-          appointments={todaysAppointments}
-          showLabel={true}
-        />
-        
-        {/* 개별 검사 진행 상황 - 선택적 표시 */}
-        {todaysAppointments && todaysAppointments.length > 0 && (
-          <ProgressBar 
-            journeyData={{
-              patientState: user?.state || 'REGISTERED',
-              appointments: todaysAppointments
-            }}
-          />
-        )}
+        <div className="h-[calc(100vh-200px)]">
+          <SlideNavigation 
+            defaultSlide={initialSlide}
+            showDots={true}
+          >
+            {/* 슬라이드 1: 검사 준비사항 및 안내 */}
+            <div className="h-full overflow-y-auto py-6 space-y-6">
+              {/* NFC 태그 위치에 따른 맞춤형 안내 */}
+              {taggedLocation && (
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 animate-fade-in">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">📍</span>
+                    <div className="flex-1">
+                      <p className="font-semibold text-green-900">
+                        현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
+                      </p>
+                      <p className="text-green-700 mt-1">
+                        {locationInfo.isNearby 
+                          ? '✅ 검사실 근처에 계십니다. 준비사항을 확인해주세요.'
+                          : '📍 위치 정보를 확인했습니다. 검사실 길찾기를 위해 다음 화면을 확인하세요.'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-        {/* 현재 진행할 작업 카드 */}
-        {current_task && (
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              지금 해야 할 일
-            </h2>
-            <CurrentTaskCard appointment={current_task} />
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-3xl">ℹ️</span>
+                  <div>
+                    <h3 className="font-semibold text-blue-900">오늘의 안내</h3>
+                    <p className="text-blue-800 mt-1">
+                      각 검사 시간 10분 전까지 해당 검사실 앞에서 대기해주세요.
+                      검사 준비사항은 아래에서 확인하실 수 있습니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            {/* 현재 진행할 작업 카드 */}
+            {current_task && (
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                  지금 해야 할 일
+                </h2>
+                <CurrentTaskCard appointment={current_task} />
+              </div>
+            )}
+
+            {/* 예정된 작업 카드 */}
+            {upcoming_tasks && upcoming_tasks.length > 0 && (
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                  오늘의 남은 일정
+                </h2>
+                <UpcomingTasksCard appointments={upcoming_tasks} />
+              </div>
+            )}
           </div>
-        )}
 
-        {/* 예정된 작업 카드 */}
-        {upcoming_tasks && upcoming_tasks.length > 0 && (
-          <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              오늘의 남은 일정
+          {/* 슬라이드 2: 지도 및 길찾기 */}
+          <div className="h-full overflow-y-auto py-6 space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">
+              검사실 위치 안내
             </h2>
-            <UpcomingTasksCard appointments={upcoming_tasks} />
-          </div>
-        )}
 
-        <div className="grid grid-cols-2 gap-4">
-          <button 
-            onClick={() => navigate('/my-exams')}
-            className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
-                         hover:shadow-md transition-all duration-300 text-left group">
-            <span className="text-3xl">📋</span>
-            <h3 className="text-lg font-semibold text-gray-900 mt-2 
-                         group-hover:text-blue-600 transition-colors">
-              내 검사 목록
-            </h3>
-            <p className="text-gray-600 mt-1">모든 검사 내역 보기</p>
-          </button>
-          
-          <button 
-            onClick={() => setIsMapModalOpen(true)}
-            className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
-                         hover:shadow-md transition-all duration-300 text-left group">
-            <span className="text-3xl">🗺️</span>
-            <h3 className="text-lg font-semibold text-gray-900 mt-2 
-                         group-hover:text-blue-600 transition-colors">
-              병원 지도
-            </h3>
-            <p className="text-gray-600 mt-1">검사실 위치 미리보기</p>
-          </button>
+            {/* [NAVIGATION-COMPONENT] 지도 컴포넌트가 들어갈 자리 */}
+            <div className="bg-white rounded-2xl shadow-lg border-2 border-dashed border-gray-300 p-8 text-center">
+              <div className="text-6xl mb-4">🗺️</div>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">
+                [NAVIGATION-COMPONENT]
+              </h3>
+              <p className="text-gray-600 mb-4">
+                실시간 병원 지도 컴포넌트가 여기에 표시됩니다
+              </p>
+              
+              {destination && (
+                <div className="bg-blue-50 rounded-xl p-4 mb-4">
+                  <p className="text-sm text-blue-600 mb-1">목적지</p>
+                  <p className="text-lg font-bold text-blue-900">
+                    {destination.building} {destination.floor}층 {destination.room}
+                  </p>
+                  <p className="text-blue-700">{destination.description}</p>
+                </div>
+              )}
+
+              {taggedLocation && (
+                <div className="bg-green-50 rounded-xl p-4">
+                  <p className="text-sm text-green-600 mb-1">현재 위치</p>
+                  <p className="text-lg font-bold text-green-900">
+                    {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
+                  </p>
+                </div>
+              )}
+
+              {/* [NAVIGATION-API] 검색 키워드 표시 */}
+              <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm">
+                <p className="font-mono text-gray-600">
+                  {navigationKeywords.apiKeyword}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  API 검색: {navigationKeywords.searchParams.from} → {navigationKeywords.searchParams.to}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => navigate('/my-exams')}
+                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
+                           hover:shadow-md transition-all duration-300 text-left group">
+                <span className="text-3xl">📋</span>
+                <h3 className="text-lg font-semibold text-gray-900 mt-2 
+                             group-hover:text-blue-600 transition-colors">
+                  내 검사 목록
+                </h3>
+                <p className="text-gray-600 mt-1">모든 검사 내역 보기</p>
+              </button>
+              
+              <button 
+                onClick={() => setIsMapModalOpen(true)}
+                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
+                           hover:shadow-md transition-all duration-300 text-left group">
+                <span className="text-3xl">🗺️</span>
+                <h3 className="text-lg font-semibold text-gray-900 mt-2 
+                             group-hover:text-blue-600 transition-colors">
+                  병원 전체 지도
+                </h3>
+                <p className="text-gray-600 mt-1">다른 시설 위치 보기</p>
+              </button>
+            </div>
+          </div>
+        </SlideNavigation>
         </div>
       </div>
 
