@@ -202,17 +202,30 @@ const apiService = {
       try {
         const [hospitalStatus, systemAlerts, queueData] = await Promise.all([
           api.get('/dashboard/monitor/hospital-status').catch(() => null),
-          api.get('/dashboard/monitor/system-alerts').catch(() => null),
+          api.get('/dashboard/notifications/').catch(() => null),
           api.get('/queue/dashboard/realtime-data').catch(() => null),
         ]);
 
+        // summary 데이터 추출
+        const summary = queueData?.data?.summary || {};
+
+        // 활성 환자 수 계산 (현재 병원에 있는 환자)
+        const activePatients = 
+        (summary.totalWaiting || 0) + 
+        (summary.totalCalled || 0) + 
+        (summary.totalInProgress || 0) + 
+        (summary.totalPayment || 0);
+
+        // hospitalStatus에서 시스템 상태 추출
+        const hospitalData = hospitalStatus?.data?.data || hospitalStatus?.data || {};
+
         // 데이터 통합 및 가공
         return {
-          totalPatients: hospitalStatus?.data?.totalPatients || 0,
-          avgWaitTime: queueData?.data?.averageWaitTime || 0,
-          systemStatus: hospitalStatus?.data?.systemStatus || 'unknown',
+          totalPatients: activePatients,  // 활성 환자 수로 변경
+          avgWaitTime: Math.round(summary.avgWaitTime || 0),  // 반올림 처리
+          systemStatus: hospitalData.systemStatus || 'normal',
           urgentAlerts: systemAlerts?.data?.alerts || [],
-          queueSummary: queueData?.data || {},
+          queueSummary: summary,  // 상태별 상세 데이터도 포함
           lastUpdated: new Date().toISOString(),
         };
       } catch (error) {

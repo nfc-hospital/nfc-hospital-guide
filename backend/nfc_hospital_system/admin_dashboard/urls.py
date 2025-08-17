@@ -5,7 +5,10 @@ from . import views
 from .views import (
     NotificationViewSet, NotificationSettingsAPIView, 
     FCMTokenRegistrationAPIView, DeviceTokenViewSet,
-    NotificationTestAPIView
+    NotificationTestAPIView,
+    # 병원 모니터링 관련 클래스 뷰 추가
+    HospitalStatusMonitoringView,
+    SystemAlertsMonitoringView
 )
 from nfc.views import (
     tag_status_monitoring, admin_tag_list, AdminNFCTagViewSet,
@@ -20,6 +23,10 @@ router.register(r'notifications', NotificationViewSet, basename='notifications')
 router.register(r'devices', DeviceTokenViewSet, basename='notification-devices')
 
 urlpatterns = [ 
+    # 병원 모니터링 관련 API (추가)
+    path('monitor/hospital-status/', HospitalStatusMonitoringView.as_view(), name='hospital-status-monitoring'),
+    path('monitor/system-alerts/', SystemAlertsMonitoringView.as_view(), name='system-alerts-monitoring'),
+
     # 알림 관련 API (router보다 우선순위 높게 배치)
     path('notifications/settings/', NotificationSettingsAPIView.as_view(), name='notification-settings'),
     path('notifications/register/', FCMTokenRegistrationAPIView.as_view(), name='fcm-token-register'),

@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -324,3 +325,159 @@ class NotificationTestAPIView(APIView):
                 'message': '테스트 알림 발송에 실패했습니다.',
                 'success': False
             }, status=status.HTTP_400_BAD_REQUEST)
+
+# 병원 현황 모니터링 관련 뷰 (클래스 기반)
+
+class HospitalStatusMonitoringView(APIView):
+    """
+    병원 전체 현황 모니터링 API
+    GET /api/v1/dashboard/monitor/hospital-status/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """병원 전체 현황 데이터 반환"""
+        try:
+            current_time = timezone.now()
+            today_start = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # 더미 데이터 (실제 모델이 없는 경우)
+            queue_stats = {
+                'total_patients': 45,
+                'waiting_count': 12,
+                'in_progress_count': 8,
+                'completed_count': 25,
+                'avg_wait_time': 23.5
+            }
+            
+            appointment_stats = {
+                'total_appointments': 35,
+                'scheduled': 15,
+                'in_progress': 5,
+                'completed': 12,
+                'cancelled': 3
+            }
+            
+            # 부서별 현황 (더미 데이터)
+            department_stats = [
+                {'department__name': '내과', 'patient_count': 15, 'avg_wait': 25.0},
+                {'department__name': '정형외과', 'patient_count': 12, 'avg_wait': 30.0},
+                {'department__name': '소아과', 'patient_count': 8, 'avg_wait': 20.0},
+                {'department__name': '이비인후과', 'patient_count': 6, 'avg_wait': 15.0},
+                {'department__name': '피부과', 'patient_count': 4, 'avg_wait': 10.0}
+            ]
+            
+            # 시스템 상태 체크
+            system_status = 'normal'
+            urgent_issues = []
+            
+            # 대기시간이 긴 환자 체크 (더미)
+            long_wait_patients = 2
+            
+            if long_wait_patients > 0:
+                system_status = 'warning'
+                urgent_issues.append({
+                    'type': 'LONG_WAIT',
+                    'message': f'{long_wait_patients}명의 환자가 2시간 이상 대기 중',
+                    'severity': 'warning'
+                })
+            
+            # 응답 데이터 구성
+            response_data = {
+                'success': True,
+                'data': {
+                    'systemStatus': system_status,
+                    'timestamp': current_time.isoformat(),
+                    'queueStats': {
+                        'totalPatients': queue_stats.get('total_patients', 0) or 0,
+                        'waiting': queue_stats.get('waiting_count', 0) or 0,
+                        'inProgress': queue_stats.get('in_progress_count', 0) or 0,
+                        'completed': queue_stats.get('completed_count', 0) or 0,
+                        'avgWaitTime': round(queue_stats.get('avg_wait_time', 0) or 0, 1)
+                    },
+                    'appointmentStats': {
+                        'total': appointment_stats.get('total_appointments', 0) or 0,
+                        'scheduled': appointment_stats.get('scheduled', 0) or 0,
+                        'inProgress': appointment_stats.get('in_progress', 0) or 0,
+                        'completed': appointment_stats.get('completed', 0) or 0,
+                        'cancelled': appointment_stats.get('cancelled', 0) or 0
+                    },
+                    'departmentStats': department_stats,
+                    'urgentIssues': urgent_issues,
+                    'metrics': {
+                        'patientSatisfaction': 4.2,
+                        'resourceUtilization': 78,
+                        'avgServiceTime': 35
+                    }
+                }
+            }
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e),
+                'message': '병원 현황 데이터를 가져오는 중 오류가 발생했습니다.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SystemAlertsMonitoringView(APIView):
+    """
+    시스템 알림 모니터링 API
+    GET /api/v1/dashboard/monitor/system-alerts/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        """시스템 알림 조회"""
+        try:
+            current_time = timezone.now()
+            
+            # 최근 24시간 내 알림들 (더미 데이터)
+            alerts = []
+            
+            alerts.append({
+                'id': 'alert_001',
+                'type': 'QUEUE_DELAY',
+                'severity': 'warning',
+                'message': '일부 부서에서 대기 시간이 증가하고 있습니다.',
+                'timestamp': current_time.isoformat(),
+                'department': 'all'
+            })
+            
+            alerts.append({
+                'id': 'alert_002',
+                'type': 'SYSTEM_INFO',
+                'severity': 'info',
+                'message': '시스템이 정상 작동 중입니다.',
+                'timestamp': current_time.isoformat(),
+                'department': 'system'
+            })
+            
+            # 추가 알림 예시
+            if current_time.hour > 14:  # 오후 2시 이후면
+                alerts.append({
+                    'id': 'alert_003',
+                    'type': 'CAPACITY',
+                    'severity': 'info',
+                    'message': '오후 진료 시간대 정상 운영 중',
+                    'timestamp': current_time.isoformat(),
+                    'department': 'all'
+                })
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'alerts': alerts,
+                    'total': len(alerts),
+                    'timestamp': current_time.isoformat()
+                }
+            })
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e),
+                'message': '시스템 알림을 가져오는 중 오류가 발생했습니다.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

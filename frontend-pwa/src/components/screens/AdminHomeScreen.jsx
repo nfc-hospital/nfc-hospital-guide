@@ -110,7 +110,7 @@ const AdminHomeScreen = () => {
           <div className="bg-white rounded-2xl shadow-soft p-6">
             <div className="flex items-center justify-between mb-2">
               <span className="text-4xl">👥</span>
-              <span className="text-sm text-text-muted">오늘</span>
+              <span className="text-sm text-text-muted">현재</span>
             </div>
             <div className="text-3xl font-bold text-primary mb-1">
               {totalPatients}명
