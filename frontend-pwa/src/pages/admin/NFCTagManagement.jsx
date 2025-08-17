@@ -17,6 +17,12 @@ const NFCTagManagement = () => {
     search: ''
   });
 
+  // 필터 변경 감지 - 필터가 변경되면 페이지를 1로 리셋
+  useEffect(() => {
+    setCurrentPage(1); // 필터 변경 시 항상 1페이지로
+  }, [filters.is_active, filters.location, filters.search]);
+
+  // 데이터 로드
   useEffect(() => {
     loadTags();
   }, [currentPage, filters]);
@@ -24,7 +30,7 @@ const NFCTagManagement = () => {
   const loadTags = async () => {
     try {
       setLoading(true);
-      const limit = 10; // limit 변수 정의
+      const limit = 10;
       const params = {
         page: currentPage,
         limit: limit,
@@ -32,14 +38,16 @@ const NFCTagManagement = () => {
       };
       
       const response = await adminAPI.nfc.getAllTags(params);
+      
       // DRF 기본 응답 형식 처리
-      if (response.results) {
+      if (response.results !== undefined) {
         setTags(response.results);
         const totalCount = response.count || 0;
         const totalPages = Math.ceil(totalCount / limit);
         setTotalPages(totalPages || 1);
-      } else if (response.success) {
-        // APIResponse 형식 처리 (나중에 수정될 때를 위해)
+      } 
+      // APIResponse 형식 처리
+      else if (response.success) {
         setTags(response.data?.items || []);
         setTotalPages(response.data?.pagination?.totalPages || 1);
       }
@@ -71,7 +79,6 @@ const NFCTagManagement = () => {
       if (tag.is_active) {
         await adminAPI.nfc.deleteTag(tag.tag_id);
       } else {
-        // 활성화를 위해 벌크 작업 사용
         await adminAPI.nfc.bulkOperation({
           operation: 'activate',
           tag_ids: [tag.tag_id]
@@ -120,6 +127,15 @@ const NFCTagManagement = () => {
     }
   };
 
+  // 필터 변경 핸들러 - currentPage 리셋 제거 (useEffect에서 처리)
+  const handleFilterChange = (filterName, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterName]: value
+    }));
+    // setCurrentPage(1) 제거 - useEffect에서 자동 처리
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -143,7 +159,7 @@ const NFCTagManagement = () => {
           <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
             <select
               value={filters.is_active}
-              onChange={(e) => setFilters({...filters, is_active: e.target.value})}
+              onChange={(e) => handleFilterChange('is_active', e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="true">활성 태그</option>
@@ -155,7 +171,7 @@ const NFCTagManagement = () => {
               type="text"
               placeholder="태그 코드 또는 위치 검색"
               value={filters.search}
-              onChange={(e) => setFilters({...filters, search: e.target.value})}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -269,35 +285,55 @@ const NFCTagManagement = () => {
             <button
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
             >
               이전
             </button>
             
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={`px-3 py-2 border rounded-md ${
-                  currentPage === page
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {page}
-              </button>
-            ))}
+            {/* 페이지 번호 렌더링 */}
+            {(() => {
+              let pages = [];
+              const maxVisible = 5;
+              let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+              let end = Math.min(totalPages, start + maxVisible - 1);
+              
+              if (end - start + 1 < maxVisible) {
+                start = Math.max(1, end - maxVisible + 1);
+              }
+              
+              for (let i = start; i <= end; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    className={`px-3 py-2 border rounded-md ${
+                      currentPage === i
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
             
             <button
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="px-3 py-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-2 border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
             >
               다음
             </button>
           </nav>
         </div>
       )}
+
+      {/* 현재 페이지 정보 표시 */}
+      <div className="text-center mt-2 text-sm text-gray-600">
+        {totalPages > 0 && `${currentPage} / ${totalPages} 페이지`}
+      </div>
 
       {/* 태그 생성 모달 */}
       {showCreateModal && (

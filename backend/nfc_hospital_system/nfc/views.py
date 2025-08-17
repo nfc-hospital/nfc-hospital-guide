@@ -6,6 +6,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework.decorators import action
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import NotFound
 from django.utils import timezone
 from django.db import transaction
 import logging
@@ -163,6 +165,35 @@ def get_tag_info(request, tag_id):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
+class CustomNFCPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'limit'
+    max_page_size = 100
+    
+    def paginate_queryset(self, queryset, request, view=None):
+        """페이지네이션 처리 with 디버깅"""
+        page_number = request.query_params.get(self.page_query_param, 1)
+        logger.info(f"=== PAGINATION DEBUG ===")
+        logger.info(f"Requested page: {page_number}")
+        logger.info(f"Total items in queryset: {queryset.count()}")
+        logger.info(f"Page size: {self.get_page_size(request)}")
+        
+        # 총 페이지 수 계산
+        page_size = self.get_page_size(request)
+        total_items = queryset.count()
+        total_pages = (total_items + page_size - 1) // page_size if page_size > 0 else 0
+        logger.info(f"Total pages: {total_pages}")
+        
+        try:
+            result = super().paginate_queryset(queryset, request, view)
+            logger.info(f"Successfully paginated, returning {len(result) if result else 0} items")
+            return result
+        except NotFound as e:
+            logger.error(f"Pagination NotFound error: {str(e)}")
+            logger.error(f"Page {page_number} requested but only {total_pages} pages available")
+            # 페이지 2를 요청했는데 데이터가 10개 이하라면 페이지 1만 존재
+            raise e
+
 # 관리자용 API
 
 class AdminNFCTagViewSet(ModelViewSet):
@@ -177,6 +208,7 @@ class AdminNFCTagViewSet(ModelViewSet):
     queryset = NFCTag.objects.all()
     permission_classes = [permissions.IsAuthenticated]
     lookup_field = 'tag_id'
+    pagination_class = CustomNFCPagination  # 커스텀 페이지네이션 추가
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -317,36 +349,72 @@ class AdminNFCTagViewSet(ModelViewSet):
                 code="TAG_UPDATE_ERROR",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+def list(self, request, *args, **kwargs):
+    """태그 목록 조회 - 페이지네이션 지원"""
+    is_admin, error_msg = self.check_admin_permission()
+    if not is_admin:
+        return APIResponse.error(
+            message=error_msg,
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
     
-    def destroy(self, request, *args, **kwargs):
-        """NFC 태그 비활성화 (soft delete)"""
-        is_admin, error_msg = self.check_admin_permission()
-        if not is_admin:
-            return APIResponse.error(
-                message=error_msg,
-                code="FORBIDDEN",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+    try:
+        queryset = self.filter_queryset(self.get_queryset())
+        total_count = queryset.count()
+        
+        # 페이지 파라미터 확인
+        page_param = request.query_params.get('page', '1')
+        limit_param = request.query_params.get('limit', '10')
         
         try:
-            instance = self.get_object()
-            instance.is_active = False
-            instance.save(update_fields=['is_active'])
-            
-            logger.info(f"NFC tag deactivated - Admin: {request.user.user_id}, Tag: {instance.code}")
-            
-            return APIResponse.success(
-                message="NFC 태그가 비활성화되었습니다.",
-                status_code=status.HTTP_200_OK
-            )
-            
-        except Exception as e:
-            logger.error(f"NFC tag deactivation error: {str(e)}", exc_info=True)
-            return APIResponse.error(
-                message="태그 비활성화 중 오류가 발생했습니다.",
-                code="TAG_DELETE_ERROR",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            page = int(page_param)
+            limit = int(limit_param)
+        except ValueError:
+            page = 1
+            limit = 10
+        
+        # 총 페이지 수 계산
+        total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+        
+        logger.info(f"Total items: {total_count}, Page: {page}, Limit: {limit}, Total pages: {total_pages}")
+        
+        # 페이지가 범위를 벗어난 경우
+        if page > total_pages and total_count > 0:
+            # 빈 결과 반환 (DRF 스타일)
+            return Response({
+                'count': total_count,
+                'next': None,
+                'previous': f"?page={total_pages}" if total_pages > 0 else None,
+                'results': []
+            })
+        
+        # 정상적인 페이지네이션
+        paginated_page = self.paginate_queryset(queryset)
+        if paginated_page is not None:
+            serializer = self.get_serializer(paginated_page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        # 페이지네이션이 없는 경우
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+        
+    except NotFound as e:
+        # DRF의 NotFound를 우리 형식으로 변환
+        return Response({
+            'count': 0,
+            'next': None,
+            'previous': None,
+            'results': []
+        })
+    except Exception as e:
+        logger.error(f"Tag list error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="태그 목록 조회 중 오류가 발생했습니다.",
+            code="TAG_LIST_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
