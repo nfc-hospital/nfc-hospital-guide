@@ -35,262 +35,165 @@ const generateRectilinearPath = (nodes, nodeIds) => {
 const MapModal = ({ isOpen, onClose, mapConfig, destinations, title }) => {
   const [activePath, setActivePath] = useState(null);
   const [selectedDestination, setSelectedDestination] = useState(null);
+  const [currentStep, setCurrentStep] = useState('select'); // 'select' or 'map'
 
   if (!isOpen) return null;
 
   const handleDestinationClick = (destination) => {
+    setSelectedDestination(destination.label);
+    
     const pathName = destination.pathName;
     const nodeIds = mapConfig?.paths?.[pathName];
     
     if (nodeIds && mapConfig?.nodes) {
       const pathString = generateRectilinearPath(mapConfig.nodes, nodeIds);
       setActivePath(pathString);
-      setSelectedDestination(destination.label);
+      setCurrentStep('map'); // 지도 화면으로 전환
     }
+  };
+
+  const handleBack = () => {
+    setCurrentStep('select');
+    setActivePath(null);
   };
 
   const handleClose = () => {
     setActivePath(null);
     setSelectedDestination(null);
+    setCurrentStep('select');
     onClose();
   };
 
   return (
     <div 
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
+      className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[1000] p-4"
       onClick={handleClose}
     >
       <div 
-        style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          display: 'flex',
-          maxWidth: '95vw',
-          maxHeight: '90vh',
-          overflow: 'hidden',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-        }}
+        className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
-        {/* 목적지 선택 사이드바 */}
-        <div style={{ 
-          padding: '24px',
-          borderRight: '1px solid #e5e7eb',
-          width: '280px',
-          backgroundColor: '#f9fafb',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          <h3 style={{ 
-            margin: '0 0 8px 0',
-            fontSize: '18px',
-            fontWeight: '600',
-            color: '#111827'
-          }}>
-            목적지 선택
-          </h3>
-          <p style={{
-            margin: '0 0 20px 0',
-            fontSize: '14px',
-            color: '#6b7280'
-          }}>
-            가고 싶은 장소를 선택하세요
-          </p>
-          
-          <div style={{ 
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            flex: 1,
-            overflowY: 'auto'
-          }}>
-            {destinations && destinations.map(dest => (
+        {/* Step 1: 목적지 선택 화면 */}
+        {currentStep === 'select' && (
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
+                어디로 가시나요?
+              </h2>
               <button 
-                key={dest.pathName}
-                onClick={() => handleDestinationClick(dest)}
-                style={{ 
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: selectedDestination === dest.label ? '2px solid #3b82f6' : '1px solid #d1d5db',
-                  backgroundColor: selectedDestination === dest.label ? '#eff6ff' : 'white',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                  transition: 'all 0.2s',
-                  fontSize: '14px',
-                  fontWeight: selectedDestination === dest.label ? '600' : '400',
-                  color: selectedDestination === dest.label ? '#1d4ed8' : '#374151'
-                }}
-                onMouseEnter={e => {
-                  if (selectedDestination !== dest.label) {
-                    e.target.style.backgroundColor = '#f3f4f6';
-                  }
-                }}
-                onMouseLeave={e => {
-                  if (selectedDestination !== dest.label) {
-                    e.target.style.backgroundColor = 'white';
-                  }
-                }}
+                onClick={handleClose}
+                className="text-3xl text-gray-600 hover:text-gray-900 p-1"
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '18px' }}>{dest.icon || '📍'}</span>
-                  <div>
-                    <div style={{ fontWeight: '500' }}>{dest.label}</div>
+                ×
+              </button>
+            </div>
+            
+            <p className="text-sm sm:text-base text-gray-600 mb-6">
+              목적지를 선택하면 현재 위치에서 가는 경로를 안내해드립니다.
+            </p>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto">
+              {destinations && destinations.map(dest => (
+                <button 
+                  key={dest.pathName}
+                  onClick={() => handleDestinationClick(dest)}
+                  className="flex items-center gap-4 p-4 bg-white border-2 border-gray-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 text-left"
+                >
+                  <span className="text-2xl">{dest.icon || '📍'}</span>
+                  <div className="flex-1">
+                    <div className="font-semibold text-gray-900">
+                      {dest.label}
+                    </div>
                     {dest.description && (
-                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                      <div className="text-sm text-gray-500 mt-1">
                         {dest.description}
                       </div>
                     )}
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
-          
-          {selectedDestination && (
-            <div style={{
-              marginTop: '16px',
-              padding: '12px',
-              backgroundColor: '#dcfce7',
-              borderRadius: '8px',
-              border: '1px solid #86efac'
-            }}>
-              <p style={{ margin: 0, fontSize: '13px', color: '#166534' }}>
-                ✅ 선택됨: <strong>{selectedDestination}</strong>
-              </p>
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              ))}
             </div>
-          )}
-        </div>
-        
-        {/* 지도 표시 영역 */}
-        <div style={{ 
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          <div style={{ 
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
-            <h2 style={{ 
-              margin: 0,
-              fontSize: '24px',
-              fontWeight: '600',
-              color: '#111827'
-            }}>
-              {title || '병원 지도'}
-            </h2>
-            <button 
-              onClick={handleClose}
-              style={{ 
-                fontSize: '28px',
-                border: 'none',
-                background: 'transparent',
-                cursor: 'pointer',
-                color: '#6b7280',
-                padding: '0 8px',
-                lineHeight: '1'
-              }}
-            >
-              ×
-            </button>
           </div>
-          
-          <div className="map-area" style={{ 
-            position: 'relative',
-            width: '800px',
-            height: '600px',
-            border: '2px solid #e5e7eb',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            backgroundColor: '#ffffff'
-          }}>
-            <InteractiveMapViewer mapUrl={mapConfig?.url || '/images/maps/main_1f.interactive.svg'} />
-            
-            {activePath && (
-              <svg 
-                style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  pointerEvents: 'none',
-                  zIndex: 10 
-                }}
-                preserveAspectRatio="xMidYMid meet"
-                viewBox={mapConfig?.viewBox || "0 0 900 600"}
-              >
-                <defs>
-                  <marker 
-                    id="arrowhead"
-                    viewBox="0 0 10 10"
-                    refX="8"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto"
-                  >
-                    <polygon 
-                      points="0,0 10,5 0,10"
-                      fill="#0066ff"
-                    />
-                  </marker>
-                </defs>
-                
-                {/* 경로 애니메이션 */}
-                <path 
-                  d={activePath}
-                  stroke="#0066ff"
-                  strokeWidth="4"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  markerEnd="url(#arrowhead)"
-                  strokeDasharray="8,4"
-                  style={{ 
-                    animation: 'dash 30s linear infinite'
-                  }}
-                />
-              </svg>
-            )}
-            
-            {!activePath && (
-              <div style={{
-                position: 'absolute',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                padding: '20px 32px',
-                borderRadius: '12px',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-                textAlign: 'center'
-              }}>
-                <p style={{
-                  margin: 0,
-                  fontSize: '16px',
-                  color: '#6b7280',
-                  fontWeight: '500'
-                }}>
-                  ← 왼쪽에서 목적지를 선택하세요
-                </p>
+        )}
+
+        {/* Step 2: 지도 화면 */}
+        {currentStep === 'map' && (
+          <div className="flex flex-col h-full">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={handleBack}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
+                    {selectedDestination} 경로 안내
+                  </h2>
+                  <p className="text-sm text-gray-600">정문에서 출발</p>
+                </div>
               </div>
-            )}
+              <button 
+                onClick={handleClose}
+                className="text-2xl text-gray-600 hover:text-gray-900 p-2"
+              >
+                ×
+              </button>
+            </div>
+            
+            <div className="relative flex-1 p-4">
+              <div className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden">
+                <InteractiveMapViewer mapUrl={mapConfig?.url || '/images/maps/main_1f.interactive.svg'} />
+                
+                {activePath && (
+                  <svg 
+                    className="absolute inset-0 w-full h-full pointer-events-none z-10"
+                    preserveAspectRatio="xMidYMid meet"
+                    viewBox={mapConfig?.viewBox || "0 0 900 600"}
+                  >
+                    <defs>
+                      <marker 
+                        id="arrowhead"
+                        viewBox="0 0 10 10"
+                        refX="8"
+                        refY="5"
+                        markerWidth="6"
+                        markerHeight="6"
+                        orient="auto"
+                      >
+                        <polygon 
+                          points="0,0 10,5 0,10"
+                          fill="#0066ff"
+                        />
+                      </marker>
+                    </defs>
+                    
+                    {/* 경로 애니메이션 */}
+                    <path 
+                      d={activePath}
+                      stroke="#0066ff"
+                      strokeWidth="4"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      markerEnd="url(#arrowhead)"
+                      strokeDasharray="8,4"
+                      style={{ 
+                        animation: 'dash 30s linear infinite'
+                      }}
+                    />
+                  </svg>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

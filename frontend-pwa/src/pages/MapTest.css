@@ -1,19 +1,23 @@
-/* MapTest 페이지 스타일 */
+/* frontend-pwa/src/pages/MapTest.css */
+
 .map-test-page {
-  min-height: 100vh;
-  background: #f9fafb;
-  padding: 20px;
+  padding: 16px;
+  width: 100%;
+  max-width: 1200px; /* 데스크톱에서 너무 커지지 않도록 최대 너비 설정 */
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-header {
   text-align: center;
-  margin-bottom: 30px;
+  margin-bottom: 20px;
 }
 
 .page-header h1 {
-  font-size: 2rem;
+  font-size: 1.8rem;
   color: #1f2937;
-  margin: 0 0 10px 0;
+  margin: 0 0 8px 0;
 }
 
 .subtitle {
@@ -22,21 +26,30 @@
   margin: 0;
 }
 
-/* 통합 컨트롤 버튼 스타일 */
 .controls {
   display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 24px;
   flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px;
+  background-color: #f9fafb;
+  border-radius: 12px;
+  justify-content: center;
 }
 
-/* 통합 맵 컨트롤 버튼 */
+.control-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 모든 버튼에 적용될 기본 스타일 */
 .map-control-button {
-  padding: 12px 24px;
+  padding: 10px 16px;
   border: none;
-  border-radius: 10px;
-  font-size: 1rem;
+  border-radius: 8px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -125,19 +138,27 @@
   box-shadow: none !important;
 }
 
-/* 추가 호버 스타일은 각 변형 클래스에서 처리 */
+.path-info {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: #4b5563;
+  text-align: center;
+}
 
 /* 메인 콘텐츠 */
 .main-content {
-  max-width: 1400px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 300px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
   gap: 20px;
 }
 
+/* --- 반응형 지도 영역 --- */
 .map-area {
   position: relative;
+  width: 100%;
+  /* 900:600 (3:2) 비율을 유지하기 위한 설정 */
+  aspect-ratio: 900 / 600; 
   background: white;
   border-radius: 12px;
   padding: 20px;
@@ -167,7 +188,7 @@
   border-radius: 12px;
   padding: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  height: fit-content;
+  width: 100%;
 }
 
 .selected-panel h3 {
@@ -208,31 +229,111 @@
   font-weight: 500;
 }
 
-/* 반응형 디자인 */
+/* --- 태블릿을 위한 미디어 쿼리 --- */
 @media (max-width: 1024px) {
-  .main-content {
-    grid-template-columns: 1fr;
+  .map-test-page {
+    padding: 12px;
   }
   
-  .selected-panel {
-    order: -1;
-  }
-}
-
-@media (max-width: 640px) {
-  .map-test-page {
-    padding: 10px;
+  .page-header h1 {
+    font-size: 1.6rem;
   }
   
   .controls {
-    flex-wrap: wrap;
+    padding: 10px;
+  }
+}
+
+/* --- 화면이 작은 모바일 기기를 위한 미디어 쿼리 --- */
+@media (max-width: 768px) {
+  .map-test-page {
+    padding: 8px;
+  }
+
+  .page-header h1 {
+    font-size: 1.4rem;
+  }
+
+  .subtitle {
+    font-size: 0.85rem;
+  }
+
+  .controls {
+    flex-direction: column;
+    padding: 8px;
     gap: 8px;
   }
-  
+
+  .control-group {
+    justify-content: center;
+    width: 100%;
+  }
+
   .map-control-button {
+    font-size: 13px;
+    padding: 8px 12px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .map-area {
+    padding: 10px;
+  }
+
+  .path-overlay {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+  }
+
+  .selected-panel {
+    padding: 15px;
+  }
+
+  .selected-panel h3 {
+    font-size: 1rem;
+  }
+
+  .info-label {
+    font-size: 0.85rem;
+  }
+
+  .info-value {
     font-size: 0.9rem;
-    padding: 10px 16px;
-    flex: 1 1 calc(50% - 4px);
-    min-width: 140px;
+  }
+}
+
+/* --- 매우 작은 모바일 기기를 위한 미디어 쿼리 --- */
+@media (max-width: 480px) {
+  .map-test-page {
+    padding: 4px;
+  }
+
+  .page-header h1 {
+    font-size: 1.2rem;
+  }
+
+  .subtitle {
+    font-size: 0.8rem;
+  }
+
+  .controls {
+    padding: 6px;
+  }
+
+  .map-control-button {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  .map-area {
+    padding: 8px;
+    border-radius: 8px;
+  }
+
+  .selected-panel {
+    padding: 12px;
+    margin-top: 12px;
   }
 }
