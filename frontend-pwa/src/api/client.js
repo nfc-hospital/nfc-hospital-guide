@@ -310,14 +310,16 @@ export const adminAPI = {
     getTagHistory: (tagId) => api.get(`/dashboard/nfc/tags/${tagId}/history/`),
     createTagExamMapping: (data) => api.post('/dashboard/nfc/tag-exam-mapping/', data),
     deleteTagExamMapping: (mappingId) => api.delete(`/dashboard/tags/mapping/${mappingId}`),
+    // 오늘 스캔 통계 API 추가
+    getTodayScans: () => api.get('/queue/nfc/today-scans/'),
   },
 
   // 대기열 모니터링
   queue: {
-    getRealTimeData: () => api.get('/queue/admin/realtime-data/'),
-    getByDepartment: (params) => api.get('/queue/admin/by-department/', { params }),
-    updateAlertSettings: (data) => api.put('/queue/admin/alert-settings/', data),
-    getMetrics: (params) => api.get('/queue/admin/metrics/', { params }),
+    getRealTimeData: () => api.get('/queue/dashboard/realtime-data/'),
+    getByDepartment: (params) => api.get('/queue/dashboard/by-department/', { params }),
+    updateAlertSettings: (data) => api.put('/queue/dashboard/alert-settings/', data),
+    getMetrics: (params) => api.get('/queue/dashboard/metrics/', { params }),
     callPatient: (data) => api.post('/queue/medical/call-patient/', data),
     getMissingPatients: () => api.get('/queue/medical/missing-patients/'),
   },
@@ -331,7 +333,7 @@ export const adminAPI = {
     getBottlenecks: () => api.get('/analytics/bottlenecks/'),
     generateCustomReport: (data) => api.post('/analytics/custom-report/', data),
     exportData: (params) => api.get('/analytics/export/', { params, responseType: 'blob' }),
-  },
+  },                                                                                                   
 };
 
 // WebSocket 연결 관리

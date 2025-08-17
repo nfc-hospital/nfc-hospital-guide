@@ -12,6 +12,7 @@ import logging
 
 from .models import NFCTag, TagLog, NFCTagExam
 from appointments.models import Exam
+from p_queue.models import Queue, PatientState
 from .serializers import (
     NFCTagSerializer, NFCTagDetailSerializer, NFCScanRequestSerializer,
     NFCScanResponseSerializer, TagLogSerializer, 
@@ -994,5 +995,99 @@ def tag_assignment_history(request, tag_id):
         return APIResponse.error(
             message="태그 할당 이력 조회 중 오류가 발생했습니다.",
             code="HISTORY_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_today_scans(request):
+    """
+    오늘 NFC 스캔 통계 조회
+    GET /api/v1/queue/nfc/today-scans/
+    """
+    try:
+        # 권한 확인 (Staff 이상)
+        admin_user = request.user
+        if admin_user.role not in ['super', 'dept', 'staff']:
+            return APIResponse.error(
+                message="권한이 부족합니다.",
+                code="FORBIDDEN",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        today = timezone.now().date()
+        
+        # 오늘 생성된 Queue 수 (NFC 스캔으로 대기열 등록)
+        today_queues = Queue.objects.filter(
+            created_at__date=today
+        ).count()
+        
+        # 오늘 호출된 환자 수 (called_at 필드 활용)
+        today_called = Queue.objects.filter(
+            called_at__date=today
+        ).count()
+        
+        # 오늘 완료된 검사 수
+        today_completed = Queue.objects.filter(
+            updated_at__date=today,
+            state='completed'
+        ).count()
+        
+        # PatientState 모델에서 오늘 업데이트된 위치 변경 수
+        # (NFC 태그로 위치가 업데이트되는 경우)
+        location_updates = PatientState.objects.filter(
+            updated_at__date=today,
+            current_location__isnull=False
+        ).count()
+        
+        # 시간대별 스캔 통계 (Queue 생성 기준)
+        hourly_scans = []
+        for hour in range(24):
+            hour_count = Queue.objects.filter(
+                created_at__date=today,
+                created_at__hour=hour
+            ).count()
+            
+            hourly_scans.append({
+                'hour': hour,
+                'count': hour_count
+            })
+        
+        # 검사실별 스캔 통계
+        exam_scans = Queue.objects.filter(
+            created_at__date=today
+        ).values('exam__title').annotate(
+            scan_count=Count('queue_id')
+        ).order_by('-scan_count')[:5]
+        
+        # 전체 스캔 수 계산 (대기열 생성 + 위치 업데이트)
+        total_scans = today_queues + location_updates
+        
+        # 피크 시간 계산
+        peak_hour_data = max(hourly_scans, key=lambda x: x['count']) if hourly_scans else None
+        
+        return APIResponse.success(
+            data={
+                'totalScans': total_scans,
+                'date': today.isoformat(),
+                'breakdown': {
+                    'newQueues': today_queues,
+                    'calledPatients': today_called,
+                    'completedExams': today_completed,
+                    'locationUpdates': location_updates
+                },
+                'hourlyScans': hourly_scans,
+                'topExams': list(exam_scans),
+                'peakHour': peak_hour_data['hour'] if peak_hour_data else None,
+                'peakHourCount': peak_hour_data['count'] if peak_hour_data else 0
+            },
+            message="오늘 NFC 스캔 통계를 조회했습니다."
+        )
+        
+    except Exception as e:
+        logger.error(f"Today scans error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="오늘 스캔 통계 조회 중 오류가 발생했습니다.",
+            code="TODAY_SCANS_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

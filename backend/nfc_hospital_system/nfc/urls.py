@@ -20,6 +20,7 @@ urlpatterns = [
     
     # 관리자용 API (기존 유지)
     # path('admin/nfc/tags/list/', views.admin_tag_list, name='admin-tag-list'),
+    path('nfc/today-scans/', views.get_today_scans, name='nfc-today-scans'),
     
     # 검사-태그 매핑 API (새로 추가되거나 수정된 부분)
     path('admin/nfc/tag-exam-mapping/', views.nfc_tag_exam_mapping_create, name='nfc_tag_exam_mapping_create'), # POST

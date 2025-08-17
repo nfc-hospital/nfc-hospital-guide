@@ -200,32 +200,52 @@ const apiService = {
     // 종합 대시보드 데이터 (여러 API를 한번에 호출)
     getSummary: async () => {
       try {
-        const [hospitalStatus, systemAlerts, queueData] = await Promise.all([
-          api.get('/dashboard/monitor/hospital-status').catch(() => null),
-          api.get('/dashboard/notifications/').catch(() => null),
-          api.get('/queue/dashboard/realtime-data').catch(() => null),
+        const [queueRealtimeData, notifications] = await Promise.all([
+          api.get('/queue/dashboard/realtime-data/').catch((error) => {
+            console.warn('⚠️ Queue realtime data error:', error.message);
+            return null;
+          }),
+          api.get('/dashboard/notifications/').catch((error) => {
+            console.warn('⚠️ Notifications API error:', error.message);
+            return { data: [] };
+          })
         ]);
-
-        // summary 데이터 추출
-        const summary = queueData?.data?.summary || {};
-
-        // 활성 환자 수 계산 (현재 병원에 있는 환자)
+    
+        // realtime-data API에서 summary 추출
+        const summary = queueRealtimeData?.data?.summary || {};
+        
+        // 활성 환자 수 계산 (PatientState 기반 데이터 사용)
         const activePatients = 
-        (summary.totalWaiting || 0) + 
-        (summary.totalCalled || 0) + 
-        (summary.totalInProgress || 0) + 
-        (summary.totalPayment || 0);
-
-        // hospitalStatus에서 시스템 상태 추출
-        const hospitalData = hospitalStatus?.data?.data || hospitalStatus?.data || {};
-
-        // 데이터 통합 및 가공
+          (summary.totalWaiting || 0) + 
+          (summary.totalCalled || 0) + 
+          (summary.totalInProgress || 0) + 
+          (summary.totalPayment || 0);
+    
+        // notifications 처리
+        const notificationsList = notifications?.data?.results || notifications?.data || [];
+        const urgentAlerts = notificationsList
+          .filter(notif => 
+            notif.type === 'urgent' || 
+            notif.type === 'system' ||
+            notif.priority === 'high'
+          )
+          .slice(0, 10)
+          .map(notif => ({
+            id: notif.notification_id || notif.id,
+            type: notif.priority === 'high' ? 'error' : 'warning',
+            message: notif.message || notif.title || '알림',
+            time: new Date(notif.created_at).toLocaleTimeString('ko-KR'),
+            created_at: notif.created_at
+          }));
+    
         return {
-          totalPatients: activePatients,  // 활성 환자 수로 변경
-          avgWaitTime: Math.round(summary.avgWaitTime || 0),  // 반올림 처리
-          systemStatus: hospitalData.systemStatus || 'normal',
-          urgentAlerts: systemAlerts?.data?.alerts || [],
-          queueSummary: summary,  // 상태별 상세 데이터도 포함
+          totalPatients: activePatients,
+          totalWaiting: summary.totalWaiting || 0,  // ✅ 추가
+          totalCalled: summary.totalCalled || 0,     // ✅ 추가
+          avgWaitTime: Math.round(summary.avgWaitTime || 0),
+          systemStatus: 'normal',  // hospital-status API가 없으므로 기본값
+          urgentAlerts: urgentAlerts,
+          queueSummary: summary,
           lastUpdated: new Date().toISOString(),
         };
       } catch (error) {

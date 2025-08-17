@@ -21,34 +21,37 @@ const AdminDashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      // 여러 API를 병렬로 호출
-      const [queueData, allTags, analytics] = await Promise.all([
-        adminAPI.queue.getRealTimeData().catch(() => ({ summary: {} })),
+      const [queueResponse, allTags, todayScansData, analytics] = await Promise.all([
+        adminAPI.queue.getRealTimeData().catch(() => ({ data: { summary: {} } })),
         adminAPI.nfc.getAllTags({ limit: 100 }).catch(() => ({ results: [], count: 0 })),
+        adminAPI.nfc.getTodayScans().catch(() => ({ totalScans: 0 })),
         adminAPI.analytics.getBottlenecks().catch(() => ({ summary: {} }))
       ]);
-
-      // 활성 태그만 카운트 (results 배열에서 직접 필터링)
+  
+      // API 응답에서 실제 데이터 추출
+      const queueData = queueResponse.data || { summary: {} };  // ← 여기가 핵심!
+      
       const activeCount = allTags.results ? 
         allTags.results.filter(tag => tag.is_active === true).length : 
         0;
       
       const totalCount = allTags.count || 0;
       
-      // NFC 태그 통계 계산
       const nfcStatus = {
         summary: {
-          healthyCount: activeCount,  // 활성 태그 개수
-          totalCount: totalCount,      // 전체 태그 개수
+          healthyCount: activeCount,
+          totalCount: totalCount,
+          todayScans: todayScansData.totalScans || 0,
           errorCount: 0
         }
       };
-
+  
       setDashboardData({
-        queue: queueData,
+        queue: queueData,  // 이제 올바른 구조로 들어감
         nfc: nfcStatus,
         analytics: analytics
       });
+      
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -137,11 +140,11 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      {/* 주요 통계 카드 */}
+      {/* 주요 통계 카드 - 진행 중인 검사 제거, 오늘 NFC 스캔 추가 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="대기 중인 환자"
-          value={queueStats.totalWaiting || 0}
+          value={dashboardData?.queue?.summary?.totalWaiting || 0}
           color="blue"
           icon="👥"
         />
@@ -152,16 +155,16 @@ const AdminDashboard = () => {
           icon="📢"
         />
         <StatCard
-          title="진행 중인 검사"
-          value={queueStats.totalInProgress || 0}
+          title="활성 NFC 태그"
+          value={`${nfcStats.healthyCount || 0}/${nfcStats.totalCount || 0}`}
           color="green"
-          icon="🏥"
+          icon="🏷️"
         />
         <StatCard
-          title="활성 NFC 태그"
-          value={nfcStats.healthyCount || 0}
+          title="오늘 NFC 스캔"
+          value={nfcStats.todayScans || 0}
           color="purple"
-          icon="🏷️"
+          icon="📡"
         />
       </div>
 
@@ -242,21 +245,39 @@ const AdminDashboard = () => {
 // 통계 카드 컴포넌트
 const StatCard = ({ title, value, color, icon }) => {
   const colorClasses = {
-    blue: 'bg-blue-500 text-blue-600 bg-blue-50',
-    green: 'bg-green-500 text-green-600 bg-green-50',
-    orange: 'bg-orange-500 text-orange-600 bg-orange-50',
-    purple: 'bg-purple-500 text-purple-600 bg-purple-50',
+    blue: {
+      container: 'bg-blue-50',
+      text: 'text-blue-600',
+      icon: 'bg-blue-50'
+    },
+    green: {
+      container: 'bg-green-50',
+      text: 'text-green-600',
+      icon: 'bg-green-50'
+    },
+    orange: {
+      container: 'bg-orange-50',
+      text: 'text-orange-600',
+      icon: 'bg-orange-50'
+    },
+    purple: {
+      container: 'bg-purple-50',
+      text: 'text-purple-600',
+      icon: 'bg-purple-50'
+    }
   };
+
+  const styles = colorClasses[color] || colorClasses.blue;
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
       <div className="flex items-center">
-        <div className={`p-3 rounded-full bg-${color}-50`}>
+        <div className={`p-3 rounded-full ${styles.icon}`}>
           <span className="text-2xl">{icon}</span>
         </div>
         <div className="ml-4">
           <p className="text-sm font-medium text-gray-600">{title}</p>
-          <p className={`text-2xl font-semibold text-${color}-600`}>{value}</p>
+          <p className={`text-2xl font-semibold ${styles.text}`}>{value}</p>
         </div>
       </div>
     </div>
@@ -265,6 +286,23 @@ const StatCard = ({ title, value, color, icon }) => {
 
 // 빠른 액션 카드 컴포넌트
 const QuickActionCard = ({ title, description, link, icon, color }) => {
+  const colorClasses = {
+    blue: {
+      title: 'text-blue-600',
+      action: 'text-blue-600'
+    },
+    green: {
+      title: 'text-green-600',
+      action: 'text-green-600'
+    },
+    purple: {
+      title: 'text-purple-600',
+      action: 'text-purple-600'
+    }
+  };
+
+  const styles = colorClasses[color] || colorClasses.blue;
+
   return (
     <Link
       to={link}
@@ -272,10 +310,10 @@ const QuickActionCard = ({ title, description, link, icon, color }) => {
     >
       <div className="flex items-center space-x-3 mb-3">
         <span className="text-2xl">{icon}</span>
-        <h3 className={`text-lg font-semibold text-${color}-600`}>{title}</h3>
+        <h3 className={`text-lg font-semibold ${styles.title}`}>{title}</h3>
       </div>
       <p className="text-gray-600 text-sm">{description}</p>
-      <div className={`mt-4 text-${color}-600 text-sm font-medium`}>
+      <div className={`mt-4 text-sm font-medium ${styles.action}`}>
         자세히 보기 →
       </div>
     </Link>
