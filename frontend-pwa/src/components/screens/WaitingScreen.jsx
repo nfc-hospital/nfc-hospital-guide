@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
 import QueueStatus from '../journey/QueueStatus';
 import ProgressBar from '../journey/ProgressBar';
-import SimpleProgressBar from '../journey/SimpleProgressBar';
+import UnifiedHeader from '../common/UnifiedHeader';
 import MapModal from '../common/MapModal';
 import SlideNavigation from '../common/SlideNavigation';
 import { useRealtimeQueues } from '../../hooks/useRealtimeQueues';
@@ -10,11 +10,19 @@ import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import CurrentTaskCard from '../journey/CurrentTaskCard';
 import UpcomingTasksCard from '../journey/UpcomingTasksCard';
+import AppointmentList from '../journey/AppointmentList';
 import { calculateNFCDistance, getDestinationByState, getInitialSlideIndex, generateNavigationKeywords } from '../../utils/nfcLocation';
 
 export default function WaitingScreen({ taggedLocation, current_task, upcoming_tasks }) {
   // 기본값으로 빈 배열을 설정하여 'find' 오류를 방지
   const { user, currentQueues = [], todaysAppointments = [] } = useJourneyStore();
+  
+  // 디버깅 로그 추가
+  console.log('🔍 WaitingScreen props:');
+  console.log('  - current_task:', current_task);
+  console.log('  - upcoming_tasks:', upcoming_tasks);
+  console.log('  - todaysAppointments:', todaysAppointments);
+  console.log('  - currentQueues:', currentQueues);
   const [showPreparation, setShowPreparation] = useState(false);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [selectedFloor, setSelectedFloor] = useState('main_1f');
@@ -33,11 +41,22 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
   const currentExam = ongoingAppointment || activeQueue;
   const isOngoing = user?.state === 'ONGOING' || activeQueue?.state === 'ongoing';
 
-  // NFC 위치 판별 및 슬라이드 설정
-  const destination = getDestinationByState('WAITING', currentExam?.exam);
+  // NFC 위치 판별 및 슬라이드 설정 - 안전한 처리
+  const destination = getDestinationByState('WAITING', currentExam?.exam) || {
+    building: '본관',
+    floor: '1',
+    room: '접수처',
+    department: '일반',
+    description: '병원 안내'
+  };
   const locationInfo = taggedLocation ? calculateNFCDistance(taggedLocation, destination) : { isNearby: false };
-  const initialSlide = getInitialSlideIndex(locationInfo.isNearby);
+  const initialSlide = getInitialSlideIndex(locationInfo?.isNearby || false);
   const navigationKeywords = generateNavigationKeywords(taggedLocation, destination);
+
+  // 현재 검사 정보 enrichment
+  const enrichedCurrentTask = current_task;
+  const currentAppointment = currentExam;
+  const upcomingAppointments = upcoming_tasks;
 
   // 테스트용 경로 데이터 (층별) - 실제 복도를 따라가는 현실적인 경로
   const testPaths = {
@@ -87,26 +106,25 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      <div className="bg-white shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <h1 className="text-2xl font-bold text-gray-900">
-            {isOngoing ? '검사가 진행 중입니다' : '대기 중입니다'}
-          </h1>
-          <p className="text-lg text-gray-600 mt-1">
-            {user?.name}님, {isOngoing ? '잠시만 기다려주세요' : '곧 호출해드리겠습니다'}
-          </p>
+      <div className="bg-blue-600 shadow-lg">
+        <div className="max-w-4xl mx-auto px-6 py-6">
+          <div className="text-center">
+            <div className="mb-3">
+              <span className="text-5xl">{isOngoing ? '🏥' : '⏳'}</span>
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              {isOngoing ? '검사가 진행 중입니다' : '대기 중입니다'}
+            </h1>
+            <p className="text-xl text-blue-100 font-medium">
+              {user?.name}님, {isOngoing ? '잠시만 기다려주세요' : '곧 호출해드리겠습니다'}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* 전체 진행 상황 표시 - 고정 */}
-        <div className="mb-4">
-          <SimpleProgressBar 
-            patientState={user?.state || 'WAITING'} 
-            appointments={todaysAppointments}
-            showLabel={true}
-          />
-        </div>
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        {/* 통합 헤더 */}
+        <UnifiedHeader currentState="WAITING" />
 
         <div className="h-[calc(100vh-200px)]">
           <SlideNavigation 
@@ -114,18 +132,21 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
             showDots={true}
           >
             {/* 슬라이드 1: 대기 상태 및 준비사항 */}
-            <div className="h-full overflow-y-auto py-6 space-y-6">
+            <div className="h-full overflow-y-auto py-8 space-y-8">
 
             {/* NFC 태그 위치에 따른 맞춤형 안내 */}
             {taggedLocation && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 animate-fade-in">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">📍</span>
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-6 shadow-lg transition-all duration-300 ease-in-out">
+                <div className="flex items-start gap-4">
+                  <div className="w-16 h-16 bg-blue-100 rounded-xl 
+                              flex items-center justify-center flex-shrink-0">
+                    <span className="text-3xl">📍</span>
+                  </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-amber-900">
+                    <p className="text-xl font-semibold text-gray-900 mb-2">
                       현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
                     </p>
-                    <p className="text-amber-700 mt-1">
+                    <p className="text-lg text-gray-700 leading-relaxed">
                       {locationInfo.isNearby 
                         ? `✅ 검사실 근처에 계십니다. 대기 번호가 호출될 때까지 잠시만 기다려주세요.`
                         : '📍 검사실까지의 길찾기는 다음 화면에서 확인하세요.'
@@ -138,27 +159,32 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
 
             {/* 대기/진행 상태 카드 */}
             {activeQueue && (
-              <QueueStatus queue={activeQueue} />
+              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200 transition-all duration-300 ease-in-out hover:shadow-xl">
+                <QueueStatus queue={activeQueue} />
+              </div>
             )}
 
             {/* 현재 진행 중인 작업 카드 */}
-            {current_task ? (
-              <CurrentTaskCard appointment={current_task} />
-            ) : currentExam && (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  {isOngoing ? '현재 진행 중인 검사' : '다음 검사 정보'}
+            {enrichedCurrentTask ? (
+              <CurrentTaskCard appointment={enrichedCurrentTask} />
+            ) : currentAppointment && (
+              <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 p-6 transition-all duration-300 ease-in-out hover:shadow-xl">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                  {isOngoing ? '🏥 현재 진행 중인 검사' : '📋 다음 검사 정보'}
                 </h3>
                 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-3xl">🏥</span>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-blue-100 rounded-xl 
+                                flex items-center justify-center flex-shrink-0">
+                      <span className="text-3xl">🏥</span>
+                    </div>
                     <div>
-                      <p className="font-medium text-gray-900">
-                        {currentExam.exam?.title || '검사'}
+                      <p className="text-xl font-semibold text-gray-900">
+                        {currentAppointment.exam?.title || '검사'}
                       </p>
-                      <p className="text-gray-600">
-                        {currentExam.exam?.building} {currentExam.exam?.floor}층 {currentExam.exam?.room}
+                      <p className="text-lg text-gray-600">
+                        {currentAppointment.exam?.building} {currentAppointment.exam?.floor}층 {currentAppointment.exam?.room}
                       </p>
                     </div>
                   </div>
@@ -166,13 +192,13 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
                   {!isOngoing && (
                     <button
                       onClick={() => setShowPreparation(!showPreparation)}
-                      className="w-full mt-2 bg-blue-50 text-blue-700 rounded-xl py-3 px-4
-                               font-medium hover:bg-blue-100 transition-colors duration-200
-                               flex items-center justify-between group"
+                      className="w-full bg-blue-50 text-blue-800 border-2 border-blue-200 rounded-xl py-4 px-8
+                               text-xl font-semibold hover:bg-blue-100 transition-all duration-300 ease-in-out
+                               flex items-center justify-between group min-h-[56px]"
                     >
                       <span>검사 준비사항 확인</span>
                       <svg 
-                        className={`w-5 h-5 transition-transform duration-200 
+                        className={`w-6 h-6 transition-transform duration-300 
                                   ${showPreparation ? 'rotate-180' : ''}`}
                         fill="none" 
                         stroke="currentColor" 
@@ -185,15 +211,15 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
                   )}
 
                   {showPreparation && (
-                    <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-200">
-                      <h4 className="font-medium text-amber-900 mb-2">준비사항</h4>
-                      <ul className="space-y-2 text-amber-800">
-                        <li className="flex items-start gap-2">
-                          <span>•</span>
+                    <div className="mt-4 p-6 bg-amber-50 rounded-xl border-2 border-amber-200">
+                      <h4 className="text-xl font-semibold text-amber-800 mb-3">⚠️ 준비사항</h4>
+                      <ul className="space-y-3 text-lg text-amber-800">
+                        <li className="flex items-start gap-3">
+                          <span className="text-xl">📌</span>
                           <span>검사 전 8시간 금식이 필요합니다</span>
                         </li>
-                        <li className="flex items-start gap-2">
-                          <span>•</span>
+                        <li className="flex items-start gap-3">
+                          <span className="text-xl">💊</span>
                           <span>복용 중인 약이 있다면 의료진에게 알려주세요</span>
                         </li>
                       </ul>
@@ -203,24 +229,69 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
               </div>
             )}
 
-            {/* 예정된 작업 카드 */}
-            {upcoming_tasks && upcoming_tasks.length > 0 && (
-              <UpcomingTasksCard appointments={upcoming_tasks} />
+            {/* 진행 중일 때 다음 검사 안내 섹션 */}
+            {isOngoing && upcomingAppointments && upcomingAppointments.length > 0 && (
+              <div className="bg-blue-50 rounded-2xl shadow-lg p-6 border-2 border-blue-200">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">📌 다음 검사 안내</h3>
+                <div className="space-y-4">
+                  <div className="bg-white rounded-xl p-4 border border-gray-200">
+                    <div className="flex items-center gap-4 mb-3">
+                      <div className="w-14 h-14 bg-blue-100 rounded-xl 
+                                  flex items-center justify-center flex-shrink-0">
+                        <span className="text-2xl">🏥</span>
+                      </div>
+                      <div>
+                        <p className="text-xl font-semibold text-gray-900">
+                          {upcomingAppointments[0].exam?.title || '다음 검사'}
+                        </p>
+                        <p className="text-lg text-gray-600">
+                          예정 시간: {format(new Date(upcomingAppointments[0].scheduled_at), 'HH:mm', { locale: ko })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
+                      <p className="text-lg text-amber-800 font-medium leading-relaxed">
+                        💡 현재 검사가 끝나면 {upcomingAppointments[0].exam?.building} {upcomingAppointments[0].exam?.floor}층 {upcomingAppointments[0].exam?.room}으로 이동해주세요
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 예정된 작업 카드 - 대기 중일 때만 표시 */}
+            {!isOngoing && upcomingAppointments && upcomingAppointments.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-lg p-6 border-2 border-gray-200 transition-all duration-300 ease-in-out hover:shadow-xl">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">📅 오늘의 남은 일정</h3>
+                <UpcomingTasksCard appointments={upcomingAppointments} />
+              </div>
+            )}
+
+            {/* 오늘의 전체 검사 목록 - 진행 중일 때 표시 */}
+            {isOngoing && todaysAppointments && todaysAppointments.length > 0 && (
+              <div className="bg-white rounded-3xl shadow-xl p-8 border-2 border-gray-200">
+                <h3 className="text-3xl font-bold text-gray-900 mb-6">📋 오늘의 전체 검사</h3>
+                <AppointmentList 
+                  appointments={todaysAppointments}
+                  currentAppointmentId={currentAppointment?.appointment_id}
+                />
+              </div>
             )}
 
             {/* 자리 비움 기능 */}
             {!isOngoing && activeQueue && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
+              <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-3xl p-6 shadow-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-semibold text-yellow-900">잠시 자리를 비우시나요?</h3>
-                    <p className="text-yellow-800 text-sm mt-1">
-                      호출 시 문자로 알려드립니다
+                    <h3 className="text-2xl font-bold text-yellow-900">내 차례에 알림 받기</h3>
+                    <p className="text-xl text-yellow-800 mt-2">
+                      호출 시 알림을 보내드립니다
                     </p>
                   </div>
-                  <button className="bg-yellow-600 text-white px-4 py-2 rounded-lg
-                                   hover:bg-yellow-700 transition-colors duration-200">
-                    자리 비움
+                  <button className="bg-yellow-600 text-white px-8 py-4 rounded-2xl text-xl font-bold
+                                   hover:bg-yellow-700 transition-all duration-200 shadow-lg hover:shadow-xl
+                                   min-w-[160px]">
+                    알림 설정
                   </button>
                 </div>
               </div>
@@ -229,12 +300,12 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
             {/* 새로고침 버튼 */}
             <button 
               onClick={refresh}
-              className="w-full bg-gray-100 text-gray-700 rounded-xl py-4
-                       font-medium hover:bg-gray-200 transition-colors duration-200
-                       flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-3xl py-6
+                       text-xl font-bold hover:from-gray-200 hover:to-gray-300 transition-all duration-200
+                       flex items-center justify-center gap-3 shadow-lg hover:shadow-xl min-h-[80px]"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} 
                       d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               대기 상태 새로고침
@@ -242,8 +313,8 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
           </div>
 
           {/* 슬라이드 2: 지도 및 길찾기 */}
-          <div className="h-full overflow-y-auto py-6 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">
+          <div className="h-full overflow-y-auto py-8 space-y-8">
+            <h2 className="text-4xl font-bold text-gray-900 text-center mb-8">
               검사실 위치 안내
             </h2>
 
@@ -330,7 +401,7 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
         onClose={() => setIsMapModalOpen(false)}
         mapUrl={floorMaps[selectedFloor]}
         pathData={testPaths[selectedFloor]}
-        title={`검사실 위치 - ${currentExam?.exam?.title || '병원 지도'}`}
+        title={`검사실 위치 - ${enrichedCurrentTask?.exam?.title || '병원 지도'}`}
       />
     </div>
   );

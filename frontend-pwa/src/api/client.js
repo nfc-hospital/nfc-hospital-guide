@@ -82,16 +82,22 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // 에러 메시지 표준화
-    const errorMessage =
-      error.response?.data?.message ||
-      error.response?.data?.detail ||
-      error.message ||
-      '알 수 없는 오류가 발생했습니다.';
+    // 에러 메시지 표준화 - 안전한 처리
+    let errorMessage = '알 수 없는 오류가 발생했습니다.';
+    
+    try {
+      errorMessage = 
+        error.response?.data?.message ||
+        error.response?.data?.detail ||
+        error.message ||
+        '알 수 없는 오류가 발생했습니다.';
+    } catch (msgError) {
+      console.warn('Error message parsing failed:', msgError);
+    }
 
     return Promise.reject({
       status: error.response?.status,
-      message: errorMessage,
+      message: String(errorMessage), // 문자열로 강제 변환
       data: error.response?.data,
     });
   }

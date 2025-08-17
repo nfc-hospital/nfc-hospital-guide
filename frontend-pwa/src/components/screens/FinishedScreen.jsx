@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
 import { useNavigate } from 'react-router-dom';
-import SimpleProgressBar from '../journey/SimpleProgressBar';
+// import SimpleProgressBar from '../journey/SimpleProgressBar';
 import CompletedTaskCard from '../journey/CompletedTaskCard';
+import UnifiedHeader from '../common/UnifiedHeader';
 
 export default function FinishedScreen({ taggedLocation, completed_tasks }) {
   const { user, todaysAppointments } = useJourneyStore();
@@ -44,18 +45,15 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-50 relative">
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* 통합 헤더 - 완료 상태 표시 */}
+        <UnifiedHeader currentState="FINISHED" />
+      </div>
+      
       <div className="h-screen flex flex-col">
-        {/* 헤더: 진행 상황 바 */}
-        <div className="px-6 pt-8 pb-4">
-          <SimpleProgressBar 
-            patientState={user?.state || 'FINISHED'} 
-            appointments={todaysAppointments}
-            showLabel={true}
-          />
-        </div>
 
         {/* 슬라이드 타이틀 */}
-        <div className="px-6 pb-4">
+        <div className="px-6 pt-8 pb-4">
           <div className="flex justify-center items-center gap-3">
             {slides.map((slide, index) => (
               <button

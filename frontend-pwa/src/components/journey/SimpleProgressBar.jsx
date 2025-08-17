@@ -48,12 +48,12 @@ export default function SimpleProgressBar({ patientState, appointments, showLabe
 
   // 상태별 색상 결정
   const getProgressColor = () => {
-    if (patientState === 'FINISHED') return 'from-green-500 to-green-600';
-    if (patientState === 'PAYMENT') return 'from-amber-500 to-amber-600';
+    if (patientState === 'FINISHED') return 'from-emerald-400 to-green-500';
+    if (patientState === 'PAYMENT') return 'from-amber-400 to-orange-500';
     if (['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
-      return 'from-blue-500 to-blue-600';
+      return 'from-blue-400 to-indigo-500';
     }
-    return 'from-gray-400 to-gray-500';
+    return 'from-gray-300 to-gray-400';
   };
 
   // 현재 상태 텍스트
@@ -84,44 +84,47 @@ export default function SimpleProgressBar({ patientState, appointments, showLabe
   };
 
   return (
-    <div className={`bg-gradient-to-br from-gray-50 to-white rounded-3xl shadow-xl border-2 border-gray-200 p-8 ${className}`}>
+    <div className={`bg-white rounded-2xl shadow-2xl p-10 ${className}`}>
       {showLabel && (
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-8">
           <h3 className="text-2xl font-bold text-gray-900">{getStatusText()}</h3>
-          <span className={`text-3xl font-extrabold bg-gradient-to-r ${getProgressColor()} 
-                         bg-clip-text text-transparent`}>
-            {getProgressText()}
-          </span>
+          <div className="text-right">
+            <span className={`text-4xl font-black bg-gradient-to-r ${getProgressColor()} 
+                           bg-clip-text text-transparent`}>
+              {getProgressText()}
+            </span>
+            <p className="text-sm text-gray-500 mt-1 font-medium">진행률</p>
+          </div>
         </div>
       )}
       
       <div className="relative">
-        {/* 배경 바 */}
-        <div className="w-full h-12 bg-gray-200 rounded-full overflow-hidden shadow-inner">
+        {/* 배경 바 - 더 부드럽게 */}
+        <div className="w-full h-14 bg-gray-100 rounded-full overflow-hidden">
           {/* 진행 바 */}
           <div 
             className={`h-full bg-gradient-to-r ${getProgressColor()} rounded-full 
-                       transition-all duration-1000 ease-out shadow-lg
+                       transition-all duration-1000 ease-out
                        relative overflow-hidden`}
             style={{ width: `${Math.min(progressPercentage, 100)}%` }}
           >
-            {/* 글로우 효과 */}
-            <div className="absolute inset-0 bg-gradient-to-t from-transparent via-white/30 to-transparent"></div>
-            {/* 움직이는 빛 효과 */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent 
-                         animate-pulse"></div>
+            {/* 윤기나는 효과 */}
+            <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
+            {/* 움직이는 광택 효과 */}
+            <div className="absolute inset-0 w-1/3 bg-gradient-to-r from-transparent via-white/10 to-transparent 
+                         -skew-x-12 animate-shimmer"></div>
           </div>
         </div>
         
-        {/* 주요 단계 표시 (점) - 더 크게 */}
-        <div className="absolute top-0 left-0 right-0 h-12 flex items-center justify-between px-2">
+        {/* 주요 단계 표시 (점) - 더 세련되게 */}
+        <div className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-3">
           {[0, 2, 6, 8].map((stepIndex) => (
             <div
               key={stepIndex}
               className={`transition-all duration-500 ${
                 currentStateIndex >= stepIndex 
-                  ? 'w-6 h-6 bg-white shadow-lg scale-125 ring-4 ring-white/50' 
-                  : 'w-4 h-4 bg-gray-300 shadow-sm'
+                  ? 'w-8 h-8 bg-white shadow-xl scale-110 border-2 border-white' 
+                  : 'w-6 h-6 bg-white/70 shadow-md'
               } rounded-full`}
               style={{
                 position: 'absolute',
@@ -136,25 +139,35 @@ export default function SimpleProgressBar({ patientState, appointments, showLabe
       
       {/* 단계 라벨 (선택적) - 현재 단계만 색상 강조 */}
       {showLabel && (
-        <div className="mt-6 flex justify-between text-lg font-medium">
-          <span className={`${currentStateIndex === 0 || currentStateIndex === 1 ? 'text-blue-600 font-bold text-xl' : 'text-gray-600'} 
-                         transition-all duration-300`}>
+        <div className="mt-8 flex justify-between px-2">
+          <span className={`${currentStateIndex === 0 || currentStateIndex === 1 
+            ? 'text-indigo-600 font-bold text-xl scale-110' 
+            : 'text-gray-400 font-medium text-lg'} 
+            transition-all duration-500 transform`}>
             도착
           </span>
-          <span className={`${currentStateIndex === 2 || currentStateIndex === 3 ? 'text-blue-600 font-bold text-xl' : 'text-gray-600'} 
-                         transition-all duration-300`}>
+          <span className={`${currentStateIndex === 2 || currentStateIndex === 3 
+            ? 'text-indigo-600 font-bold text-xl scale-110' 
+            : 'text-gray-400 font-medium text-lg'} 
+            transition-all duration-500 transform`}>
             접수
           </span>
-          <span className={`${currentStateIndex >= 4 && currentStateIndex <= 6 ? 'text-blue-600 font-bold text-xl' : 'text-gray-600'} 
-                         transition-all duration-300`}>
+          <span className={`${currentStateIndex >= 4 && currentStateIndex <= 6 
+            ? 'text-indigo-600 font-bold text-xl scale-110' 
+            : 'text-gray-400 font-medium text-lg'} 
+            transition-all duration-500 transform`}>
             검사
           </span>
-          <span className={`${currentStateIndex === 7 ? 'text-amber-600 font-bold text-xl' : 'text-gray-600'} 
-                         transition-all duration-300`}>
+          <span className={`${currentStateIndex === 7 
+            ? 'text-orange-500 font-bold text-xl scale-110' 
+            : 'text-gray-400 font-medium text-lg'} 
+            transition-all duration-500 transform`}>
             수납
           </span>
-          <span className={`${currentStateIndex === 8 ? 'text-green-600 font-bold text-xl' : 'text-gray-600'} 
-                         transition-all duration-300`}>
+          <span className={`${currentStateIndex === 8 
+            ? 'text-emerald-500 font-bold text-xl scale-110' 
+            : 'text-gray-400 font-medium text-lg'} 
+            transition-all duration-500 transform`}>
             완료
           </span>
         </div>

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import apiService from '../api/apiService';
-import { authAPI, appointmentAPI, queueAPI } from '../api/client';
+import { authAPI, appointmentAPI, queueAPI, api } from '../api/client';
 
 const useJourneyStore = create(
   devtools(
@@ -28,9 +28,13 @@ const useJourneyStore = create(
 
         // 대기열 정보
         queues: [],
+        currentQueues: [],
         currentQueue: null,
         queuePosition: null,
         estimatedWaitTime: null,
+        
+        // 당일 예약 정보
+        todaysAppointments: [],
 
         // 위치 정보
         currentLocation: null,
@@ -104,19 +108,115 @@ const useJourneyStore = create(
               // 환자인 경우에만 여정 데이터 로드
               console.log('🔄 환자 여정 데이터 로딩 중...');
               try {
-                // 개별 API 호출로 환자 데이터 가져오기
-                const [appointmentsRes, queuesRes] = await Promise.all([
-                  appointmentAPI.getTodaysAppointments ? 
-                    appointmentAPI.getTodaysAppointments().catch(() => ({ data: [] })) :
-                    Promise.resolve({ data: [] }),
+                // 개별 API 호출로 환자 데이터 가져오기 
+                const [scheduleRes, queuesRes] = await Promise.all([
+                  // /schedule/today API 사용 (Home.jsx와 동일)
+                  api.get('/schedule/today').catch(() => ({ data: { appointments: [] } })),
                   queueAPI.getMyQueue().catch(() => ({ data: [] }))
                 ]);
 
+                // 디버깅 로그 추가
+                console.log('📋 scheduleRes:', scheduleRes);
+                console.log('📋 scheduleRes.data:', scheduleRes.data);
+                console.log('📋 scheduleRes.data.appointments:', scheduleRes.data?.appointments);
+                console.log('🔍 queuesRes:', queuesRes);
+                console.log('🔍 queuesRes.data:', queuesRes.data);
+
+                // API 명세서에 따른 데이터 구조 파싱
+                // 1. 스케줄 API: /api/v1/schedule/today
+                const scheduleData = scheduleRes.data?.data || scheduleRes.data;
+                let appointments = scheduleData?.appointments || [];
+                
+                // 개발 환경에서 REGISTERED 상태일 때 테스트 데이터 추가
+                const currentPatientState = get().patientState;
+                if (import.meta.env.DEV && appointments.length === 0 && currentPatientState === 'REGISTERED') {
+                  console.log('🧪 개발 환경: REGISTERED 상태에서 테스트 데이터 추가');
+                  appointments = [
+                    {
+                      appointment_id: 'dev-001',
+                      exam: {
+                        exam_id: 'exam_001',
+                        title: '혈액검사',
+                        building: '본관',
+                        floor: '1',
+                        room: '채혈실',
+                        department: '진단검사의학과',
+                        average_duration: 15
+                      },
+                      scheduled_at: new Date().toISOString(),
+                      status: 'scheduled'
+                    },
+                    {
+                      appointment_id: 'dev-002',
+                      exam: {
+                        exam_id: 'exam_002',
+                        title: '흉부 X-ray',
+                        building: '본관',
+                        floor: '2',
+                        room: '영상의학과',
+                        department: '영상의학과',
+                        average_duration: 10
+                      },
+                      scheduled_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+                      status: 'scheduled'
+                    }
+                  ];
+                }
+                
+                console.log('📋 최종 appointments:', appointments);
+                
+                // 2. 큐 API: /api/v1/queue/my-current/  
+                // queuesRes는 axios 인터셉터로 인해 이미 data 부분만 반환됨
+                const queueData = queuesRes;
+                let currentQueues = [];
+                
+                if (queueData?.results && Array.isArray(queueData.results)) {
+                  // Django pagination 응답 구조 (/queue/my-current/ 응답)
+                  currentQueues = queueData.results;
+                } else if (Array.isArray(queueData)) {
+                  currentQueues = queueData;
+                } else if (queueData) {
+                  currentQueues = [queueData];
+                }
+                
+                console.log('🔍 최종 currentQueues:', currentQueues);
+                
+                // 큐 데이터에서 exam ID를 exam 객체로 확장 (임시 해결책)
+                currentQueues = currentQueues.map(queue => ({
+                  ...queue,
+                  exam: typeof queue.exam === 'string' ? {
+                    exam_id: queue.exam,
+                    title: `검사 ${queue.exam}`,
+                    building: '본관',
+                    floor: '1',
+                    room: '검사실',
+                    department: '일반'
+                  } : queue.exam
+                }));
+
+                // appointments가 비어있으면 queue 데이터를 appointment 형태로 변환
+                let finalAppointments = appointments;
+                if (appointments.length === 0 && currentQueues.length > 0) {
+                  finalAppointments = currentQueues.map(queue => ({
+                    appointment_id: queue.appointment || `QUEUE_${queue.queue_id}`,
+                    status: queue.state === 'waiting' ? 'waiting' : 
+                           queue.state === 'called' ? 'ongoing' : queue.state,
+                    scheduled_at: queue.created_at,
+                    exam: queue.exam,
+                    queue_info: {
+                      queue_number: queue.queue_number,
+                      estimated_wait_time: queue.estimated_wait_time,
+                      priority: queue.priority
+                    }
+                  }));
+                  console.log('📋 appointments가 비어있어서 queue 데이터로 생성:', finalAppointments);
+                }
+
                 set({
-                  todaysAppointments: appointmentsRes.data || [],
-                  currentQueues: queuesRes.data || [],
-                  appointments: appointmentsRes.data || [],
-                  queues: queuesRes.data || []
+                  todaysAppointments: finalAppointments,
+                  currentQueues: currentQueues,
+                  appointments: finalAppointments,
+                  queues: currentQueues
                 });
                 
                 console.log('✅ 환자 여정 데이터 로드 완료');
@@ -241,9 +341,11 @@ const useJourneyStore = create(
             user: null,
             patientState: null,
             appointments: [],
+            todaysAppointments: [],
             currentAppointment: null,
             examProgress: null,
             queues: [],
+            currentQueues: [],
             currentQueue: null,
             queuePosition: null,
             estimatedWaitTime: null,

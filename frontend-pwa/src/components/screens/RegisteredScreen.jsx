@@ -4,7 +4,7 @@ import useJourneyStore from '../../store/journeyStore';
 import Lottie from 'lottie-react';
 import AppointmentList from '../journey/AppointmentList';
 import ProgressBar from '../journey/ProgressBar';
-import SimpleProgressBar from '../journey/SimpleProgressBar';
+// import SimpleProgressBar from '../journey/SimpleProgressBar';
 import Modal from '../common/Modal';
 import MapModal from '../common/MapModal';
 import SlideNavigation from '../common/SlideNavigation';
@@ -13,6 +13,7 @@ import { ko } from 'date-fns/locale';
 import CurrentTaskCard from '../journey/CurrentTaskCard';
 import UpcomingTasksCard from '../journey/UpcomingTasksCard';
 import { calculateNFCDistance, getDestinationByState, getInitialSlideIndex, generateNavigationKeywords } from '../../utils/nfcLocation';
+import UnifiedHeader from '../common/UnifiedHeader';
 
 // Lottie 애니메이션 데이터 (체크마크)
 const checkmarkAnimation = {
@@ -72,7 +73,39 @@ const checkmarkAnimation = {
 
 export default function RegisteredScreen({ taggedLocation, current_task, upcoming_tasks }) {
   const navigate = useNavigate();
-  const { user, todaysAppointments } = useJourneyStore();
+  const { user, todaysAppointments, currentQueues = [] } = useJourneyStore();
+  
+  // WaitingScreen처럼 journeyStore 데이터 우선 사용
+  // 현재 대기 중인 큐 찾기
+  const activeQueue = currentQueues.find(
+    q => q.state === 'waiting' || q.state === 'ongoing'
+  );
+  
+  // todaysAppointments에서 현재 진행중인 검사 찾기
+  const currentFromAppointments = todaysAppointments?.find(apt => 
+    ['waiting', 'called', 'ongoing'].includes(apt.status)
+  );
+  
+  // props보다 journeyStore 데이터를 우선시
+  const actualCurrentTask = currentFromAppointments || activeQueue || current_task;
+  
+  // 예정된 작업들 찾기
+  const upcomingFromAppointments = todaysAppointments?.filter(apt => 
+    apt.status === 'scheduled' || apt.status === 'pending'
+  ) || [];
+  
+  const actualUpcomingTasks = upcomingFromAppointments.length > 0 ? upcomingFromAppointments : 
+    (upcoming_tasks || []);
+  
+  // journeyStore의 데이터를 우선 사용
+  const displayCurrentTask = actualCurrentTask;
+  const displayUpcomingTasks = actualUpcomingTasks;
+  
+  // 디버깅 로그
+  console.log('🔍 RegisteredScreen 데이터:');
+  console.log('  - todaysAppointments:', todaysAppointments);
+  console.log('  - displayCurrentTask:', displayCurrentTask);
+  console.log('  - displayUpcomingTasks:', displayUpcomingTasks);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showAnimation, setShowAnimation] = useState(true);
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -85,10 +118,16 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
   ) || current_task;
 
   // NFC 위치 판별 및 슬라이드 설정
-  const nextExam = current_task?.exam || todaysAppointments?.[0]?.exam;
-  const destination = getDestinationByState('REGISTERED', nextExam);
+  const nextExam = displayCurrentTask?.exam || displayUpcomingTasks?.[0]?.exam || todaysAppointments?.[0]?.exam;
+  const destination = getDestinationByState('REGISTERED', nextExam) || {
+    building: '본관',
+    floor: '1',
+    room: '접수처',
+    department: '일반',
+    description: '병원 안내'
+  };
   const locationInfo = taggedLocation ? calculateNFCDistance(taggedLocation, destination) : { isNearby: false };
-  const initialSlide = getInitialSlideIndex(locationInfo.isNearby);
+  const initialSlide = getInitialSlideIndex(locationInfo?.isNearby || false);
   const navigationKeywords = generateNavigationKeywords(taggedLocation, destination);
 
   useEffect(() => {
@@ -117,39 +156,40 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 pb-20">
       {showAnimation && (
-        <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-gradient-to-br from-green-100 to-blue-100 z-50 flex items-center justify-center">
           <div className="text-center">
-            <Lottie 
-              animationData={checkmarkAnimation} 
-              loop={false}
-              style={{ width: 200, height: 200 }}
-            />
-            <h1 className="text-3xl font-bold text-green-600 mt-4">
+            <div className="mb-6 animate-bounce-slow">
+              <div className="w-48 h-48 mx-auto bg-gradient-to-br from-green-100 to-green-200 
+                           rounded-full flex items-center justify-center shadow-2xl">
+                <span className="text-8xl">✅</span>
+              </div>
+            </div>
+            <h1 className="text-5xl font-extrabold text-green-700 mb-4">
               접수가 완료되었습니다!
             </h1>
-            <p className="text-xl text-gray-600 mt-2">
+            <p className="text-3xl text-gray-700 font-semibold">
               {user?.name}님, 오늘 진료 잘 받으세요
             </p>
           </div>
         </div>
       )}
 
-      <div className="bg-white shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-6">
+      <div className="bg-gradient-to-r from-blue-500 to-green-500 shadow-xl">
+        <div className="max-w-4xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-4xl font-bold text-white mb-2">
                 안녕하세요, {user?.name}님
               </h1>
-              <p className="text-lg text-gray-600 mt-1">
+              <p className="text-2xl text-blue-100 font-medium">
                 오늘의 검사 일정을 확인하세요
               </p>
             </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-500">첫 검사까지</p>
-              <p className="text-2xl font-bold text-blue-600">
+            <div className="text-center bg-white/20 backdrop-blur-sm rounded-3xl p-6">
+              <p className="text-lg text-blue-100 mb-1">첫 검사까지</p>
+              <p className="text-4xl font-extrabold text-white">
                 {getTimeUntilFirst() || '-'}
               </p>
             </div>
@@ -157,15 +197,9 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* 전체 진행 상황 표시 - 고정 */}
-        <div className="mb-4">
-          <SimpleProgressBar 
-            patientState={user?.state || 'REGISTERED'} 
-            appointments={todaysAppointments}
-            showLabel={true}
-          />
-        </div>
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        {/* 통합 헤더 - 현재 상태와 진행률 표시 */}
+        <UnifiedHeader currentState="REGISTERED" />
 
         <div className="h-[calc(100vh-200px)]">
           <SlideNavigation 
@@ -173,17 +207,20 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
             showDots={true}
           >
             {/* 슬라이드 1: 검사 준비사항 및 안내 */}
-            <div className="h-full overflow-y-auto py-6 space-y-6">
+            <div className="h-full overflow-y-auto py-8 space-y-8">
               {/* NFC 태그 위치에 따른 맞춤형 안내 */}
               {taggedLocation && (
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 animate-fade-in">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">📍</span>
+                <div className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-200 rounded-3xl p-8 animate-fade-in shadow-lg">
+                  <div className="flex items-start gap-5">
+                    <div className="w-16 h-16 bg-gradient-to-br from-green-200 to-green-300 rounded-2xl 
+                                flex items-center justify-center flex-shrink-0 shadow-lg">
+                      <span className="text-3xl">📍</span>
+                    </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-green-900">
+                      <p className="text-2xl font-bold text-green-900 mb-3">
                         현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
                       </p>
-                      <p className="text-green-700 mt-1">
+                      <p className="text-xl text-green-700 leading-relaxed">
                         {locationInfo.isNearby 
                           ? '✅ 검사실 근처에 계십니다. 준비사항을 확인해주세요.'
                           : '📍 위치 정보를 확인했습니다. 검사실 길찾기를 위해 다음 화면을 확인하세요.'
@@ -194,12 +231,15 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
                 </div>
               )}
 
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-3xl">ℹ️</span>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-3xl p-8 shadow-lg">
+                <div className="flex items-start gap-5">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-200 to-blue-300 rounded-2xl 
+                              flex items-center justify-center flex-shrink-0 shadow-lg">
+                    <span className="text-3xl">ℹ️</span>
+                  </div>
                   <div>
-                    <h3 className="font-semibold text-blue-900">오늘의 안내</h3>
-                    <p className="text-blue-800 mt-1">
+                    <h3 className="text-2xl font-bold text-blue-900 mb-3">오늘의 안내</h3>
+                    <p className="text-xl text-blue-800 leading-relaxed">
                       각 검사 시간 10분 전까지 해당 검사실 앞에서 대기해주세요.
                       검사 준비사항은 아래에서 확인하실 수 있습니다.
                     </p>
@@ -207,30 +247,42 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
                 </div>
               </div>
 
+            {/* 디버깅: 데이터 확인 */}
+            {console.log('🎯 렌더링 시점 - displayCurrentTask:', displayCurrentTask)}
+            {console.log('🎯 렌더링 시점 - displayUpcomingTasks:', displayUpcomingTasks)}
+            
             {/* 현재 진행할 작업 카드 */}
-            {current_task && (
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
+            {displayCurrentTask ? (
+              <div className="mb-8">
+                <h2 className="text-3xl font-bold text-gray-900 mb-6">
                   지금 해야 할 일
                 </h2>
-                <CurrentTaskCard appointment={current_task} />
+                <CurrentTaskCard appointment={displayCurrentTask} />
+              </div>
+            ) : (
+              <div className="mb-8 p-4 bg-gray-100 rounded-lg">
+                <p className="text-gray-600">현재 진행할 작업이 없습니다.</p>
               </div>
             )}
 
             {/* 예정된 작업 카드 */}
-            {upcoming_tasks && upcoming_tasks.length > 0 && (
+            {displayUpcomingTasks && displayUpcomingTasks.length > 0 ? (
               <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                <h2 className="text-3xl font-bold text-gray-900 mb-6">
                   오늘의 남은 일정
                 </h2>
-                <UpcomingTasksCard appointments={upcoming_tasks} />
+                <UpcomingTasksCard appointments={displayUpcomingTasks} />
+              </div>
+            ) : (
+              <div className="p-4 bg-gray-100 rounded-lg">
+                <p className="text-gray-600">예정된 작업이 없습니다.</p>
               </div>
             )}
           </div>
 
           {/* 슬라이드 2: 지도 및 길찾기 */}
-          <div className="h-full overflow-y-auto py-6 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">
+          <div className="h-full overflow-y-auto py-8 space-y-8">
+            <h2 className="text-4xl font-bold text-gray-900 text-center mb-8">
               검사실 위치 안내
             </h2>
 
@@ -274,29 +326,35 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <button 
                 onClick={() => navigate('/my-exams')}
-                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
-                           hover:shadow-md transition-all duration-300 text-left group">
-                <span className="text-3xl">📋</span>
-                <h3 className="text-lg font-semibold text-gray-900 mt-2 
+                className="bg-white rounded-3xl shadow-xl border-2 border-gray-200 p-8 
+                           hover:shadow-2xl hover:scale-[1.03] transition-all duration-300 text-left group">
+                <div className="w-16 h-16 bg-gradient-to-br from-blue-200 to-blue-300 rounded-2xl 
+                            flex items-center justify-center mb-4 shadow-lg">
+                  <span className="text-3xl">📋</span>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2 
                              group-hover:text-blue-600 transition-colors">
                   내 검사 목록
                 </h3>
-                <p className="text-gray-600 mt-1">모든 검사 내역 보기</p>
+                <p className="text-lg text-gray-600">모든 검사 내역 보기</p>
               </button>
               
               <button 
                 onClick={() => setIsMapModalOpen(true)}
-                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
-                           hover:shadow-md transition-all duration-300 text-left group">
-                <span className="text-3xl">🗺️</span>
-                <h3 className="text-lg font-semibold text-gray-900 mt-2 
+                className="bg-white rounded-3xl shadow-xl border-2 border-gray-200 p-8 
+                           hover:shadow-2xl hover:scale-[1.03] transition-all duration-300 text-left group">
+                <div className="w-16 h-16 bg-gradient-to-br from-green-200 to-green-300 rounded-2xl 
+                            flex items-center justify-center mb-4 shadow-lg">
+                  <span className="text-3xl">🗺️</span>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2 
                              group-hover:text-blue-600 transition-colors">
                   병원 전체 지도
                 </h3>
-                <p className="text-gray-600 mt-1">다른 시설 위치 보기</p>
+                <p className="text-lg text-gray-600">다른 시설 위치 보기</p>
               </button>
             </div>
           </div>

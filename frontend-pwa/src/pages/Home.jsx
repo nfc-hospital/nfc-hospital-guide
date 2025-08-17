@@ -93,6 +93,7 @@ const Home = () => {
     user, 
     patientState, 
     taggedLocationInfo,
+    todaysAppointments,
     isLoading, 
     error, 
     fetchJourneyData,
@@ -217,6 +218,8 @@ const Home = () => {
     // 환자 상태에 따른 화면 렌더링
     const currentState = patientState?.current_state || patientState;
     const locationType = taggedLocationInfo?.type; // 'exam_room', 'reception', 'lobby' 등
+    
+    // WaitingScreen에서 데이터를 자체적으로 처리하므로 간단하게 전달
     
     // --- 분기 로직 시작 ---
     
