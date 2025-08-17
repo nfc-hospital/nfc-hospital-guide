@@ -129,6 +129,8 @@ class ExamListSerializer(serializers.ModelSerializer):
     exam_info = serializers.SerializerMethodField()
     location = serializers.SerializerMethodField()
     has_result = serializers.SerializerMethodField()
+    # UUID를 문자열로 확실하게 변환
+    appointment_id = serializers.CharField(read_only=True)
     
     class Meta:
         model = Appointment
@@ -140,16 +142,29 @@ class ExamListSerializer(serializers.ModelSerializer):
     
     def get_exam_info(self, obj):
         """검사 기본 정보만 반환"""
+        if not obj.exam:
+            # exam이 없는 경우 기본값 반환
+            return {
+                'exam_id': None,
+                'title': '검사 정보 없음',
+                'department': '',
+                'category': '',
+                'average_duration': 30
+            }
+        
         return {
-            'exam_id': obj.exam.exam_id,
-            'title': obj.exam.title,
-            'department': obj.exam.department,
-            'category': obj.exam.category,
-            'average_duration': obj.exam.average_duration
+            'exam_id': str(obj.exam.exam_id),  # UUID를 문자열로 명시적 변환
+            'title': obj.exam.title or '제목 없음',
+            'department': obj.exam.department or '',
+            'category': obj.exam.category or '',
+            'average_duration': obj.exam.average_duration or 30
         }
     
     def get_location(self, obj):
         """검사 장소 정보"""
+        if not obj.exam:
+            return None
+            
         if obj.exam.building or obj.exam.floor or obj.exam.room:
             return {
                 'building': obj.exam.building or '',
@@ -160,7 +175,15 @@ class ExamListSerializer(serializers.ModelSerializer):
     
     def get_has_result(self, obj):
         """검사 결과 존재 여부"""
-        return hasattr(obj, 'result')
+        return hasattr(obj, 'result') and obj.result is not None
+    
+    def to_representation(self, instance):
+        """최종 출력 전 status null 처리"""
+        data = super().to_representation(instance)
+        # status가 None인 경우 'unregistered'로 변환
+        if data.get('status') is None:
+            data['status'] = 'unregistered'
+        return data
 
 
 class ExamResultSerializer(serializers.ModelSerializer):

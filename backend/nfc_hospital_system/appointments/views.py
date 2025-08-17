@@ -134,12 +134,17 @@ class TodaysAppointmentsView(ListAPIView):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        today = timezone.now().date()
-        return Appointment.objects.filter(
-            user=self.request.user,
-            scheduled_at__date=today
-        ).select_related('exam').order_by('scheduled_at')
+def get_queryset(self):
+    today = timezone.now().date()
+    queryset = Appointment.objects.filter(
+        user=self.request.user,
+        scheduled_at__date=today
+    )
+    
+    # exam이 null이 아닌 경우만 select_related 적용
+    queryset = queryset.exclude(exam__isnull=True).select_related('exam')
+    
+    return queryset.order_by('scheduled_at')
 
 
 class PatientExamViewSet(viewsets.GenericViewSet):
@@ -230,6 +235,20 @@ class PatientExamViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+class TodaysAppointmentsView(ListAPIView):
+    """
+    오늘의 예약 목록 API
+    GET /api/v1/appointments/today/
+    """
+    serializer_class = AppointmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        today = timezone.now().date()
+        return Appointment.objects.filter(
+            user=self.request.user,
+            scheduled_at__date=today
+        ).select_related('exam').order_by('scheduled_at')
 
 class TodayScheduleView(APIView):
     """

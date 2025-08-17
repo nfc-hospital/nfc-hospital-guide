@@ -67,6 +67,53 @@ const apiService = {
     return api.get('/appointments/today');
   },
 
+  // 검사(Exam) 관련 API 추가
+  exams: {
+    // 내 검사 목록 조회
+    getMyList: async (params = {}) => {
+      try {
+        const response = await api.get('/exams/my-list/', { params });
+        return response;
+      } catch (error) {
+        console.error('Failed to fetch my exams:', error);
+        throw error;
+      }
+    },
+
+    // 검사 결과 조회
+    getResult: async (appointmentId) => {
+      try {
+        const response = await api.get(`/exams/${appointmentId}/result/`);
+        return response;
+      } catch (error) {
+        console.error('Failed to fetch exam result:', error);
+        throw error;
+      }
+    },
+
+    // 검사 상세 정보 조회
+    getDetail: async (examId) => {
+      try {
+        const response = await api.get(`/appointments/exams/${examId}/`);
+        return response;
+      } catch (error) {
+        console.error('Failed to fetch exam detail:', error);
+        throw error;
+      }
+    },
+
+    // 모든 검사 목록 조회 (검사 선택용)
+    getAllExams: async (params = {}) => {
+      try {
+        const response = await api.get('/appointments/exams/', { params });
+        return response;
+      } catch (error) {
+        console.error('Failed to fetch all exams:', error);
+        throw error;
+      }
+    }
+  },
+
   // 내 대기 순서 조회
   getMyQueuePosition: async () => {
     return api.get('/queue/my-position');

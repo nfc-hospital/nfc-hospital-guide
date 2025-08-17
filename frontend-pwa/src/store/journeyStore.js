@@ -106,7 +106,9 @@ const useJourneyStore = create(
               try {
                 // 개별 API 호출로 환자 데이터 가져오기
                 const [appointmentsRes, queuesRes] = await Promise.all([
-                  appointmentAPI.getAppointmentById().catch(() => ({ data: [] })),
+                  appointmentAPI.getTodaysAppointments ? 
+                    appointmentAPI.getTodaysAppointments().catch(() => ({ data: [] })) :
+                    Promise.resolve({ data: [] }),
                   queueAPI.getMyQueue().catch(() => ({ data: [] }))
                 ]);
 

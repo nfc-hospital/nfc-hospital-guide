@@ -18,24 +18,36 @@ const MyExams = () => {
     fetchExams();
   }, [filter, currentPage]);
 
+
   const fetchExams = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await apiService.get('/exams/my-list/', {
-        params: {
-          is_past: filter === 'past' ? 'true' : 'false',
-          page: currentPage,
-          page_size: 10
-        }
+      const response = await apiService.exams.getMyList({
+        is_past: filter === 'past' ? 'true' : 'false',
+        page: currentPage,
+        page_size: 10
       });
 
-      if (response.data.results) {
-        setExams(response.data.results);
-        setTotalPages(Math.ceil(response.data.count / 10));
+      console.log('API 응답:', response); // 디버깅용 로그
+
+      // response가 이미 data 객체일 수 있음
+      const data = response.data || response;
+      
+      if (data.results) {
+        console.log('검사 데이터 상세:', data.results[0]); // 첫 번째 검사 데이터 구조 확인
+        setExams(data.results);
+        setTotalPages(Math.ceil(data.count / 10));
+      } else if (Array.isArray(data)) {
+        // 페이지네이션 없이 배열로 직접 반환하는 경우
+        console.log('검사 데이터 배열:', data[0]); // 첫 번째 검사 데이터 구조 확인
+        setExams(data);
+        setTotalPages(1);
       } else {
-        setExams(response.data);
+        // 예상치 못한 응답 형식
+        console.warn('예상치 못한 응답 형식:', data);
+        setExams([]);
       }
     } catch (err) {
       console.error('검사 목록 조회 실패:', err);
