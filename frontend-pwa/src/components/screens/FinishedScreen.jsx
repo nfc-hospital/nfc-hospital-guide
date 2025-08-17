@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
 import { useNavigate } from 'react-router-dom';
 import Lottie from 'lottie-react';
+import CompletedTaskCard from '../journey/CompletedTaskCard';
 
 // 축하 애니메이션 데이터
 const celebrationAnimation = {
@@ -52,7 +53,7 @@ const celebrationAnimation = {
   }]
 };
 
-export default function FinishedScreen({ taggedLocation }) {
+export default function FinishedScreen({ taggedLocation, completed_tasks }) {
   const { user, todaysAppointments } = useJourneyStore();
   const navigate = useNavigate();
   const [showSurvey, setShowSurvey] = useState(false);
@@ -135,37 +136,48 @@ export default function FinishedScreen({ taggedLocation }) {
           </div>
         )}
 
-        {/* 오늘의 진료 요약 */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            오늘의 진료 요약
-          </h3>
-          
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div className="bg-blue-50 rounded-xl p-4 text-center">
-              <p className="text-sm text-blue-600">완료된 검사</p>
-              <p className="text-3xl font-bold text-blue-800">{completedCount}건</p>
-            </div>
-            <div className="bg-green-50 rounded-xl p-4 text-center">
-              <p className="text-sm text-green-600">소요 시간</p>
-              <p className="text-3xl font-bold text-green-800">2시간 30분</p>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {todaysAppointments?.filter(apt => apt.status === 'completed').map(apt => (
-              <div key={apt.appointment_id} 
-                   className="flex items-center gap-2 text-gray-700 p-2 bg-gray-50 rounded-lg">
-                <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" 
-                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" 
-                        clipRule="evenodd" />
-                </svg>
-                <span>{apt.exam?.title}</span>
-              </div>
+        {/* 완료된 검사 카드들 */}
+        {completed_tasks && completed_tasks.length > 0 ? (
+          <div className="space-y-4 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">
+              오늘의 진료 요약
+            </h3>
+            {completed_tasks.map((task) => (
+              <CompletedTaskCard key={task.appointment_id} appointment={task} />
             ))}
           </div>
-        </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              오늘의 진료 요약
+            </h3>
+            
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-blue-50 rounded-xl p-4 text-center">
+                <p className="text-sm text-blue-600">완료된 검사</p>
+                <p className="text-3xl font-bold text-blue-800">{completedCount}건</p>
+              </div>
+              <div className="bg-green-50 rounded-xl p-4 text-center">
+                <p className="text-sm text-green-600">소요 시간</p>
+                <p className="text-3xl font-bold text-green-800">2시간 30분</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {todaysAppointments?.filter(apt => apt.status === 'completed').map(apt => (
+                <div key={apt.appointment_id} 
+                     className="flex items-center gap-2 text-gray-700 p-2 bg-gray-50 rounded-lg">
+                  <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" 
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" 
+                          clipRule="evenodd" />
+                  </svg>
+                  <span>{apt.exam?.title}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 귀가 동선 안내 카드 추가 */}
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-6 mb-6">

@@ -68,7 +68,8 @@ def patient_state_post_save(sender, instance, created, **kwargs):
         }
         
         # 환자별 그룹에 브로드캐스트
-        patient_group = f'patient_{instance.user.id}'
+        user_id = str(instance.user.user_id) if hasattr(instance.user, 'user_id') else str(instance.user.id)
+        patient_group = f'patient_{user_id}'
         async_to_sync(channel_layer.group_send)(
             patient_group,
             {

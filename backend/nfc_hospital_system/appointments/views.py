@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.generics import ListAPIView
+from rest_framework.views import APIView
 from datetime import date
 from django.utils import timezone
 
@@ -10,8 +11,13 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 
-from .models import Exam, ExamPreparation, Appointment
-from .serializers import ExamSerializer, ExamPreparationSerializer, AppointmentSerializer
+from .models import Exam, ExamPreparation, Appointment, ExamResult
+from .serializers import (
+    ExamSerializer, ExamPreparationSerializer, AppointmentSerializer,
+    ExamListSerializer, ExamResultSerializer, TodayScheduleSerializer
+)
+from .permissions import IsPatientOwner, IsPatientOrStaff
+from p_queue.models import PatientState
 
 # 페이지네이션 설정
 class StandardResultsSetPagination(PageNumberPagination):
@@ -132,5 +138,217 @@ class TodaysAppointmentsView(ListAPIView):
         today = timezone.now().date()
         return Appointment.objects.filter(
             user=self.request.user,
-            scheduled_date=today
-        ).select_related('exam').order_by('scheduled_time')
+            scheduled_at__date=today
+        ).select_related('exam').order_by('scheduled_at')
+
+
+class PatientExamViewSet(viewsets.GenericViewSet):
+    """
+    환자용 검사 관련 API ViewSet
+    """
+    permission_classes = [IsAuthenticated, IsPatientOwner]
+    
+    @action(detail=False, methods=['get'], url_path='my-list')
+    def my_list(self, request):
+        """
+        환자 본인의 전체 검사 목록 조회
+        GET /api/v1/exams/my-list/
+        
+        Query Parameters:
+        - is_past: true/false (과거/예정 검사 필터링)
+        - page: 페이지 번호
+        - page_size: 페이지 크기
+        """
+        queryset = Appointment.objects.filter(
+            user=request.user
+        ).select_related('exam', 'result').order_by('-scheduled_at')
+        
+        # 과거/예정 필터링
+        is_past = request.query_params.get('is_past', None)
+        if is_past is not None:
+            today = timezone.now().date()
+            if is_past.lower() == 'true':
+                # 과거 검사 (오늘 이전)
+                queryset = queryset.filter(scheduled_at__date__lt=today)
+            else:
+                # 예정 검사 (오늘 이후)
+                queryset = queryset.filter(scheduled_at__date__gte=today)
+        
+        # 페이지네이션 적용
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(queryset, request)
+        
+        if page is not None:
+            serializer = ExamListSerializer(page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+        
+        serializer = ExamListSerializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], url_path='result')
+    def result(self, request, pk=None):
+        """
+        특정 검사의 결과 조회
+        GET /api/v1/exams/{appointment_id}/result/
+        
+        Note: pk는 appointment_id를 받습니다 (exam_id가 아님)
+        """
+        try:
+            # 환자 본인의 예약인지 확인
+            appointment = Appointment.objects.get(
+                appointment_id=pk,
+                user=request.user
+            )
+        except Appointment.DoesNotExist:
+            return Response(
+                {"error": "예약을 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 검사가 완료되었는지 확인
+        if appointment.status != 'done':
+            return Response(
+                {
+                    "error": "검사가 아직 완료되지 않았습니다.",
+                    "status": appointment.status,
+                    "message": "검사 결과는 검사가 완료된 후에 확인할 수 있습니다."
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 검사 결과 조회
+        try:
+            result = ExamResult.objects.get(appointment=appointment)
+            serializer = ExamResultSerializer(result)
+            return Response(serializer.data)
+        except ExamResult.DoesNotExist:
+            return Response(
+                {
+                    "error": "검사 결과가 아직 등록되지 않았습니다.",
+                    "message": "검사 결과가 준비되면 알림을 보내드리겠습니다."
+                },
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class TodayScheduleView(APIView):
+    """
+    당일 일정 조회 API
+    GET /api/v1/schedule/today
+    
+    API 명세서 v3에 정의된 환자의 전체 여정 정보 제공
+    """
+    permission_classes = [IsAuthenticated, IsPatientOwner]
+    
+    def get(self, request):
+        """
+        환자의 오늘 일정 및 현재 상태 반환
+        """
+        user = request.user
+        today = timezone.now().date()
+        
+        # 1. 오늘의 예약 조회
+        appointments = Appointment.objects.filter(
+            user=user,
+            scheduled_at__date=today
+        ).select_related('exam').prefetch_related('exam__preparations', 'queues').order_by('scheduled_at')
+        
+        # 2. 환자의 현재 상태 조회 또는 생성
+        patient_state, created = PatientState.objects.get_or_create(
+            user=user,
+            defaults={'current_state': 'UNREGISTERED'}
+        )
+        
+        # 3. 상태 결정 로직
+        current_state = self._determine_patient_state(user, appointments, patient_state)
+        
+        # 4. 다음 행동 안내 메시지 생성
+        next_action = self._generate_next_action(current_state, appointments)
+        
+        # 5. 현재 위치 정보 (NFC 태그 기반)
+        current_location = patient_state.current_location
+        
+        # 6. 응답 데이터 구성
+        response_data = {
+            'state': current_state,
+            'appointments': appointments,
+            'current_location': current_location,
+            'next_action': next_action,
+            'timestamp': timezone.now()
+        }
+        
+        serializer = TodayScheduleSerializer(response_data)
+        return Response({
+            'success': True,
+            'data': serializer.data,
+            'message': '당일 일정을 조회했습니다.',
+            'timestamp': timezone.now().isoformat()
+        })
+    
+    def _determine_patient_state(self, user, appointments, patient_state):
+        """
+        환자의 현재 상태를 결정하는 로직
+        """
+        # 이미 저장된 상태가 있으면 우선 사용
+        if patient_state.current_state != 'UNREGISTERED':
+            # 활성 대기열이 있는지 확인
+            active_queue = user.queues.filter(
+                state__in=['waiting', 'called', 'ongoing']
+            ).first()
+            
+            if active_queue:
+                # 대기열 상태에 따라 환자 상태 매핑
+                queue_state_mapping = {
+                    'waiting': 'WAITING',
+                    'called': 'CALLED',
+                    'ongoing': 'ONGOING'
+                }
+                return queue_state_mapping.get(active_queue.state, patient_state.current_state)
+            
+            # 모든 예약이 완료되었는지 확인
+            if appointments.exists():
+                all_completed = all(apt.status == 'done' for apt in appointments)
+                if all_completed:
+                    # 수납 상태 확인 (여기서는 간단히 PAYMENT로 설정)
+                    return 'PAYMENT'
+            
+            return patient_state.current_state
+        
+        # 상태가 UNREGISTERED인 경우
+        if not appointments.exists():
+            return 'UNREGISTERED'
+        
+        # 도착 확인된 예약이 있는지 확인
+        if any(apt.arrival_confirmed for apt in appointments):
+            return 'REGISTERED'
+        
+        return 'UNREGISTERED'
+    
+    def _generate_next_action(self, state, appointments):
+        """
+        현재 상태에 따른 다음 행동 안내 메시지 생성
+        """
+        state_actions = {
+            'UNREGISTERED': '병원에 도착하시면 로비의 NFC 태그를 스캔해주세요.',
+            'ARRIVED': '접수창구에서 접수를 진행해주세요.',
+            'REGISTERED': '오늘의 검사 일정을 확인하고 첫 번째 검사실로 이동해주세요.',
+            'WAITING': '잠시만 기다려주세요. 곧 호출될 예정입니다.',
+            'CALLED': '검사실로 입장해주세요.',
+            'ONGOING': '검사가 진행 중입니다.',
+            'COMPLETED': '다음 검사로 이동하거나 수납창구로 가주세요.',
+            'PAYMENT': '수납창구에서 수납을 진행해주세요.',
+            'FINISHED': '오늘의 모든 일정이 완료되었습니다. 안전하게 귀가하세요.'
+        }
+        
+        # 상태별 기본 메시지
+        base_action = state_actions.get(state, '병원 직원에게 문의해주세요.')
+        
+        # 다음 예약 정보 추가
+        if state in ['REGISTERED', 'COMPLETED'] and appointments:
+            next_appointment = appointments.filter(status__in=['waiting', 'ongoing']).first()
+            if next_appointment:
+                time_str = next_appointment.scheduled_at.strftime('%H:%M')
+                location = f"{next_appointment.exam.building} {next_appointment.exam.floor}층 {next_appointment.exam.room}"
+                base_action = f"{base_action} 다음 검사: {time_str} {next_appointment.exam.title} ({location})"
+        
+        return base_action

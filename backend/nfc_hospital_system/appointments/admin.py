@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Exam, Appointment, ExamPreparation, AppointmentHistory
+from .models import Exam, Appointment, ExamPreparation, AppointmentHistory, ExamResult
 from django.utils import timezone # For actions that update timestamps
 import uuid
 
@@ -202,3 +202,51 @@ class AppointmentHistoryAdmin(admin.ModelAdmin):
     readonly_fields = (
         'history_id', 'appointment', 'action', 'note', 'created_by', 'created_at'
     )
+
+
+# ExamResult 모델 관리자 설정
+@admin.register(ExamResult)
+class ExamResultAdmin(admin.ModelAdmin):
+    """
+    Django 관리자 페이지에서 ExamResult 모델을 관리합니다.
+    """
+    list_display = (
+        'result_id', 'appointment', 'is_normal', 'requires_followup',
+        'created_by', 'created_at', 'updated_at'
+    )
+    list_filter = (
+        'is_normal', 'requires_followup', 'created_at',
+        'appointment__exam__department'
+    )
+    search_fields = (
+        'result_id', 'summary', 'doctor_notes',
+        'appointment__appointment_id', 'appointment__user__name',
+        'appointment__exam__title'
+    )
+    autocomplete_fields = ('appointment', 'created_by')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+
+    fieldsets = (
+        (None, {
+            'fields': ('result_id', 'appointment')
+        }),
+        ('검사 결과', {
+            'fields': ('summary', 'doctor_notes', 'is_normal', 'requires_followup'),
+            'description': '검사 결과 정보를 입력합니다.'
+        }),
+        ('결과 파일', {
+            'fields': ('result_pdf_url',),
+        }),
+        ('메타 정보', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+
+    readonly_fields = ('result_id', 'created_at', 'updated_at')
+
+    def save_model(self, request, obj, form, change):
+        if not obj.created_by:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)

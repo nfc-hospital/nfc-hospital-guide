@@ -38,12 +38,23 @@ def simple_login(request):
         if not phone_last4 or not birth_date:
             return APIResponse.error("전화번호 뒷자리와 생년월일이 필요합니다", code="AUTH_003")
         
+        # birthDate 형식 변환: YYMMDD -> YYYY-MM-DD
+        if len(birth_date) == 6:  # YYMMDD 형식인 경우
+            yy = birth_date[:2]
+            mm = birth_date[2:4]
+            dd = birth_date[4:6]
+            # 90년대생은 19xx, 00년대생은 20xx로 가정
+            year_prefix = '19' if int(yy) >= 90 else '20'
+            birth_date_formatted = f"{year_prefix}{yy}-{mm}-{dd}"
+        else:
+            birth_date_formatted = birth_date
+        
         # 단순화된 사용자 찾기/생성
         try:
             # 먼저 기존 사용자 찾기
             user = User.objects.filter(
                 phone_number__endswith=phone_last4,
-                birth_date=birth_date
+                birth_date=birth_date_formatted
             ).first()
             
             if not user:
@@ -51,7 +62,7 @@ def simple_login(request):
                 user = User.objects.create(
                     name=f'환자{phone_last4}',
                     phone_number=f'010****{phone_last4}',
-                    birth_date=birth_date,
+                    birth_date=birth_date_formatted,
                 )
             
         except Exception as create_error:

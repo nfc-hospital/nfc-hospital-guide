@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Exam, ExamPreparation, Appointment
+from django.utils import timezone
+from .models import Exam, ExamPreparation, Appointment, ExamResult
 from p_queue.models import Queue 
 from authentication.serializers import UserSerializer # 사용자 정보를 위해 추가
 
@@ -116,4 +117,148 @@ class AppointmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Appointment
         # API 응답에 포함될 필드들을 명시합니다.
-        fields = ['id', 'user', 'exam', 'appointment_time', 'status', 'created_at', 'updated_at']
+        fields = ['appointment_id', 'user', 'exam', 'scheduled_at', 'status', 'arrival_confirmed', 'created_at']
+        read_only_fields = ['appointment_id', 'created_at']
+
+
+class ExamListSerializer(serializers.ModelSerializer):
+    """
+    환자의 검사 목록 조회용 Serializer
+    필요한 최소한의 정보만 포함하여 효율성을 높입니다.
+    """
+    exam_info = serializers.SerializerMethodField()
+    location = serializers.SerializerMethodField()
+    has_result = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Appointment
+        fields = [
+            'appointment_id', 'exam_info', 'location', 
+            'scheduled_at', 'status', 'arrival_confirmed', 
+            'has_result', 'created_at'
+        ]
+    
+    def get_exam_info(self, obj):
+        """검사 기본 정보만 반환"""
+        return {
+            'exam_id': obj.exam.exam_id,
+            'title': obj.exam.title,
+            'department': obj.exam.department,
+            'category': obj.exam.category,
+            'average_duration': obj.exam.average_duration
+        }
+    
+    def get_location(self, obj):
+        """검사 장소 정보"""
+        if obj.exam.building or obj.exam.floor or obj.exam.room:
+            return {
+                'building': obj.exam.building or '',
+                'floor': obj.exam.floor or '',
+                'room': obj.exam.room or ''
+            }
+        return None
+    
+    def get_has_result(self, obj):
+        """검사 결과 존재 여부"""
+        return hasattr(obj, 'result')
+
+
+class ExamResultSerializer(serializers.ModelSerializer):
+    """
+    검사 결과 조회용 Serializer
+    """
+    appointment_info = serializers.SerializerMethodField()
+    exam_info = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    
+    class Meta:
+        model = ExamResult
+        fields = [
+            'result_id', 'appointment_info', 'exam_info',
+            'summary', 'doctor_notes', 'result_pdf_url',
+            'is_normal', 'requires_followup',
+            'created_by_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['result_id', 'created_at', 'updated_at']
+    
+    def get_appointment_info(self, obj):
+        """예약 정보"""
+        return {
+            'appointment_id': obj.appointment.appointment_id,
+            'scheduled_at': obj.appointment.scheduled_at,
+            'status': obj.appointment.status
+        }
+    
+    def get_exam_info(self, obj):
+        """검사 정보"""
+        exam = obj.appointment.exam
+        return {
+            'exam_id': exam.exam_id,
+            'title': exam.title,
+            'department': exam.department,
+            'category': exam.category
+        }
+
+
+class TodayScheduleExamSerializer(serializers.Serializer):
+    """
+    당일 일정 조회용 Exam 정보 Serializer
+    API 명세서의 Exam 객체 구조를 따름
+    """
+    exam_id = serializers.CharField()
+    title = serializers.CharField()
+    department = serializers.CharField()
+    category = serializers.CharField(allow_null=True)
+    location = serializers.SerializerMethodField()
+    duration = serializers.IntegerField(source='average_duration')
+    preparations = ExamPreparationSerializer(many=True, read_only=True)
+    
+    def get_location(self, obj):
+        if obj.building or obj.floor or obj.room:
+            return {
+                'building': obj.building or '',
+                'floor': obj.floor or '',
+                'room': obj.room or ''
+            }
+        return None
+
+
+class TodayScheduleAppointmentSerializer(serializers.Serializer):
+    """
+    당일 일정 조회용 Appointment Serializer
+    """
+    appointment_id = serializers.CharField()
+    exam = TodayScheduleExamSerializer(read_only=True)
+    scheduled_at = serializers.DateTimeField()
+    status = serializers.CharField()
+    queue_info = serializers.SerializerMethodField()
+    
+    def get_queue_info(self, obj):
+        """현재 대기열 정보 반환"""
+        # 활성 대기열 찾기
+        active_queue = obj.queues.filter(
+            state__in=['waiting', 'called', 'ongoing']
+        ).first()
+        
+        if active_queue:
+            return {
+                'queue_id': str(active_queue.queue_id),
+                'state': active_queue.state,
+                'queue_number': active_queue.queue_number,
+                'estimated_wait_time': active_queue.estimated_wait_time,
+                'priority': active_queue.priority,
+                'called_at': active_queue.called_at.isoformat() if active_queue.called_at else None
+            }
+        return None
+
+
+class TodayScheduleSerializer(serializers.Serializer):
+    """
+    GET /api/v1/schedule/today 응답용 Serializer
+    API 명세서 v3 구조 준수
+    """
+    state = serializers.CharField()
+    appointments = TodayScheduleAppointmentSerializer(many=True)
+    current_location = serializers.CharField(allow_null=True)
+    next_action = serializers.CharField()
+    timestamp = serializers.DateTimeField(default=timezone.now)

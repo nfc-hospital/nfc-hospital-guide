@@ -254,6 +254,37 @@ const apiService = {
       }
     },
   },
+
+  // 챗봇 관련 API
+  sendChatbotQuery: async (question, context = {}) => {
+    try {
+      const response = await chatbotAPI.query(question, context);
+      return response;
+    } catch (error) {
+      console.error('Failed to send chatbot query:', error);
+      throw error;
+    }
+  },
+
+  getChatbotFAQ: async () => {
+    try {
+      const response = await chatbotAPI.getFAQ();
+      return response;
+    } catch (error) {
+      console.error('Failed to get chatbot FAQ:', error);
+      throw error;
+    }
+  },
+
+  getChatbotSuggestions: async () => {
+    try {
+      const response = await chatbotAPI.getSuggestions();
+      return response;
+    } catch (error) {
+      console.error('Failed to get chatbot suggestions:', error);
+      throw error;
+    }
+  },
 };
 
 export default apiService;

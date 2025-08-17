@@ -21,8 +21,8 @@ export default defineConfig({
       testAdminPassword: 'admin123',
       // 테스트용 환자 정보
       testPatientId: '',  // 테스트 실행 시 동적으로 설정
-      testPatientPhone: '01012349999',
-      testPatientBirthDate: '990101'
+      testPatientPhone: '01012345678',
+      testPatientBirthDate: '19900101'
     }
   }
 })

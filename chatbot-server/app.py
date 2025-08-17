@@ -14,12 +14,22 @@ CORS(app)
 
 # OpenAI 클라이언트 초기화
 try:
+    # 환경 변수에서 프록시 설정 제거 (만약 있다면)
+    import os
+    for key in list(os.environ.keys()):
+        if 'proxy' in key.lower() or 'proxies' in key.lower():
+            print(f"Removing environment variable: {key}")
+            os.environ.pop(key, None)
+    
+    # OpenAI 클라이언트 생성
     client = OpenAI(
         api_key=os.getenv('OPENAI_API_KEY')
     )
     print("OpenAI client initialized successfully")
 except Exception as e:
     print(f"Failed to initialize OpenAI client: {e}")
+    import traceback
+    traceback.print_exc()
     client = None
 
 SYSTEM_PROMPT = """
@@ -87,7 +97,7 @@ def chatbot_query():
         # OpenAI API 호출
         print(f"Sending query to OpenAI: {user_question}")
         response = client.chat.completions.create(
-            model="gpt-4.1",
+            model="gpt-4",  # 또는 "gpt-3.5-turbo" 사용 가능
             messages=messages,
             max_tokens=500,
             temperature=0.7

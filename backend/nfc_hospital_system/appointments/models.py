@@ -311,6 +311,103 @@ class ExamPreparation(models.Model):
         return f"{self.exam.title} - {self.get_type_display()} - {self.title} ({required})"
 
 
+class ExamResult(models.Model):
+    """
+    검사 결과를 관리하는 모델
+    각 예약별 검사 결과 및 의사 소견
+    """
+
+    result_id = models.CharField(
+        max_length=50,
+        primary_key=True,
+        default=uuid.uuid4,
+        verbose_name='결과 ID'
+    )
+
+    appointment = models.OneToOneField(
+        Appointment,
+        on_delete=models.CASCADE,
+        related_name='result',
+        verbose_name='예약',
+        db_column='appointment_id'
+    )
+
+    # 결과 정보
+    summary = models.TextField(
+        verbose_name='결과 요약',
+        help_text='환자가 이해하기 쉬운 검사 결과 요약'
+    )
+
+    result_pdf_url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        verbose_name='상세 결과지 PDF 링크',
+        help_text='상세 검사 결과 PDF 파일 URL'
+    )
+
+    doctor_notes = models.TextField(
+        blank=True,
+        null=True,
+        verbose_name='의사 소견',
+        help_text='담당 의사의 추가 소견'
+    )
+
+    # 결과 상태
+    is_normal = models.BooleanField(
+        default=True,
+        verbose_name='정상 여부',
+        help_text='검사 결과 정상 여부'
+    )
+
+    requires_followup = models.BooleanField(
+        default=False,
+        verbose_name='추가 검사 필요',
+        help_text='추가 검사나 진료가 필요한지 여부'
+    )
+
+    # 시간 정보
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='결과 생성일시'
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='결과 수정일시'
+    )
+
+    # 작성자 정보
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_exam_results',
+        verbose_name='결과 작성자',
+        help_text='검사 결과를 입력한 의료진'
+    )
+
+    class Meta:
+        db_table = 'exam_results'
+        verbose_name = '검사 결과'
+        verbose_name_plural = '검사 결과 목록'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['appointment']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['is_normal', 'requires_followup']),
+        ]
+
+    def __str__(self):
+        return f"{self.appointment.user.name} - {self.appointment.exam.title} 결과 ({self.created_at.strftime('%Y-%m-%d')})"
+
+    def save(self, *args, **kwargs):
+        """저장 시 관련 예약 상태 확인"""
+        if self.appointment.status != 'done':
+            raise ValueError("검사가 완료되지 않은 예약에는 결과를 저장할 수 없습니다.")
+        super().save(*args, **kwargs)
+
+
 class AppointmentHistory(models.Model):
     """
     예약 변경 이력을 관리하는 모델

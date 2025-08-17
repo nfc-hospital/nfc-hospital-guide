@@ -11,6 +11,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import KakaoOAuth from './components/auth/KakaoOAuth';
 import Exam from './pages/Exam';
+import MyExams from './pages/MyExams';
 import NotFound from './pages/NotFound';
 import PublicGuide from './components/PublicGuide';
 import PrivateRoute from './components/common/PrivateRoute';
@@ -112,6 +113,11 @@ function AppContent() {
             <Route path="/exam/:examId" element={
               <PrivateRoute>
                 <Exam />
+              </PrivateRoute>
+            } />
+            <Route path="/my-exams" element={
+              <PrivateRoute>
+                <MyExams />
               </PrivateRoute>
             } />
             

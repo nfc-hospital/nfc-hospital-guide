@@ -86,7 +86,7 @@ class Command(BaseCommand):
             defaults={
                 'current_state': 'REGISTERED',
                 'is_logged_in': True,
-                'current_exam': exam1.exam_id
+                'current_exam': exam1  # Exam 인스턴스를 직접 할당
             }
         )
         
@@ -139,7 +139,7 @@ class Command(BaseCommand):
             defaults={
                 'current_state': 'WAITING',
                 'is_logged_in': True,
-                'current_exam': exam1.exam_id
+                'current_exam': exam1  # Exam 인스턴스를 직접 할당
             }
         )
         
@@ -209,7 +209,7 @@ class Command(BaseCommand):
             defaults={
                 'current_state': 'ONGOING',
                 'is_logged_in': True,
-                'current_exam': exam1.exam_id
+                'current_exam': exam1  # Exam 인스턴스를 직접 할당
             }
         )
         
@@ -376,5 +376,37 @@ class Command(BaseCommand):
             self.stdout.write(f'\n{state}:')
             self.stdout.write(f'  Email: {email}')
             self.stdout.write(f'  설명: {description}')
+        
+        # Cypress 테스트를 위한 간편 로그인 사용자 생성
+        self.stdout.write('\n\nCypress 테스트용 사용자 생성 중...')
+        cypress_user, created = User.objects.get_or_create(
+            email='cypress_test@test.com',
+            defaults={
+                'name': 'Cypress 테스트',
+                'phone_number': '010-1234-5678',  # 뒷자리: 5678
+                'birth_date': '1990-01-01',      # YYMMDD: 900101
+                'role': 'patient',
+                'patient_id': 'P_CYPRESS'
+            }
+        )
+        if created:
+            cypress_user.set_password('test1234')
+            cypress_user.save()
+            self.stdout.write(self.style.SUCCESS('\u2713 Cypress 테스트 사용자 생성됨'))
+        else:
+            self.stdout.write(self.style.WARNING('\u2713 Cypress 테스트 사용자 이미 존재'))
+        
+        self.stdout.write(f'  - 전화번호: {cypress_user.phone_number} (뒷자리: 5678)')
+        self.stdout.write(f'  - 생년월일: {cypress_user.birth_date} (YYMMDD: 900101)')
+        self.stdout.write(f'  - 간편 로그인: phoneLast4="5678", birthDate="900101"')
+        
+        # PatientState 생성
+        PatientState.objects.update_or_create(
+            user=cypress_user,
+            defaults={
+                'current_state': 'UNREGISTERED',
+                'is_logged_in': False
+            }
+        )
         
         self.stdout.write(self.style.SUCCESS('\n테스트 데이터 생성이 완료되었습니다!'))

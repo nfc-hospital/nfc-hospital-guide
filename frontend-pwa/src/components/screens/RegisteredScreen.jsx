@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useJourneyStore from '../../store/journeyStore';
 import Lottie from 'lottie-react';
 import AppointmentList from '../journey/AppointmentList';
 import Modal from '../common/Modal';
 import { format, differenceInMinutes } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import CurrentTaskCard from '../journey/CurrentTaskCard';
+import UpcomingTasksCard from '../journey/UpcomingTasksCard';
 
 // Lottie 애니메이션 데이터 (체크마크)
 const checkmarkAnimation = {
@@ -62,7 +65,8 @@ const checkmarkAnimation = {
   }]
 };
 
-export default function RegisteredScreen({ taggedLocation }) {
+export default function RegisteredScreen({ taggedLocation, current_task, upcoming_tasks }) {
+  const navigate = useNavigate();
   const { user, todaysAppointments } = useJourneyStore();
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [showAnimation, setShowAnimation] = useState(true);
@@ -202,17 +206,39 @@ export default function RegisteredScreen({ taggedLocation }) {
           </div>
         </div>
 
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 mb-4">
-            오늘의 검사 일정 ({todaysAppointments?.length || 0}건)
-          </h2>
-          <AppointmentList 
-            appointments={todaysAppointments}
-            onItemClick={setSelectedAppointment}
-          />
-        </div>
+        {/* 현재 진행할 작업 카드 */}
+        {current_task && (
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              지금 해야 할 일
+            </h2>
+            <CurrentTaskCard appointment={current_task} />
+          </div>
+        )}
+
+        {/* 예정된 작업 카드 */}
+        {upcoming_tasks && upcoming_tasks.length > 0 && (
+          <div>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">
+              오늘의 남은 일정
+            </h2>
+            <UpcomingTasksCard appointments={upcoming_tasks} />
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
+          <button 
+            onClick={() => navigate('/my-exams')}
+            className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
+                         hover:shadow-md transition-all duration-300 text-left group">
+            <span className="text-3xl">📋</span>
+            <h3 className="text-lg font-semibold text-gray-900 mt-2 
+                         group-hover:text-blue-600 transition-colors">
+              내 검사 목록
+            </h3>
+            <p className="text-gray-600 mt-1">모든 검사 내역 보기</p>
+          </button>
+          
           <button className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
                          hover:shadow-md transition-all duration-300 text-left group">
             <span className="text-3xl">🗺️</span>
@@ -221,16 +247,6 @@ export default function RegisteredScreen({ taggedLocation }) {
               병원 지도
             </h3>
             <p className="text-gray-600 mt-1">검사실 위치 미리보기</p>
-          </button>
-          
-          <button className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
-                         hover:shadow-md transition-all duration-300 text-left group">
-            <span className="text-3xl">🍽️</span>
-            <h3 className="text-lg font-semibold text-gray-900 mt-2 
-                         group-hover:text-blue-600 transition-colors">
-              편의시설
-            </h3>
-            <p className="text-gray-600 mt-1">카페, 편의점 위치</p>
           </button>
         </div>
       </div>

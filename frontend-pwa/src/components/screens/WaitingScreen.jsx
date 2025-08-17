@@ -6,8 +6,10 @@ import MapModal from '../common/MapModal';
 import { useRealtimeQueues } from '../../hooks/useRealtimeQueues';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import CurrentTaskCard from '../journey/CurrentTaskCard';
+import UpcomingTasksCard from '../journey/UpcomingTasksCard';
 
-export default function WaitingScreen({ taggedLocation }) {
+export default function WaitingScreen({ taggedLocation, current_task, upcoming_tasks }) {
   // 기본값으로 빈 배열을 설정하여 'find' 오류를 방지
   const { user, currentQueues = [], todaysAppointments = [] } = useJourneyStore();
   const [showPreparation, setShowPreparation] = useState(false);
@@ -146,8 +148,10 @@ export default function WaitingScreen({ taggedLocation }) {
         {/* 진행 상황 */}
         <ProgressBar appointments={todaysAppointments} />
 
-        {/* 현재 검사 정보 */}
-        {currentExam && (
+        {/* 현재 진행 중인 작업 카드 */}
+        {current_task ? (
+          <CurrentTaskCard appointment={current_task} />
+        ) : currentExam && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               {isOngoing ? '현재 진행 중인 검사' : '다음 검사 정보'}
@@ -220,6 +224,11 @@ export default function WaitingScreen({ taggedLocation }) {
               )}
             </div>
           </div>
+        )}
+
+        {/* 예정된 작업 카드 */}
+        {upcoming_tasks && upcoming_tasks.length > 0 && (
+          <UpcomingTasksCard appointments={upcoming_tasks} />
         )}
 
         {/* 대기 중 이용 가능한 옵션들 */}
