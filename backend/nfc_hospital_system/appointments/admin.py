@@ -97,8 +97,14 @@ class AppointmentAdmin(admin.ModelAdmin):
     readonly_fields = ('appointment_id', 'created_at')
 
     # 액션 추가: 상태 변경 및 도착 확인/취소
-    actions = ['mark_as_ongoing', 'mark_as_done', 'mark_as_delayed',
-               'confirm_arrival_action', 'unconfirm_arrival_action']
+    actions = [
+        'mark_as_ongoing',
+        'mark_as_done',
+        'mark_as_delayed',
+        'confirm_arrival_action',
+        'unconfirm_arrival_action',
+        'change_date_to_today'  # ✨ 추가된 액션
+    ]
 
     def mark_as_ongoing(self, request, queryset):
         """선택된 예약을 '진행중'으로 변경합니다."""
@@ -129,6 +135,16 @@ class AppointmentAdmin(admin.ModelAdmin):
         updated = queryset.update(arrival_confirmed=False)
         self.message_user(request, f'{updated}개의 예약 도착 확인이 취소되었습니다.')
     unconfirm_arrival_action.short_description = "선택된 예약 도착 확인 취소"
+
+    def change_date_to_today(self, request, queryset):
+        """선택된 예약들의 날짜를 오늘로 변경합니다."""
+        # 현재 시간을 가져와서 scheduled_at 필드를 업데이트합니다.
+        now = timezone.now()
+        # 주의: 단순히 날짜만 변경하고 싶다면 .date()를 사용하거나,
+        # 시간 정보도 함께 업데이트하려면 timezone.now()를 그대로 사용합니다.
+        updated = queryset.update(scheduled_at=now)    
+        self.message_user(request, f'{updated}개의 예약 날짜가 오늘로 변경되었습니다.')
+    change_date_to_today.short_description = "선택된 예약 날짜를 오늘로 변경"
 
     # Appointment ID 자동 생성 (선택 사항: 필요한 경우)
     def save_model(self, request, obj, form, change):
