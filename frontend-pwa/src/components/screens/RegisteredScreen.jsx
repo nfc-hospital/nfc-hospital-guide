@@ -76,6 +76,11 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [locationAppointment, setLocationAppointment] = useState(null);
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  
+  // 다음 검사 찾기
+  const nextAppointment = todaysAppointments?.find(apt => 
+    apt.status === 'pending' || apt.status === 'waiting'
+  ) || current_task;
 
   useEffect(() => {
     const timer = setTimeout(() => setShowAnimation(false), 3000);
@@ -444,173 +449,319 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
       <MapModal 
         isOpen={isMapModalOpen}
         onClose={() => setIsMapModalOpen(false)}
+        appointment={null} // 일반 지도 탐색을 위해 appointment 비활성화
         mapConfig={{
-          url: '/images/maps/main_1f.interactive.svg',
-          viewBox: '0 0 900 600',
-          nodes: {
-            // 건물 입구
-            entrance_main: { x: 450, y: 80 },
-            
-            // 검사실/시설 입구
-            door_emergency: { x: 220, y: 280 },
-            door_lab: { x: 500, y: 200 },
-            door_blood: { x: 700, y: 200 },
-            door_xray: { x: 380, y: 200 },
-            door_ct: { x: 320, y: 200 },
-            door_donation: { x: 140, y: 430 },
-            door_convenience: { x: 570, y: 280 },
-            door_cafe: { x: 570, y: 360 },
-            door_bank: { x: 680, y: 280 },
-            door_pharmacy: { x: 780, y: 280 },
-            
-            // 메인 복도
-            corridor_main_1: { x: 180, y: 240 },
-            corridor_main_2: { x: 250, y: 240 },
-            corridor_main_3: { x: 320, y: 240 },
-            corridor_main_4: { x: 380, y: 240 },
-            corridor_main_5: { x: 450, y: 240 },
-            corridor_main_6: { x: 500, y: 240 },
-            corridor_main_7: { x: 570, y: 240 },
-            corridor_main_8: { x: 640, y: 240 },
-            corridor_main_9: { x: 700, y: 240 },
-            corridor_main_10: { x: 780, y: 240 },
-            
-            // 세로 연결 복도
-            corridor_north_1: { x: 450, y: 160 },
-            corridor_north_2: { x: 450, y: 120 },
-            
-            // 우회 경로
-            bypass_north: { x: 450, y: 180 },
-            bypass_east_1: { x: 750, y: 240 },
-            bypass_east_2: { x: 750, y: 180 },
+          // 본관 1층 설정
+          '본관 1층': {
+            url: '/images/maps/main_1f.interactive.svg',
+            viewBox: '0 0 900 600',
+            nodes: {
+              entrance_main: { x: 450, y: 80 },
+              door_emergency: { x: 220, y: 280 },
+              door_lab: { x: 500, y: 200 },
+              door_blood: { x: 700, y: 200 },
+              door_convenience: { x: 570, y: 280 },
+              door_cafe: { x: 570, y: 360 },
+              door_bank: { x: 680, y: 280 },
+              corridor_main_1: { x: 180, y: 240 },
+              corridor_main_2: { x: 250, y: 240 },
+              corridor_main_3: { x: 320, y: 240 },
+              corridor_main_4: { x: 380, y: 240 },
+              corridor_main_5: { x: 450, y: 240 },
+              corridor_main_6: { x: 500, y: 240 },
+              corridor_main_7: { x: 570, y: 240 },
+              corridor_main_8: { x: 640, y: 240 },
+              corridor_main_9: { x: 700, y: 240 },
+              corridor_north_1: { x: 450, y: 160 },
+              corridor_north_2: { x: 450, y: 120 },
+              bypass_north: { x: 450, y: 180 },
+              bypass_east_1: { x: 750, y: 240 },
+              bypass_east_2: { x: 750, y: 180 },
+            },
+            paths: {
+              '정문 → 채혈실': [
+                'entrance_main',
+                'corridor_north_2',
+                'corridor_north_1',
+                'bypass_north',
+                'bypass_east_2',
+                'bypass_east_1',
+                'corridor_main_9',
+                'door_blood',
+              ],
+              '정문 → 진단검사의학과': [
+                'entrance_main',
+                'corridor_north_2',
+                'corridor_north_1',
+                'corridor_main_5',
+                'corridor_main_6',
+                'door_lab',
+              ],
+              '정문 → 응급센터': [
+                'entrance_main',
+                'corridor_north_2',
+                'corridor_north_1',
+                'corridor_main_5',
+                'corridor_main_4',
+                'corridor_main_3',
+                'corridor_main_2',
+                'door_emergency',
+              ],
+              '정문 → 편의점': [
+                'entrance_main',
+                'corridor_north_2',
+                'corridor_north_1',
+                'corridor_main_5',
+                'corridor_main_6',
+                'corridor_main_7',
+                'door_convenience',
+              ],
+              '정문 → 카페': [
+                'entrance_main',
+                'corridor_north_2',
+                'corridor_north_1',
+                'corridor_main_5',
+                'corridor_main_6',
+                'corridor_main_7',
+                'door_cafe',
+              ],
+              '정문 → 은행': [
+                'entrance_main',
+                'corridor_north_2',
+                'corridor_north_1',
+                'corridor_main_5',
+                'corridor_main_6',
+                'corridor_main_7',
+                'corridor_main_8',
+                'door_bank',
+              ],
+            }
           },
-          paths: {
-            '정문 → 채혈실': [
-              'entrance_main',
-              'corridor_north_2',
-              'corridor_north_1',
-              'bypass_north',
-              'bypass_east_2',
-              'bypass_east_1',
-              'corridor_main_9',
-              'door_blood',
-            ],
-            '정문 → 진단검사의학과': [
-              'entrance_main',
-              'corridor_north_2',
-              'corridor_north_1',
-              'corridor_main_5',
-              'corridor_main_6',
-              'door_lab',
-            ],
-            '정문 → 응급센터': [
-              'entrance_main',
-              'corridor_north_2',
-              'corridor_north_1',
-              'corridor_main_5',
-              'corridor_main_4',
-              'corridor_main_3',
-              'corridor_main_2',
-              'door_emergency',
-            ],
-            '정문 → X-ray실': [
-              'entrance_main',
-              'corridor_north_2',
-              'corridor_north_1',
-              'corridor_main_5',
-              'corridor_main_4',
-              'door_xray',
-            ],
-            '정문 → CT실': [
-              'entrance_main',
-              'corridor_north_2',
-              'corridor_north_1',
-              'corridor_main_5',
-              'corridor_main_4',
-              'corridor_main_3',
-              'door_ct',
-            ],
-            '정문 → 편의점': [
-              'entrance_main',
-              'corridor_north_2',
-              'corridor_north_1',
-              'corridor_main_5',
-              'corridor_main_6',
-              'corridor_main_7',
-              'door_convenience',
-            ],
-            '정문 → 은행': [
-              'entrance_main',
-              'corridor_north_2',
-              'corridor_north_1',
-              'corridor_main_5',
-              'corridor_main_6',
-              'corridor_main_7',
-              'corridor_main_8',
-              'door_bank',
-            ],
-            '정문 → 약국': [
-              'entrance_main',
-              'corridor_north_2',
-              'corridor_north_1',
-              'corridor_main_5',
-              'corridor_main_6',
-              'corridor_main_7',
-              'corridor_main_8',
-              'corridor_main_9',
-              'corridor_main_10',
-              'door_pharmacy',
-            ],
+          // 본관 2층 설정
+          '본관 2층': {
+            url: '/images/maps/main_2f.interactive.svg',
+            viewBox: '0 0 900 600',
+            nodes: {
+              elevator: { x: 450, y: 300 },
+              door_internal: { x: 650, y: 200 },
+              door_surgery: { x: 250, y: 200 },
+              door_orthopedic: { x: 450, y: 200 },
+              door_pediatric: { x: 450, y: 100 },
+              corridor_main: { x: 450, y: 250 },
+              corridor_east: { x: 600, y: 250 },
+              corridor_west: { x: 300, y: 250 },
+              corridor_north: { x: 450, y: 150 },
+            },
+            paths: {
+              '엘리베이터 → 내과': [
+                'elevator',
+                'corridor_main',
+                'corridor_east',
+                'door_internal',
+              ],
+              '엘리베이터 → 외과': [
+                'elevator',
+                'corridor_main',
+                'corridor_west',
+                'door_surgery',
+              ],
+              '엘리베이터 → 정형외과': [
+                'elevator',
+                'corridor_main',
+                'door_orthopedic',
+              ],
+              '엘리베이터 → 소아청소년과': [
+                'elevator',
+                'corridor_main',
+                'corridor_north',
+                'door_pediatric',
+              ],
+            }
+          },
+          // 암센터 1층 설정
+          '암센터 1층': {
+            url: '/images/maps/cancer_1f.interactive.svg',
+            viewBox: '0 0 900 600',
+            nodes: {
+              entrance_cancer: { x: 450, y: 500 },
+              door_oncology: { x: 650, y: 300 },
+              door_chemo: { x: 450, y: 300 },
+              door_consult: { x: 250, y: 300 },
+              corridor_main: { x: 450, y: 400 },
+              corridor_east: { x: 600, y: 400 },
+              corridor_west: { x: 300, y: 400 },
+            },
+            paths: {
+              '암센터입구 → 종양내과': [
+                'entrance_cancer',
+                'corridor_main',
+                'corridor_east',
+                'door_oncology',
+              ],
+              '암센터입구 → 항암치료실': [
+                'entrance_cancer',
+                'corridor_main',
+                'door_chemo',
+              ],
+              '암센터입구 → 상담실': [
+                'entrance_cancer',
+                'corridor_main',
+                'corridor_west',
+                'door_consult',
+              ],
+            }
+          },
+          // 암센터 2층 설정
+          '암센터 2층': {
+            url: '/images/maps/cancer_2f.interactive.svg',
+            viewBox: '0 0 900 600',
+            nodes: {
+              entrance_cancer: { x: 450, y: 80 },
+              door_ct: { x: 360, y: 270 },
+              door_mri: { x: 560, y: 270 },
+              door_xray: { x: 145, y: 435 },
+              corridor_main: { x: 450, y: 350 },
+              corridor_west: { x: 250, y: 350 },
+              corridor_east: { x: 650, y: 350 },
+            },
+            paths: {
+              '입구 → CT실': [
+                'entrance_cancer',
+                'corridor_main',
+                'corridor_west',
+                'door_ct',
+              ],
+              '입구 → MRI실': [
+                'entrance_cancer',
+                'corridor_main',
+                'corridor_east',
+                'door_mri',
+              ],
+              '입구 → X-ray실': [
+                'entrance_cancer',
+                'corridor_main',
+                'corridor_west',
+                'door_xray',
+              ],
+            }
           }
         }}
         destinations={[
+          // 본관 1층 시설
           { 
             label: '채혈실',
             pathName: '정문 → 채혈실',
             icon: '💉',
-            description: '본관 1층 동쪽'
+            description: '본관 1층 동쪽',
+            floor: '본관 1층'
           },
           { 
             label: '진단검사의학과',
             pathName: '정문 → 진단검사의학과',
             icon: '🔬',
-            description: '본관 1층 중앙'
+            description: '본관 1층 중앙',
+            floor: '본관 1층'
           },
           { 
             label: '응급센터',
             pathName: '정문 → 응급센터',
             icon: '🚨',
-            description: '본관 1층 서쪽'
-          },
-          { 
-            label: 'X-ray실',
-            pathName: '정문 → X-ray실',
-            icon: '📷',
-            description: '본관 1층 중앙'
-          },
-          { 
-            label: 'CT실',
-            pathName: '정문 → CT실',
-            icon: '🏥',
-            description: '본관 1층 서쪽'
+            description: '본관 1층 서쪽',
+            floor: '본관 1층'
           },
           { 
             label: '편의점',
             pathName: '정문 → 편의점',
             icon: '🏪',
-            description: '편의시설 구역'
+            description: '편의시설 구역',
+            floor: '본관 1층'
+          },
+          { 
+            label: '카페',
+            pathName: '정문 → 카페',
+            icon: '☕',
+            description: '편의시설 구역',
+            floor: '본관 1층'
           },
           { 
             label: '은행',
             pathName: '정문 → 은행',
             icon: '🏦',
-            description: '편의시설 구역'
+            description: '편의시설 구역',
+            floor: '본관 1층'
+          },
+          // 본관 2층 시설
+          { 
+            label: '내과',
+            pathName: '엘리베이터 → 내과',
+            icon: '🩺',
+            description: '본관 2층 동쪽',
+            floor: '본관 2층'
           },
           { 
-            label: '약국',
-            pathName: '정문 → 약국',
+            label: '외과',
+            pathName: '엘리베이터 → 외과',
+            icon: '🏥',
+            description: '본관 2층 서쪽',
+            floor: '본관 2층'
+          },
+          { 
+            label: '정형외과',
+            pathName: '엘리베이터 → 정형외과',
+            icon: '🦴',
+            description: '본관 2층 중앙',
+            floor: '본관 2층'
+          },
+          { 
+            label: '소아청소년과',
+            pathName: '엘리베이터 → 소아청소년과',
+            icon: '👶',
+            description: '본관 2층 북쪽',
+            floor: '본관 2층'
+          },
+          // 암센터 1층 시설
+          { 
+            label: '종양내과',
+            pathName: '암센터입구 → 종양내과',
+            icon: '🏥',
+            description: '암센터 1층 동쪽',
+            floor: '암센터 1층'
+          },
+          { 
+            label: '항암치료실',
+            pathName: '암센터입구 → 항암치료실',
             icon: '💊',
-            description: '본관 1층 동쪽 끝'
+            description: '암센터 1층 중앙',
+            floor: '암센터 1층'
+          },
+          { 
+            label: '상담실',
+            pathName: '암센터입구 → 상담실',
+            icon: '💬',
+            description: '암센터 1층 서쪽',
+            floor: '암센터 1층'
+          },
+          // 암센터 2층 시설
+          { 
+            label: 'CT실',
+            pathName: '입구 → CT실',
+            icon: '🔍',
+            description: '암센터 2층 중앙',
+            floor: '암센터 2층'
+          },
+          { 
+            label: 'MRI실',
+            pathName: '입구 → MRI실',
+            icon: '🧲',
+            description: '암센터 2층 동쪽',
+            floor: '암센터 2층'
+          },
+          { 
+            label: 'X-ray실',
+            pathName: '입구 → X-ray실',
+            icon: '📷',
+            description: '암센터 2층 서쪽',
+            floor: '암센터 2층'
           },
         ]}
         title="병원 길찾기"
