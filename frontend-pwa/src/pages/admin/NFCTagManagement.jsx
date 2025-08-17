@@ -17,11 +17,6 @@ const NFCTagManagement = () => {
     search: ''
   });
 
-  // 필터 변경 감지 - 필터가 변경되면 페이지를 1로 리셋
-  useEffect(() => {
-    setCurrentPage(1); // 필터 변경 시 항상 1페이지로
-  }, [filters.is_active, filters.location, filters.search]);
-
   // 데이터 로드
   useEffect(() => {
     loadTags();
@@ -45,16 +40,32 @@ const NFCTagManagement = () => {
         const totalCount = response.count || 0;
         const totalPages = Math.ceil(totalCount / limit);
         setTotalPages(totalPages || 1);
+        
+        // 현재 페이지가 총 페이지 수보다 크면 1페이지로 리셋
+        if (currentPage > totalPages && totalPages > 0) {
+          setCurrentPage(1);
+        }
       } 
       // APIResponse 형식 처리
       else if (response.success) {
         setTags(response.data?.items || []);
-        setTotalPages(response.data?.pagination?.totalPages || 1);
+        const calculatedTotalPages = response.data?.pagination?.totalPages || 1;
+        setTotalPages(calculatedTotalPages);
+        
+        // 현재 페이지가 총 페이지 수보다 크면 1페이지로 리셋
+        if (currentPage > calculatedTotalPages && calculatedTotalPages > 0) {
+          setCurrentPage(1);
+        }
       }
       setError(null);
     } catch (err) {
-      setError(err.message);
-      console.error('Tags loading error:', err);
+      // 404 에러이고 페이지가 2 이상이면 1페이지로 재시도
+      if (err.response?.status === 404 && currentPage > 1) {
+        setCurrentPage(1);
+      } else {
+        setError(err.message);
+        console.error('Tags loading error:', err);
+      }
     } finally {
       setLoading(false);
     }
@@ -127,13 +138,13 @@ const NFCTagManagement = () => {
     }
   };
 
-  // 필터 변경 핸들러 - currentPage 리셋 제거 (useEffect에서 처리)
+  // 필터 변경 핸들러 - 필터 변경시 페이지를 1로 리셋
   const handleFilterChange = (filterName, value) => {
     setFilters(prev => ({
       ...prev,
       [filterName]: value
     }));
-    // setCurrentPage(1) 제거 - useEffect에서 자동 처리
+    setCurrentPage(1); // 필터 변경 시 1페이지로 리셋
   };
 
   if (loading) {
