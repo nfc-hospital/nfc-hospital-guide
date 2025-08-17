@@ -61,7 +61,7 @@ const MapTest = () => {
     <div className="map-test-page">
       {/* 페이지 헤더 */}
       <div className="page-header">
-        <h1>🏥 병원 지도 시스템 테스트</h1>
+        <h1>병원 지도 시스템 테스트</h1>
         <p>InteractiveMapViewer - SVG 요소 직접 활용</p>
         <button 
           onClick={() => setUseSimple(!useSimple)}
