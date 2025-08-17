@@ -4,6 +4,7 @@ import useJourneyStore from '../../store/journeyStore';
 import Lottie from 'lottie-react';
 import AppointmentList from '../journey/AppointmentList';
 import Modal from '../common/Modal';
+import MapModal from '../common/MapModal';
 import { format, differenceInMinutes } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import CurrentTaskCard from '../journey/CurrentTaskCard';
@@ -72,6 +73,7 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
   const [showAnimation, setShowAnimation] = useState(true);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [locationAppointment, setLocationAppointment] = useState(null);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setShowAnimation(false), 3000);
@@ -239,7 +241,9 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
             <p className="text-gray-600 mt-1">모든 검사 내역 보기</p>
           </button>
           
-          <button className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
+          <button 
+            onClick={() => setIsMapModalOpen(true)}
+            className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
                          hover:shadow-md transition-all duration-300 text-left group">
             <span className="text-3xl">🗺️</span>
             <h3 className="text-lg font-semibold text-gray-900 mt-2 
@@ -416,6 +420,182 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
           </button>
         </div>
       </Modal>
+
+      {/* 병원 지도 모달 */}
+      <MapModal 
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+        mapConfig={{
+          url: '/images/maps/main_1f.interactive.svg',
+          viewBox: '0 0 900 600',
+          nodes: {
+            // 건물 입구
+            entrance_main: { x: 450, y: 80 },
+            
+            // 검사실/시설 입구
+            door_emergency: { x: 220, y: 280 },
+            door_lab: { x: 500, y: 200 },
+            door_blood: { x: 700, y: 200 },
+            door_xray: { x: 380, y: 200 },
+            door_ct: { x: 320, y: 200 },
+            door_donation: { x: 140, y: 430 },
+            door_convenience: { x: 570, y: 280 },
+            door_cafe: { x: 570, y: 360 },
+            door_bank: { x: 680, y: 280 },
+            door_pharmacy: { x: 780, y: 280 },
+            
+            // 메인 복도
+            corridor_main_1: { x: 180, y: 240 },
+            corridor_main_2: { x: 250, y: 240 },
+            corridor_main_3: { x: 320, y: 240 },
+            corridor_main_4: { x: 380, y: 240 },
+            corridor_main_5: { x: 450, y: 240 },
+            corridor_main_6: { x: 500, y: 240 },
+            corridor_main_7: { x: 570, y: 240 },
+            corridor_main_8: { x: 640, y: 240 },
+            corridor_main_9: { x: 700, y: 240 },
+            corridor_main_10: { x: 780, y: 240 },
+            
+            // 세로 연결 복도
+            corridor_north_1: { x: 450, y: 160 },
+            corridor_north_2: { x: 450, y: 120 },
+            
+            // 우회 경로
+            bypass_north: { x: 450, y: 180 },
+            bypass_east_1: { x: 750, y: 240 },
+            bypass_east_2: { x: 750, y: 180 },
+          },
+          paths: {
+            '정문 → 채혈실': [
+              'entrance_main',
+              'corridor_north_2',
+              'corridor_north_1',
+              'bypass_north',
+              'bypass_east_2',
+              'bypass_east_1',
+              'corridor_main_9',
+              'door_blood',
+            ],
+            '정문 → 진단검사의학과': [
+              'entrance_main',
+              'corridor_north_2',
+              'corridor_north_1',
+              'corridor_main_5',
+              'corridor_main_6',
+              'door_lab',
+            ],
+            '정문 → 응급센터': [
+              'entrance_main',
+              'corridor_north_2',
+              'corridor_north_1',
+              'corridor_main_5',
+              'corridor_main_4',
+              'corridor_main_3',
+              'corridor_main_2',
+              'door_emergency',
+            ],
+            '정문 → X-ray실': [
+              'entrance_main',
+              'corridor_north_2',
+              'corridor_north_1',
+              'corridor_main_5',
+              'corridor_main_4',
+              'door_xray',
+            ],
+            '정문 → CT실': [
+              'entrance_main',
+              'corridor_north_2',
+              'corridor_north_1',
+              'corridor_main_5',
+              'corridor_main_4',
+              'corridor_main_3',
+              'door_ct',
+            ],
+            '정문 → 편의점': [
+              'entrance_main',
+              'corridor_north_2',
+              'corridor_north_1',
+              'corridor_main_5',
+              'corridor_main_6',
+              'corridor_main_7',
+              'door_convenience',
+            ],
+            '정문 → 은행': [
+              'entrance_main',
+              'corridor_north_2',
+              'corridor_north_1',
+              'corridor_main_5',
+              'corridor_main_6',
+              'corridor_main_7',
+              'corridor_main_8',
+              'door_bank',
+            ],
+            '정문 → 약국': [
+              'entrance_main',
+              'corridor_north_2',
+              'corridor_north_1',
+              'corridor_main_5',
+              'corridor_main_6',
+              'corridor_main_7',
+              'corridor_main_8',
+              'corridor_main_9',
+              'corridor_main_10',
+              'door_pharmacy',
+            ],
+          }
+        }}
+        destinations={[
+          { 
+            label: '채혈실',
+            pathName: '정문 → 채혈실',
+            icon: '💉',
+            description: '본관 1층 동쪽'
+          },
+          { 
+            label: '진단검사의학과',
+            pathName: '정문 → 진단검사의학과',
+            icon: '🔬',
+            description: '본관 1층 중앙'
+          },
+          { 
+            label: '응급센터',
+            pathName: '정문 → 응급센터',
+            icon: '🚨',
+            description: '본관 1층 서쪽'
+          },
+          { 
+            label: 'X-ray실',
+            pathName: '정문 → X-ray실',
+            icon: '📷',
+            description: '본관 1층 중앙'
+          },
+          { 
+            label: 'CT실',
+            pathName: '정문 → CT실',
+            icon: '🏥',
+            description: '본관 1층 서쪽'
+          },
+          { 
+            label: '편의점',
+            pathName: '정문 → 편의점',
+            icon: '🏪',
+            description: '편의시설 구역'
+          },
+          { 
+            label: '은행',
+            pathName: '정문 → 은행',
+            icon: '🏦',
+            description: '편의시설 구역'
+          },
+          { 
+            label: '약국',
+            pathName: '정문 → 약국',
+            icon: '💊',
+            description: '본관 1층 동쪽 끝'
+          },
+        ]}
+        title="병원 길찾기"
+      />
     </div>
   );
 }

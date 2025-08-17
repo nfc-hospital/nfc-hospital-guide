@@ -22,91 +22,110 @@
   margin: 0;
 }
 
-/* 층 선택 탭 */
-.floor-tabs {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.floor-tab {
-  padding: 10px 20px;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.floor-tab:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-
-.floor-tab.active {
-  background: #2563eb;
-  color: white;
-  border-color: #2563eb;
-}
-
-.building-badge {
-  font-size: 0.85rem;
-  padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-.floor-tab.active .building-badge {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-.floor-name {
-  font-weight: 600;
-}
-
-/* 컨트롤 버튼 */
+/* 통합 컨트롤 버튼 스타일 */
 .controls {
   display: flex;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
 }
 
-.action-button {
-  padding: 10px 20px;
+/* 통합 맵 컨트롤 버튼 */
+.map-control-button {
+  padding: 12px 24px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.action-button.primary {
-  background: #2563eb;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   color: white;
+  position: relative;
 }
 
-.action-button.primary:hover {
-  background: #1d4ed8;
+.map-control-button:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
-.action-button.secondary {
-  background: #ef4444;
+.map-control-button:active {
+  transform: translateY(0);
+}
+
+/* 버튼 변형 스타일 */
+.map-control-button.primary {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+
+.map-control-button.primary:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+}
+
+.map-control-button.secondary {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+.map-control-button.secondary:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
+  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+.map-control-button.success {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+.map-control-button.success:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.map-control-button.neutral {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%) !important;
+}
+
+.map-control-button.neutral:hover {
+  background: linear-gradient(135deg, #4b5563 0%, #374151 100%) !important;
+  box-shadow: 0 6px 20px rgba(107, 114, 128, 0.4);
+}
+
+/* 탭 스타일 (층 선택용) */
+.map-control-button.tab {
+  background: white;
+  color: #4b5563;
+  border: 2px solid #e5e7eb;
+  box-shadow: none;
+}
+
+.map-control-button.tab:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.map-control-button.tab.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
+  border-color: transparent;
 }
 
-.action-button.secondary:hover {
-  background: #dc2626;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+.map-control-button.tab.active:hover {
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
 }
+
+/* 비활성화 상태 */
+.map-control-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* 추가 호버 스타일은 각 변형 클래스에서 처리 */
 
 /* 메인 콘텐츠 */
 .main-content {
@@ -205,21 +224,15 @@
     padding: 10px;
   }
   
-  .floor-tabs {
-    flex-wrap: wrap;
-  }
-  
-  .floor-tab {
-    font-size: 0.9rem;
-    padding: 8px 15px;
-  }
-  
   .controls {
     flex-wrap: wrap;
+    gap: 8px;
   }
   
-  .action-button {
+  .map-control-button {
     font-size: 0.9rem;
-    padding: 8px 16px;
+    padding: 10px 16px;
+    flex: 1 1 calc(50% - 4px);
+    min-width: 140px;
   }
 }

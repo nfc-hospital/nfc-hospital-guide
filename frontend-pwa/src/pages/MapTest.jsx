@@ -191,22 +191,21 @@ const MapTest = () => {
           <button 
             key={pathName} 
             onClick={() => createPath(pathName)} 
-            className="action-button primary"
+            className="map-control-button primary"
           >
             🗺️ {pathName}
           </button>
         ))}
         
         {pathData && (
-          <button onClick={clearPath} className="action-button secondary">
+          <button onClick={clearPath} className="map-control-button secondary">
             ❌ 경로 초기화
           </button>
         )}
         
         <button 
           onClick={() => setShowNodes(!showNodes)} 
-          className="action-button"
-          style={{ backgroundColor: showNodes ? '#10b981' : '#6b7280' }}
+          className={`map-control-button ${showNodes ? 'success' : 'neutral'}`}
         >
           {showNodes ? '🔵 노드 숨기기' : '⭕ 노드 표시'}
         </button>
