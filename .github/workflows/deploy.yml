@@ -91,6 +91,7 @@ jobs:
                   proxy_set_header Upgrade $http_upgrade;
                   proxy_set_header Connection "upgrade";
                   proxy_read_timeout 300s;
+                  proxy_set_header Authorization $http_authorization;
               }
           }
           EOF
