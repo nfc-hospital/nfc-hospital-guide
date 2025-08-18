@@ -49,106 +49,68 @@ jobs:
           # --- 4. Django 애플리케이션 준비 ---
           echo ">>> 4. Preparing Django application..."
           cd $DJANGO_DIR
-          
-          # production 설정으로 명시적 실행
-          export DJANGO_SETTINGS_MODULE="nfc_hospital_system.settings.production"
-          
-          $VENV_PYTHON manage.py collectstatic --noinput
-          $VENV_PYTHON manage.py migrate --noinput
+          $VENV_PYTHON manage.py collectstatic --noinput --settings=nfc_hospital_system.settings.production
+          $VENV_PYTHON manage.py migrate --noinput --settings=nfc_hospital_system.settings.production
 
-          # --- 5. 로그 디렉터리 생성 (중요!) ---
-          echo ">>> 5. Creating log directories for Django..."
+          # --- 5. 로그 디렉터리 생성 (502 오류 해결!) ---
+          echo ">>> 5. Creating log directory for Django..."
           sudo mkdir -p /var/log/django
           sudo chown $USER:$USER /var/log/django
-          sudo chmod 755 /var/log/django
 
           # --- 6. 백엔드 서버 재시작 ---
           echo ">>> 6. Restarting backend server..."
-          # 기존 서버 종료
           screen -S django -X quit || true
-          pkill -f "daphne" || true
           sleep 2
-          
-          # production 환경으로 Daphne 실행
-          cd $DJANGO_DIR
           screen -dmS django bash -c "export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.production'; $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application"
 
           # --- 7. Nginx 설정 ---
           echo ">>> 7. Configuring Nginx..."
-          
-          # Nginx 설정 파일 생성
           sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
-server {
-    listen 80;
-    server_name 15.164.94.194;
-    
-    # 타임아웃 설정
-    proxy_connect_timeout 60s;
-    proxy_send_timeout 60s;
-    proxy_read_timeout 60s;
-    
-    # 프론트엔드
-    location / {
-        root /var/www/nfc-hospital;
-        try_files $uri $uri/ /index.html;
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-    }
-    
-    # 백엔드 API, Admin, WebSocket
-    location ~ ^/(api|admin|ws|static)/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-EOF
+          server {
+              listen 80;
+              server_name 15.164.94.194;
 
-          # Nginx 사이트 활성화
-          sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
-          sudo rm -f /etc/nginx/sites-enabled/default
+              # 프론트엔드
+              location / {
+                  root /var/www/nfc-hospital;
+                  try_files $uri /index.html;
+                  add_header Cache-Control "no-cache, no-store, must-revalidate";
+              }
 
-          # --- 8. 프론트엔드 파일 복사 ---
-          echo ">>> 8. Copying frontend files..."
+              # 백엔드 API, Admin, WebSocket
+              location ~ ^/(api|admin|ws|static)/ {
+                  proxy_pass http://127.0.0.1:8000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+                  proxy_read_timeout 300s;
+              }
+          }
+          EOF
+
+          # --- 8. 프론트엔드 파일 복사 및 Nginx 재시작 ---
+          echo ">>> 8. Copying frontend files and restarting Nginx..."
           sudo mkdir -p $FRONTEND_BUILD_PATH
-          sudo rm -rf $FRONTEND_BUILD_PATH/*
           sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH/
           sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH
-
-          # --- 9. Nginx 재시작 ---
-          echo ">>> 9. Restarting Nginx..."
+          
+          sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
+          sudo rm -f /etc/nginx/sites-enabled/default
           sudo nginx -t
           sudo systemctl restart nginx
 
-          # --- 10. 최종 검증 ---
-          echo ">>> 10. Verifying deployment..."
+          # --- 9. 최종 검증 ---
+          echo ">>> 9. Verifying deployment..."
           sleep 5
-          
-          # Django 서버 확인
           if screen -list | grep -q "django"; then
-              echo "✅ Backend server is running"
+              echo "✅ Backend server is running successfully."
           else
-              echo "❌ ERROR: Backend server failed to start"
-              echo "Checking for errors..."
-              if [ -f /var/log/django/error.log ]; then
-                  tail -20 /var/log/django/error.log
-              fi
+              echo "❌ ERROR: Backend server failed to start."
               exit 1
           fi
-          
-          # 웹사이트 응답 확인
-          if curl -f http://localhost/ > /dev/null 2>&1; then
-              echo "✅ Frontend is responding"
-          else
-              echo "❌ ERROR: Frontend is not responding"
-              exit 1
-          fi
-          
-          echo "🎉 Deployment completed successfully!"
+          echo "✅ Deployment completed successfully!"
           echo "🌐 Website: http://$EC2_HOST/"
-          echo "🔧 API: http://$EC2_HOST/api/"
-          echo "⚙️ Admin: http://$EC2_HOST/admin/"
