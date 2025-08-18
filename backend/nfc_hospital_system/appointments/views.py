@@ -132,7 +132,7 @@ class TodaysAppointmentsView(ListAPIView):
     GET /api/v1/appointments/today/
     """
     serializer_class = AppointmentSerializer
-    permission_classes = [IsAuthenticated]
+    # permission_classes는 전역 설정(IsAuthenticated)을 사용
 
     def get_queryset(self):
         today = timezone.now().date()

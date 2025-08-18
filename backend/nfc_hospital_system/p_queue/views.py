@@ -148,7 +148,7 @@ class MyCurrentQueuesView(ListAPIView):
     GET /api/v1/queues/my-current/
     """
     serializer_class = QueueSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    # permission_classes는 전역 설정(IsAuthenticated)을 사용
 
     def get_queryset(self):
         return Queue.objects.filter(

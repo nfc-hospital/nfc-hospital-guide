@@ -378,6 +378,18 @@ class CSRFTokenView(APIView):
 
 # views.py에 추가할 테스트용 뷰
 
+# JWT 토큰 관련 커스텀 뷰 추가
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    permission_classes = [AllowAny]
+
+class CustomTokenRefreshView(TokenRefreshView):
+    permission_classes = [AllowAny]
+
+class CustomTokenVerifyView(TokenVerifyView):
+    permission_classes = [AllowAny]
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def kakao_login_mock(request):
