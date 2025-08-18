@@ -1,4 +1,4 @@
-name: Deploy Full Stack to EC2
+name: Deploy Full Stack to EC2 - Final Version
 
 on:
   push:
@@ -20,101 +20,90 @@ jobs:
 
           # --- 경로 변수 정의 ---
           PROJECT_DIR="$HOME/nfc-hospital"
-          BACKEND_DIR="$PROJECT_DIR/backend"
           FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
-          VENV_DAPHNE="$BACKEND_DIR/venv/bin/daphne"
-          VENV_PIP="$BACKEND_DIR/venv/bin/pip"
-          VENV_PYTHON="$BACKEND_DIR/venv/bin/python"
-          DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
+          VENV_DAPHNE="$HOME/nfc-hospital/backend/venv/bin/daphne" # 절대 경로 사용
+          VENV_PYTHON="$HOME/nfc-hospital/backend/venv/bin/python" # 절대 경로 사용
+          DJANGO_DIR="$PROJECT_DIR/nfc_hospital_system"
           FRONTEND_BUILD_PATH="/var/www/nfc-hospital"
           EC2_HOST="15.164.94.194"
 
           # --- 1. 코드 업데이트 ---
-          echo ">>> 1. Updating code from repository..."
+          echo ">>> 1. git 리포지토리에서 코드를 업데이트합니다..."
           cd $PROJECT_DIR
           git reset --hard HEAD
           git pull origin main
 
-          # --- 2. 백엔드 의존성 설치 ---
-          echo ">>> 2. Installing backend dependencies..."
+          # --- 2. 의존성 설치 ---
+          echo ">>> 2. 백엔드와 프론트엔드 의존성을 설치합니다..."
           cd $DJANGO_DIR
           $VENV_PIP install -r requirements.txt
-
-          # --- 3. 프론트엔드 의존성 설치 및 빌드 ---
-          echo ">>> 3. Installing frontend dependencies and building..."
           cd $FRONTEND_DIR
           npm install
+
+          # --- 3. 프론트엔드 빌드 ---
+          echo ">>> 3. 프론트엔드 애플리케이션을 빌드합니다..."
           npm run build
 
-          # --- 4. Django 애플리케이션 준비 ---
-          echo ">>> 4. Preparing Django application..."
+          # --- 4. 로그 디렉터리 및 파일 생성 (가장 중요!) ---
+          echo ">>> 4. Django를 위한 로그 디렉터리 및 파일을 먼저 생성하고 권한을 설정합니다..."
+          sudo mkdir -p /var/log/django
+          # 오타 수정: 두 파일을 공백으로 구분하여 한 번에 생성
+          sudo touch /var/log/django/error.log /var/log/django/nfc_hospital.log
+          # 생성된 디렉터리와 그 안의 모든 파일 소유권을 EC2 접속 유저에게 부여
+          sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /var/log/django
+
+          # --- 5. Django 애플리케이션 준비 ---
+          echo ">>> 5. Django 마이그레이션을 실행하고 정적 파일을 수집합니다..."
           cd $DJANGO_DIR
           $VENV_PYTHON manage.py collectstatic --noinput --settings=nfc_hospital_system.settings.production
           $VENV_PYTHON manage.py migrate --noinput --settings=nfc_hospital_system.settings.production
 
-          # --- 5. 로그 디렉터리 생성 (502 오류 해결!) ---
-          echo ">>> 5. Creating log directory for Django..."
-          sudo mkdir -p /var/log/django
-          sudo chown $USER:$USER /var/log/django
-          sudo chmod 755 /var/log/django
-          # 로그 파일도 미리 생성하여 권한 문제 방지
-          sudo touch /var/log/django/nfc_hospital.log /var/log/django/error.log
-          sudo chown $USER:$USER /var/log/django/*.log
-
           # --- 6. 백엔드 서버 재시작 ---
-          echo ">>> 6. Restarting backend server..."
+          echo ">>> 6. 백엔드 Daphne 서버를 재시작합니다..."
           screen -S django -X quit || true
           sleep 2
           screen -dmS django bash -c "export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.production'; $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application"
 
-          # --- 7. Nginx 설정 ---
-          echo ">>> 7. Configuring Nginx..."
-          sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
-          server {
-              listen 80;
-              server_name 15.164.94.194;
-
-              # 프론트엔드
-              location / {
-                  root /var/www/nfc-hospital;
-                  try_files $uri /index.html;
-                  add_header Cache-Control "no-cache, no-store, must-revalidate";
-              }
-
-              # 백엔드 API, Admin, WebSocket
-              location ~ ^/(api|admin|ws|static)/ {
-                  proxy_pass http://127.0.0.1:8000;
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade $http_upgrade;
-                  proxy_set_header Connection "upgrade";
-                  proxy_set_header Host $host;
-                  proxy_set_header X-Real-IP $remote_addr;
-                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto $scheme;
-                  proxy_read_timeout 300s;
-              }
-          }
-          EOF
-
-          # --- 8. 프론트엔드 파일 복사 및 Nginx 재시작 ---
-          echo ">>> 8. Copying frontend files and restarting Nginx..."
+          # --- 7. 프론트엔드 빌드 파일 복사 ---
+          echo ">>> 7. 프론트엔드 빌드 파일을 Nginx 디렉터리로 복사합니다..."
           sudo mkdir -p $FRONTEND_BUILD_PATH
           sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH/
           sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH
-          
+
+          # --- 8. Nginx 설정 및 재시작 ---
+          echo ">>> 8. Nginx를 설정하고 재시작합니다..."
+          sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
+server {
+    listen 80;
+    server_name 15.164.94.194;
+
+    location / {
+        root /var/www/nfc-hospital;
+        try_files $uri /index.html;
+    }
+
+    location ~ ^/(api|admin|ws|static)/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 300s;
+    }
+}
+EOF
           sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
           sudo rm -f /etc/nginx/sites-enabled/default
           sudo nginx -t
           sudo systemctl restart nginx
 
           # --- 9. 최종 검증 ---
-          echo ">>> 9. Verifying deployment..."
+          echo ">>> 9. 배포 상태를 검증합니다..."
           sleep 5
           if screen -list | grep -q "django"; then
-              echo "✅ Backend server is running successfully."
+              echo "✅ 백엔드 서버가 정상적으로 실행 중입니다."
           else
-              echo "❌ ERROR: Backend server failed to start."
+              echo "❌ ERROR: 백엔드 서버가 시작되지 못했습니다."
               exit 1
           fi
-          echo "✅ Deployment completed successfully!"
-          echo "🌐 Website: http://$EC2_HOST/"
+          echo "✅ 배포가 성공적으로 완료되었습니다!"
