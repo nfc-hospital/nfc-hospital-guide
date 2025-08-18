@@ -36,6 +36,10 @@ urlpatterns = [
     # 개선된 지도 메타데이터 API
     path('api/v1/navigation/maps/', views.get_maps_metadata, name='maps-metadata'),
     
+    # 진료과/시설 존 API (비로그인 사용자용)
+    path('api/v1/navigation/zones/', views.department_zones_list, name='department-zones-list'),
+    path('api/v1/navigation/zones/<int:zone_id>/', views.department_zone_detail, name='department-zone-detail'),
+    
     # 관리자용 ViewSet (REST framework)
     path('api/navigation/', include(router.urls)),
 ]

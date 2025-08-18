@@ -20,13 +20,13 @@ from collections import defaultdict
 
 from .models import (
     HospitalMap, NavigationNode, NavigationEdge,
-    PatientRoute, RouteProgress
+    PatientRoute, RouteProgress, DepartmentZone
 )
 from .serializers import (
     HospitalMapSerializer, NavigationNodeSerializer,
     PatientRouteSerializer, RouteProgressSerializer,
     RouteCalculationRequestSerializer, NFCScanNavigateRequestSerializer,
-    RouteCompleteRequestSerializer, RouteSearchSerializer
+    RouteCompleteRequestSerializer, RouteSearchSerializer, DepartmentZoneSerializer
 )
 from nfc.models import NFCTag
 from appointments.models import Exam
@@ -733,3 +733,78 @@ class NavigationManagementViewSet(ModelViewSet):
                 code="STATS_ERROR",
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])  # 비로그인 사용자도 접근 가능
+def department_zones_list(request):
+    """
+    진료과/시설 존 목록 조회 API
+    비로그인 사용자를 위한 병원 개요 정보 제공
+    """
+    try:
+        # 활성화된 존만 조회, 표시 순서대로 정렬
+        zones = DepartmentZone.objects.filter(is_active=True).order_by('display_order', 'name')
+        
+        # 타입별 필터링 (선택사항)
+        zone_type = request.GET.get('type')
+        if zone_type and zone_type in ['DEPARTMENT', 'FACILITY']:
+            zones = zones.filter(zone_type=zone_type)
+        
+        # 건물별 필터링 (선택사항)
+        building = request.GET.get('building')
+        if building:
+            zones = zones.filter(building=building)
+        
+        # 층별 필터링 (선택사항)
+        floor = request.GET.get('floor')
+        if floor:
+            zones = zones.filter(floor=floor)
+        
+        serializer = DepartmentZoneSerializer(zones, many=True)
+        
+        return APIResponse.success(
+            message="진료과/시설 정보를 조회했습니다.",
+            data={
+                'zones': serializer.data,
+                'total_count': zones.count()
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Department zones list error: {str(e)}")
+        return APIResponse.error(
+            message="진료과 정보 조회 중 오류가 발생했습니다.",
+            code="ZONES_LIST_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def department_zone_detail(request, zone_id):
+    """
+    특정 진료과/시설 존 상세 정보 조회
+    """
+    try:
+        zone = get_object_or_404(DepartmentZone, id=zone_id, is_active=True)
+        serializer = DepartmentZoneSerializer(zone)
+        
+        return APIResponse.success(
+            message="진료과 상세 정보를 조회했습니다.",
+            data=serializer.data
+        )
+        
+    except DepartmentZone.DoesNotExist:
+        return APIResponse.error(
+            message="해당 진료과를 찾을 수 없습니다.",
+            code="ZONE_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Department zone detail error: {str(e)}")
+        return APIResponse.error(
+            message="진료과 상세 정보 조회 중 오류가 발생했습니다.",
+            code="ZONE_DETAIL_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

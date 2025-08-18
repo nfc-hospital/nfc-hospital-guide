@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&amp;display=swap');
+            /* 기본 스타일 - 기존 SVG와 동일 */
+            .bg { fill: #ffffff; }
+            .room { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 2; }
+            .medical-room { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; }
+            .convenience { fill: #e0f2fe; stroke: #0891b2; stroke-width: 2; }
+            .doorway { stroke: #ffffff; stroke-width: 8; }
+            
+            /* 진료과 구역 스타일 */
+            .department-zone { 
+                fill: #dbeafe; 
+                stroke: #3b82f6; 
+                stroke-width: 2;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            .department-zone:hover {
+                fill: #bfdbfe;
+                stroke: #2563eb;
+                stroke-width: 3;
+            }
+            .department-zone.highlight {
+                fill: #93c5fd;
+                stroke: #1d4ed8;
+                stroke-width: 4;
+            }
+            
+            /* 텍스트 스타일 - 기존 SVG와 동일 */
+            .text-base { font-family: "Noto Sans KR", sans-serif; text-anchor: middle; fill: #1e293b; font-weight: 600; }
+            .text-large { font-size: 16px; }
+            .text-medium { font-size: 14px; }
+            .text-small { font-size: 12px; }
+            .icon-text { font-size: 12px; fill: #475569; }
+            .floor-label { font-size: 24px; font-weight: 700; fill: #1e293b; }
+        </style>
+    </defs>
+    
+    <rect width="900" height="600" class="bg"/>
+    
+    <!-- 본관 1층 라벨 -->
+    <text x="450" y="40" class="text-base floor-label">본관 1층</text>
+    <text x="450" y="60" class="text-base text-medium" fill="#6b7280">Main Building 1F</text>
+    
+    <!-- 층 구조 레이아웃 -->
+    <g id="floor-layout">
+        <!-- 응급의료센터 - 좌측 대형 구역 -->
+        <path d="M 50 100 L 250 100 L 250 250 L 50 250 Z" class="department-zone" id="dept-emergency" 
+              data-interactive="true" data-name="응급의료센터" data-building="본관" data-floor="1F"/>
+        <line x1="150" y1="250" x2="150" y2="270" class="doorway"/>
+        <text x="150" y="170" class="text-base text-large">응급의료센터</text>
+        <text x="150" y="190" class="text-base text-small" fill="#6b7280">24시간 운영</text>
+        
+        <!-- 진단검사의학과 -->
+        <rect x="280" y="100" width="180" height="100" class="department-zone" id="dept-laboratory" 
+              data-interactive="true" data-name="진단검사의학과" data-building="본관" data-floor="1F"/>
+        <line x1="370" y1="200" x2="370" y2="220" class="doorway"/>
+        <text x="370" y="145" class="text-base text-large">진단검사의학과</text>
+        <text x="370" y="165" class="text-base text-small" fill="#6b7280">Laboratory</text>
+        
+        <!-- 채혈실 -->
+        <rect x="490" y="100" width="140" height="100" class="department-zone" id="room-blood-collection" 
+              data-interactive="true" data-name="채혈실" data-building="본관" data-floor="1F"/>
+        <line x1="560" y1="200" x2="560" y2="220" class="doorway"/>
+        <text x="560" y="145" class="text-base text-large">채혈실</text>
+        <text x="560" y="165" class="text-base text-small" fill="#6b7280">Blood Collection</text>
+        
+        <!-- 영상의학과 -->
+        <rect x="660" y="100" width="190" height="100" class="department-zone" id="dept-radiology" 
+              data-interactive="true" data-name="영상의학과" data-building="본관" data-floor="1F"/>
+        <line x1="755" y1="200" x2="755" y2="220" class="doorway"/>
+        <text x="755" y="145" class="text-base text-large">영상의학과</text>
+        <text x="755" y="165" class="text-base text-small" fill="#6b7280">X-ray, CT, MRI</text>
+        
+        <!-- 중앙 복도 -->
+        <rect x="50" y="270" width="800" height="60" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1"/>
+        <text x="450" y="305" class="text-base text-small" fill="#94a3b8">중앙 복도</text>
+        
+        <!-- 원무과/접수 -->
+        <rect x="50" y="350" width="150" height="80" class="convenience" id="dept-administration" 
+              data-interactive="true" data-name="원무과" data-building="본관" data-floor="1F"/>
+        <line x1="125" y1="350" x2="125" y2="330" class="doorway"/>
+        <text x="125" y="385" class="text-base text-medium">원무과/접수</text>
+        <text x="125" y="405" class="text-base text-small" fill="#6b7280">Administration</text>
+        
+        <!-- 약국 -->
+        <rect x="230" y="350" width="120" height="80" class="convenience" id="dept-pharmacy" 
+              data-interactive="true" data-name="약국" data-building="본관" data-floor="1F"/>
+        <line x1="290" y1="350" x2="290" y2="330" class="doorway"/>
+        <text x="290" y="385" class="text-base text-medium">약국</text>
+        <text x="290" y="405" class="text-base text-small" fill="#6b7280">Pharmacy</text>
+        
+        <!-- 편의시설 구역 -->
+        <g id="convenience-area">
+            <rect x="380" y="350" width="100" height="80" class="convenience" id="store-convenience" 
+                  data-interactive="true" data-name="편의점" data-building="본관" data-floor="1F"/>
+            <line x1="430" y1="350" x2="430" y2="330" class="doorway"/>
+            <text x="430" y="385" class="text-base text-medium">편의점</text>
+            
+            <rect x="510" y="350" width="100" height="80" class="convenience" id="store-cafe" 
+                  data-interactive="true" data-name="카페" data-building="본관" data-floor="1F"/>
+            <line x1="560" y1="350" x2="560" y2="330" class="doorway"/>
+            <text x="560" y="385" class="text-base text-medium">카페</text>
+            
+            <rect x="640" y="350" width="100" height="80" class="convenience" id="store-bank" 
+                  data-interactive="true" data-name="은행" data-building="본관" data-floor="1F"/>
+            <line x1="690" y1="350" x2="690" y2="330" class="doorway"/>
+            <text x="690" y="385" class="text-base text-medium">은행/ATM</text>
+        </g>
+        
+        <!-- 다른 층 안내 패널 -->
+        <g id="floor-guide">
+            <rect x="50" y="460" width="800" height="100" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="2" rx="5"/>
+            <text x="450" y="485" class="text-base text-large" fill="#475569">다른 층 진료과 안내</text>
+            
+            <!-- 2층 진료과 -->
+            <g transform="translate(100, 500)">
+                <rect x="0" y="0" width="150" height="40" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" rx="3"
+                      data-interactive="true" data-name="내과" data-building="본관" data-floor="2F"/>
+                <text x="75" y="25" class="text-base text-medium">내과 (2층)</text>
+            </g>
+            
+            <g transform="translate(270, 500)">
+                <rect x="0" y="0" width="150" height="40" fill="#dcfce7" stroke="#16a34a" stroke-width="2" rx="3"
+                      data-interactive="true" data-name="외과" data-building="본관" data-floor="2F"/>
+                <text x="75" y="25" class="text-base text-medium">외과 (2층)</text>
+            </g>
+            
+            <g transform="translate(440, 500)">
+                <rect x="0" y="0" width="150" height="40" fill="#fce7f3" stroke="#ec4899" stroke-width="2" rx="3"
+                      data-interactive="true" data-name="산부인과" data-building="본관" data-floor="2F"/>
+                <text x="75" y="25" class="text-base text-medium">산부인과 (2층)</text>
+            </g>
+            
+            <g transform="translate(610, 500)">
+                <rect x="0" y="0" width="150" height="40" fill="#e9d5ff" stroke="#9333ea" stroke-width="2" rx="3"
+                      data-interactive="true" data-name="소아과" data-building="본관" data-floor="3F"/>
+                <text x="75" y="25" class="text-base text-medium">소아과 (3층)</text>
+            </g>
+        </g>
+        
+        <!-- 시설 아이콘들 -->
+        <g id="facilities">
+            <!-- 정문 -->
+            <g transform="translate(450, 65)" id="info-main-gate" data-interactive="true" data-name="정문">
+                <path d="M0 -15 L0 15 M-5 10 L0 15 L5 10" stroke="#475569" stroke-width="3" fill="none"/>
+                <text y="30" class="text-base icon-text">정문</text>
+            </g>
+            
+            <!-- 엘리베이터 -->
+            <g transform="translate(780, 350)" id="facility-elevator-1" data-interactive="true" data-name="엘리베이터">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-10 -8 L0 -15 L10 -8 M-10 8 L0 15 L10 8" stroke="#475569" stroke-width="2" fill="none"/>
+                <text y="40" class="text-base icon-text">엘리베이터</text>
+            </g>
+            
+            <!-- 화장실 -->
+            <g transform="translate(820, 250)" id="facility-restroom-1" data-interactive="true" data-name="화장실">
+                <circle cx="-8" cy="-8" r="4" fill="#475569"/>
+                <rect x="-10" y="-2" width="4" height="10" fill="#475569"/>
+                <circle cx="8" cy="-8" r="4" fill="#475569"/>
+                <path d="M 6 -2 L 10 -2 L 10 8 L 8 8 L 8 3 L 6 3 Z" fill="#475569"/>
+                <text y="30" class="text-base icon-text">화장실</text>
+            </g>
+            
+            <!-- 계단 -->
+            <g transform="translate(780, 430)" id="facility-stairs-1" data-interactive="true" data-name="계단">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-12 -10 L-12 -6 L-6 -6 L-6 -2 L0 -2 L0 2 L6 2 L6 6 L12 6 L12 10" 
+                      stroke="#475569" stroke-width="2" fill="none"/>
+                <text y="40" class="text-base icon-text">계단</text>
+            </g>
+            
+            <!-- 암센터 연결 통로 -->
+            <g transform="translate(850, 175)" id="conn-cancer-center" data-interactive="true" 
+               data-name="암센터 연결통로" data-building="연결통로" data-floor="2F">
+                <rect x="-25" y="-15" width="50" height="30" fill="#fff7ed" stroke="#ea580c" stroke-width="2"/>
+                <path d="M-20 0 L20 0 M15 -5 L20 0 L15 5" stroke="#ea580c" stroke-width="2" fill="none"/>
+                <text y="35" class="text-base icon-text">암센터</text>
+                <text y="50" class="text-base icon-text">연결통로</text>
+            </g>
+        </g>
+        
+        <!-- 범례 -->
+        <g id="legend" transform="translate(50, 20)">
+            <rect x="0" y="0" width="180" height="50" fill="none" stroke="#e2e8f0" stroke-width="1" rx="3"/>
+            <rect x="10" y="10" width="20" height="10" class="department-zone"/>
+            <text x="35" y="19" class="text-base text-small">진료과</text>
+            <rect x="10" y="25" width="20" height="10" class="convenience"/>
+            <text x="35" y="34" class="text-base text-small">편의시설</text>
+            <rect x="90" y="10" width="20" height="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="1"/>
+            <text x="115" y="19" class="text-base text-small">다른 층</text>
+        </g>
+    </g>
+</svg>

@@ -5,6 +5,9 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import AdminHomeScreen from '../components/screens/AdminHomeScreen';
 import { api } from '../api/client';
 
+// 비로그인 사용자용 컴포넌트
+import PublicGuide from '../components/PublicGuide';
+
 // 상태별 화면 컴포넌트들 import
 import UnregisteredScreen from '../components/screens/UnregisteredScreen';
 import ArrivedScreen from '../components/screens/ArrivedScreen';
@@ -193,9 +196,9 @@ const Home = () => {
     return <ErrorScreen message={error} />;
   }
 
-  // 사용자 정보가 없는 경우
+  // 사용자 정보가 없는 경우 - 비로그인 상태
   if (!user) {
-    return <ErrorScreen message="사용자 정보를 찾을 수 없습니다" />;
+    return <PublicGuide />;
   }
 
   // ✨ 역할에 따른 라우팅

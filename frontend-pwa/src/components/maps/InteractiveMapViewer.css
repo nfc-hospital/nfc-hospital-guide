@@ -14,3 +14,16 @@
   cursor: pointer;
   transition: opacity 0.2s ease;
 }
+
+/* 선택된 방/구역 정보 표시 */
+.selected-room-info {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}

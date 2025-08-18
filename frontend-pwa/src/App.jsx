@@ -100,11 +100,7 @@ function AppContent() {
           <Route path="/chatbot-test" element={<ChatbotTest />} />
           <Route path="/map-test" element={<MapTest />} />
           <Route element={<Layout />}>
-            <Route path="/" element={
-              <PrivateRoute>
-                <Home />
-              </PrivateRoute>
-            } />
+            <Route path="/" element={<Home />} />
             <Route path="/nfc/:tagId" element={
               <PrivateRoute>
                 <Home />

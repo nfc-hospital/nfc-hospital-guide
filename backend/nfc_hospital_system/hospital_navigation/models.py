@@ -605,3 +605,113 @@ class RouteProgress(models.Model):
         
         self.is_on_route = True
         return False
+
+
+class DepartmentZone(models.Model):
+    """
+    병원 내 주요 진료과 및 시설의 위치와 정보를 정의.
+    비로그인 사용자를 위한 전체 구조도(Overview Map)에 사용될 데이터.
+    """
+    # 1. 이름 (화면에 표시될 이름)
+    # 예: "내과", "원무과"
+    name = models.CharField(
+        max_length=100, 
+        unique=True, 
+        verbose_name="진료과/시설 이름",
+        help_text="지도에 표시될 진료과/시설의 이름"
+    )
+
+    # 2. SVG ID (SVG 요소와 매칭될 고유 ID)
+    # 예: "zone-internal-medicine", "zone-administration"
+    svg_id = models.CharField(
+        max_length=100, 
+        unique=True, 
+        verbose_name="SVG 요소 ID",
+        help_text="SVG 지도 내 해당 존(Zone)의 <g> 태그 ID"
+    )
+
+    # 3. 위치 정보
+    building = models.CharField(
+        max_length=50, 
+        default="본관", 
+        verbose_name="건물명",
+        help_text="건물명 (예: 본관, 암센터)"
+    )
+    
+    floor = models.CharField(
+        max_length=50, 
+        default="1F", 
+        verbose_name="층수",
+        help_text="층수 (예: 1F, 2F)"
+    )
+    
+    # 4. 지도 파일 경로 (어떤 지도에 그려져 있는지)
+    # 예: "/images/maps/overview_main_1f.svg"
+    map_url = models.CharField(
+        max_length=255, 
+        verbose_name="지도 파일 경로",
+        help_text="해당 존이 그려진 SVG 지도의 URL"
+    )
+
+    # 5. 부가 정보 (UI 표시에 사용)
+    description = models.TextField(
+        blank=True, 
+        verbose_name="위치 설명",
+        help_text="간단한 위치 설명 (예: 본관 1층 엘리베이터 옆)"
+    )
+    
+    icon = models.CharField(
+        max_length=50, 
+        blank=True, 
+        verbose_name="아이콘",
+        help_text="UI에 표시될 아이콘 (예: 🏥, 💊)"
+    )
+    
+    # 6. 타입 구분 (UI에서 그룹핑할 때 사용)
+    ZONE_TYPE_CHOICES = [
+        ('DEPARTMENT', '진료과'),
+        ('FACILITY', '편의/행정시설'),
+    ]
+    zone_type = models.CharField(
+        max_length=20, 
+        choices=ZONE_TYPE_CHOICES, 
+        default='DEPARTMENT',
+        verbose_name="구역 타입"
+    )
+
+    # 7. 정렬 순서
+    display_order = models.IntegerField(
+        default=0,
+        verbose_name="표시 순서",
+        help_text="낮은 숫자일수록 먼저 표시"
+    )
+
+    # 8. 활성 상태
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="활성 상태"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name="생성일시"
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name="수정일시"
+    )
+
+    def __str__(self):
+        return f"{self.name} ({self.building} {self.floor})"
+
+    class Meta:
+        db_table = 'department_zones'
+        verbose_name = "진료과/시설 존"
+        verbose_name_plural = "진료과/시설 존 목록"
+        ordering = ['display_order', 'name']
+        indexes = [
+            models.Index(fields=['zone_type', 'is_active']),
+            models.Index(fields=['building', 'floor']),
+            models.Index(fields=['display_order']),
+        ]
