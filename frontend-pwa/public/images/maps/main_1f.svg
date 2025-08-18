@@ -47,10 +47,10 @@
 
         <!-- 우측 중앙 - 편의시설들 -->
         <g id="convenience-area">
-            <!-- 편의점 -->
+            <!-- 약국 -->
             <rect x="470" y="280" width="120" height="80" class="convenience"/>
             <line x1="510" y1="280" x2="550" y2="280" class="doorway"/>
-            <text x="530" y="325" class="text-base text-medium">편의점</text>
+            <text x="530" y="325" class="text-base text-medium">약국</text>
 
             <!-- 카페 -->
             <rect x="470" y="380" width="120" height="80" class="convenience"/>
@@ -66,7 +66,7 @@
         <!-- 하단 - 물류창고 -->
         <rect x="280" y="480" width="200" height="80" class="room"/>
         <line x1="350" y1="480" x2="410" y2="480" class="doorway"/>
-        <text x="380" y="525" class="text-base text-medium">중앙창고</text>
+        <text x="380" y="525" class="text-base text-medium">원무과</text>
 
         <!-- 시설 아이콘들 -->
         <g id="facilities">

@@ -25,6 +25,7 @@ import QueueMonitoring from './pages/admin/QueueMonitoring';
 import AnalyticsDashboard from './pages/admin/AnalyticsDashboard';
 import ChatbotTest from './pages/ChatbotTest';
 import MapTest from './pages/MapTest';
+import MapEditor from './pages/MapEditor';
 // New Chatbot System
 import ChatbotSystem from './components/chatbot-v2';
 // Mock NFC Panel for development
@@ -104,6 +105,7 @@ function AppContent() {
           <Route path="/public-guide" element={<PublicGuide />} />
           <Route path="/chatbot-test" element={<ChatbotTest />} />
           <Route path="/map-test" element={<MapTest />} />
+          <Route path="/map-editor" element={<MapEditor />} />
           {/* Public NFC route - no authentication required */}
           <Route path="/nfc/:tagId" element={<Home />} />
           

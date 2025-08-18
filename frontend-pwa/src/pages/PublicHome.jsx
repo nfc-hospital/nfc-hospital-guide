@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import VoiceInput from '../components/VoiceInput';
 import DepartmentDirections from '../components/DepartmentDirections';
 import { 
-  ArrowRightIcon, 
   MapPinIcon,
   BuildingOfficeIcon,
+  ArrowRightIcon,
 } from '@heroicons/react/24/outline';
 import { 
   ChevronRightIcon,
@@ -39,15 +39,6 @@ export default function PublicHome() {
       hoverColor: 'hover:bg-emerald-100 hover:border-emerald-300',
     },
     { 
-      name: '주차장', 
-      icon: '🚗', 
-      description: '주차 안내',
-      color: 'bg-blue-500',
-      lightColor: 'bg-blue-50',
-      borderColor: 'border-blue-200',
-      hoverColor: 'hover:bg-blue-100 hover:border-blue-300',
-    },
-    { 
       name: '원무과', 
       icon: '💳', 
       description: '접수·수납',
@@ -55,6 +46,15 @@ export default function PublicHome() {
       lightColor: 'bg-amber-50',
       borderColor: 'border-amber-200',
       hoverColor: 'hover:bg-amber-100 hover:border-amber-300',
+    },
+    { 
+      name: '안내데스크', 
+      icon: '💁‍♀️', 
+      description: '도움·안내',
+      color: 'bg-purple-500',
+      lightColor: 'bg-purple-50',
+      borderColor: 'border-purple-200',
+      hoverColor: 'hover:bg-purple-100 hover:border-purple-300',
     },
   ];
 
@@ -95,13 +95,13 @@ export default function PublicHome() {
       setSelectedDepartment('응급실');
     } else if (text.includes('약국')) {
       setSelectedDepartment('약국');
-    } else if (text.includes('주차')) {
-      setSelectedDepartment('주차장');
+    } else if (text.includes('안내') || text.includes('도움')) {
+      setSelectedDepartment('안내데스크');
     } else if (text.includes('화장실')) {
       setSelectedDepartment('화장실');
     } else if (text.includes('엘리베이터')) {
       setSelectedDepartment('엘리베이터');
-    } else if (text.includes('원무') || text.includes('접수')) {
+    } else if (text.includes('원무') || text.includes('접수') || text.includes('수납')) {
       setSelectedDepartment('원무과');
     }
     // 진료과 매칭
@@ -177,7 +177,7 @@ export default function PublicHome() {
             </h2>
             
             {/* 음성 입력 - VoiceInput 컴포넌트 사용 */}
-            <div className="max-w-md mx-auto">
+            <div className="w-full">
               <VoiceInput
                 onResult={handleVoiceResult}
                 onError={handleError}
@@ -196,16 +196,11 @@ export default function PublicHome() {
           </div>
         )}
 
-        {/* 선택 안내 문구 */}
-        <div className="text-center mt-16 sm:mt-24 mb-8 sm:mb-12">
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-lg sm:text-xl text-gray-700 font-medium">
-              혹은 아래에서 선택해주세요
-            </p>
-            <svg className="w-6 h-6 text-blue-600 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-            </svg>
-          </div>
+        {/* 선택 안내 문구 - 간소화 */}
+        <div className="text-center mt-6 mb-4">
+          <p className="text-sm text-gray-600">
+            또는 아래 버튼을 선택하세요 ↓
+          </p>
         </div>
 
         {/* 주요 장소 빠른 선택 - 모바일 최적화 */}
@@ -261,30 +256,6 @@ export default function PublicHome() {
                 </div>
               </button>
             ))}
-          </div>
-        </section>
-
-        {/* 안내 데스크 섹션 - 모바일 최적화 */}
-        <section className="mb-8">
-          <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 sm:p-6 border-2 border-amber-200">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-amber-100 rounded-xl flex items-center justify-center text-2xl">
-                  💁‍♀️
-                </div>
-                <div>
-                  <h4 className="text-base sm:text-lg font-bold text-gray-900">도움이 필요하신가요?</h4>
-                  <p className="text-sm text-gray-700">안내 데스크로 오세요</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedDepartment('안내데스크')}
-                className="w-full sm:w-auto bg-amber-500 hover:bg-amber-600 text-white px-6 py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-300 hover:shadow-lg flex items-center justify-center gap-2"
-              >
-                위치보기
-                <ArrowRightIcon className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </section>
 

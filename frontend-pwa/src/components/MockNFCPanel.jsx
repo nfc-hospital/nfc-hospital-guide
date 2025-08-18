@@ -23,6 +23,7 @@ const realTags = [
 export default function MockNFCPanel() {
   const [isScanning, setIsScanning] = useState(false);
   const [selectedTag, setSelectedTag] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
@@ -137,58 +138,79 @@ export default function MockNFCPanel() {
   };
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 bg-white rounded-2xl shadow-2xl border-2 border-gray-200 p-4 max-w-sm">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-lg font-bold text-gray-800">🏷️ Mock NFC Panel</h3>
-        <span className={`text-xs px-2 py-1 rounded-full ${isAuthenticated ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-          {isAuthenticated ? '로그인됨' : '비로그인'}
-        </span>
-      </div>
-      
-      <p className="text-xs text-gray-500 mb-3">개발용 가상 NFC 태그 스캐너</p>
-      
-      <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-        {realTags.map((tag) => (
-          <button
-            key={tag.uid}
-            onClick={() => handleMockScan(tag)}
-            disabled={isScanning}
-            className={`
-              relative p-3 rounded-lg text-sm font-medium transition-all
-              ${selectedTag === tag.uid 
-                ? 'bg-blue-500 text-white scale-95' 
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}
-              ${isScanning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-              border border-gray-300
-            `}
-          >
-            <div className="text-xs opacity-75">{tag.code.split('-')[1]}</div>
-            <div className="font-semibold">{tag.name}</div>
-            <div className="text-xs mt-1 opacity-75">
-              {tag.building} {tag.floor}F
+    <div className="fixed bottom-20 right-4 z-50">
+      {/* 접힌 상태 */}
+      {!isExpanded ? (
+        <button
+          onClick={() => setIsExpanded(true)}
+          className="bg-white rounded-full shadow-lg border-2 border-gray-200 p-3 hover:shadow-xl transition-all duration-200"
+        >
+          <span className="text-xl">🏷️</span>
+        </button>
+      ) : (
+        /* 펼쳐진 상태 */
+        <div className="bg-white rounded-2xl shadow-2xl border-2 border-gray-200 p-4 max-w-sm animate-in slide-in-from-right duration-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-bold text-gray-800">🏷️ Mock NFC Panel</h3>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2 py-1 rounded-full ${isAuthenticated ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                {isAuthenticated ? '로그인됨' : '비로그인'}
+              </span>
+              <button
+                onClick={() => setIsExpanded(false)}
+                className="text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                ✕
+              </button>
             </div>
-            
-            {selectedTag === tag.uid && (
-              <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-90 rounded-lg">
-                <div className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-white opacity-75"></div>
-                <div className="relative inline-flex rounded-full h-6 w-6 bg-white"></div>
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-      
-      {isScanning && (
-        <div className="mt-3 text-center text-sm text-blue-600 font-medium animate-pulse">
-          스캔 처리 중...
+          </div>
+          
+          {/* <p className="text-xs text-gray-500 mb-3">개발용 가상 NFC 태그 스캐너</p> */}
+          
+          <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+            {realTags.map((tag) => (
+              <button
+                key={tag.uid}
+                onClick={() => handleMockScan(tag)}
+                disabled={isScanning}
+                className={`
+                  relative p-3 rounded-lg text-sm font-medium transition-all
+                  ${selectedTag === tag.uid 
+                    ? 'bg-blue-500 text-white scale-95' 
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}
+                  ${isScanning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                  border border-gray-300
+                `}
+              >
+                <div className="text-xs opacity-75">{tag.code.split('-')[1]}</div>
+                <div className="font-semibold">{tag.name}</div>
+                <div className="text-xs mt-1 opacity-75">
+                  {tag.building} {tag.floor}F
+                </div>
+                
+                {selectedTag === tag.uid && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-blue-500 bg-opacity-90 rounded-lg">
+                    <div className="animate-ping absolute inline-flex h-8 w-8 rounded-full bg-white opacity-75"></div>
+                    <div className="relative inline-flex rounded-full h-6 w-6 bg-white"></div>
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+          
+          {isScanning && (
+            <div className="mt-3 text-center text-sm text-blue-600 font-medium animate-pulse">
+              스캔 처리 중...
+            </div>
+          )}
+          
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <p className="text-xs text-gray-400">
+              💡 실제 NFC 태그처럼 작동합니다
+            </p>
+          </div>
         </div>
       )}
-      
-      <div className="mt-3 pt-3 border-t border-gray-200">
-        <p className="text-xs text-gray-400">
-          💡 실제 NFC 태그처럼 작동합니다
-        </p>
-      </div>
     </div>
   );
 }

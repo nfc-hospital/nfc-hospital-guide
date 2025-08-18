@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { MicrophoneIcon } from '@heroicons/react/24/solid';
-import { StopIcon } from '@heroicons/react/24/outline';
+import { StopIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 
 const VoiceInput = ({ onResult, onError, isListening, setIsListening }) => {
   const [transcript, setTranscript] = useState('');
+  const [textInput, setTextInput] = useState('');
   const [recognition, setRecognition] = useState(null);
 
   useEffect(() => {
@@ -69,6 +70,21 @@ const VoiceInput = ({ onResult, onError, isListening, setIsListening }) => {
     }
   }, [recognition, isListening]);
 
+  const handleTextSubmit = useCallback((e) => {
+    e.preventDefault();
+    if (textInput.trim()) {
+      onResult(textInput.trim());
+      setTextInput('');
+    }
+  }, [textInput, onResult]);
+
+  const handleKeyPress = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleTextSubmit(e);
+    }
+  }, [handleTextSubmit]);
+
   return (
     <div className="w-full">
       <div className="relative">
@@ -104,16 +120,42 @@ const VoiceInput = ({ onResult, onError, isListening, setIsListening }) => {
             </button>
           </div>
         ) : (
-          // 대기 상태 버튼
-          <button
-            onClick={startListening}
-            className="w-full bg-white hover:bg-gray-50 text-blue-600 px-8 py-6 rounded-2xl font-semibold text-lg sm:text-xl transition-all duration-300 shadow-2xl hover:shadow-3xl hover:scale-[1.02] flex items-center justify-center gap-4 group"
-          >
-            <div className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-              <MicrophoneIcon className="w-7 h-7 sm:w-8 sm:h-8 text-blue-600" />
+          // 메신저 스타일 입력창
+          <form onSubmit={handleTextSubmit} className="w-full max-w-2xl mx-auto">
+            <div className="bg-white rounded-2xl shadow-2xl p-3 flex items-center gap-3">
+              <input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="어디로 가시나요? (예: 응급실, 약국, 내과)"
+                className="flex-1 px-5 py-4 text-lg sm:text-xl outline-none placeholder-gray-400"
+              />
+              
+              {/* 텍스트 전송 버튼 (텍스트가 있을 때만 표시) */}
+              {textInput.trim() && (
+                <button
+                  type="submit"
+                  className="p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all duration-200"
+                >
+                  <PaperAirplaneIcon className="w-7 h-7" />
+                </button>
+              )}
+              
+              {/* 마이크 버튼 - 크기 증가 */}
+              <button
+                type="button"
+                onClick={startListening}
+                className="p-4 bg-gradient-to-br from-blue-100 to-blue-200 hover:from-blue-200 hover:to-blue-300 text-blue-600 rounded-xl transition-all duration-200 group"
+              >
+                <MicrophoneIcon className="w-8 h-8 group-hover:scale-110 transition-transform" />
+              </button>
             </div>
-            <span className="text-lg sm:text-xl font-bold">버튼을 누르고 말씀해주세요</span>
-          </button>
+            
+            <p className="text-white/80 text-sm text-center mt-3">
+              텍스트로 입력하거나 마이크 버튼을 눌러 말씀해주세요
+            </p>
+          </form>
         )}
       </div>
     </div>

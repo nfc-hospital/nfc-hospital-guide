@@ -31,9 +31,9 @@
         <line x1="130" y1="350" x2="170" y2="350" class="doorway"/>
         <text x="140" y="405" class="text-base text-large">헌혈실</text>
         <g id="convenience-area">
-            <rect x="470" y="280" width="120" height="80" class="convenience" id="store-convinience" data-name="편의점" data-interactive="true"/>
+            <rect x="470" y="280" width="120" height="80" class="convenience" id="store-pharmacy" data-name="약국" data-interactive="true"/>
             <line x1="510" y1="280" x2="550" y2="280" class="doorway"/>
-            <text x="530" y="325" class="text-base text-medium">편의점</text>
+            <text x="530" y="325" class="text-base text-medium">약국</text>
             <rect x="470" y="380" width="120" height="80" class="convenience" id="store-cafe" data-name="카페" data-interactive="true"/>
             <line x1="510" y1="380" x2="550" y2="380" class="doorway"/>
             <text x="530" y="425" class="text-base text-medium">카페</text>
@@ -41,9 +41,9 @@
             <line x1="660" y1="280" x2="700" y2="280" class="doorway"/>
             <text x="680" y="375" class="text-base text-medium">은행</text>
         </g>
-        <rect x="280" y="480" width="200" height="80" class="room" id="room-storage" data-name="중앙창고" data-interactive="true"/>
+        <rect x="280" y="480" width="200" height="80" class="room" id="room-storage" data-name="원무과" data-interactive="true"/>
         <line x1="350" y1="480" x2="410" y2="480" class="doorway"/>
-        <text x="380" y="525" class="text-base text-medium">중앙창고</text>
+        <text x="380" y="525" class="text-base text-medium">원무과</text>
         <g id="facilities">
             <g transform="translate(450, 65)" id="info-main-gate" data-name="정문" data-interactive="true">
                 <path d="M0 -15 L0 15 M-5 10 L0 15 L5 10" stroke="#475569" stroke-width="3" fill="none"/>
