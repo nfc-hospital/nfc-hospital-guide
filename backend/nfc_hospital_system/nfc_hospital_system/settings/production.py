@@ -156,19 +156,28 @@ if config('USE_S3', default=False, cast=bool):
 # SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # 운영용 JWT 설정 (보안 강화)
-SIMPLE_JWT.update({
+from datetime import timedelta
+SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),   # 1시간
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),   # 1일
-    'SIGNING_KEY': config('JWT_SECRET_KEY'),
-})
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': config('JWT_SECRET_KEY', default=SECRET_KEY),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
 
 # 성능 최적화
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
 
-# API 문서 비활성화 (운영 환경)
-SPECTACULAR_SETTINGS.update({
-    'SERVE_INCLUDE_SCHEMA': False,
-})
+# API 문서 설정 (운영 환경에서는 비활성화)
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'NFC Hospital API',
+    'DESCRIPTION': 'NFC 기반 병원 안내 시스템 API',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,  # 운영 환경에서는 스키마 비활성화
+    'SERVE_PUBLIC': False,  # 운영 환경에서는 공개 비활성화
+}
 
 print("🔒 운영 환경으로 Django 서버가 시작됩니다!")
