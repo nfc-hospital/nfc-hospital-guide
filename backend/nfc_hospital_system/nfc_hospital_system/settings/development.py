@@ -63,8 +63,6 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:5174",      # React PWA (Vite) - 2
     "http://127.0.0.1:5174",
-    "http://15.164.94.194",       # EC2 배포 서버
-    "http://15.164.94.194:8000",  # EC2 Django
 ]
 
 # CSRF_TRUSTED_ORIGINS 설정 추가
@@ -79,9 +77,7 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     'http://localhost:5174', 
-    'http://127.0.0.1:5174',
-    'http://15.164.94.194',       # EC2 배포 서버
-    'http://15.164.94.194:8000',  # EC2 Django
+    'http://127.0.0.1:5174', 
 ]
 
 
@@ -233,4 +229,4 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # WebSocket을 위한 ALLOWED_HOSTS 추가
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '15.164.94.194', '*']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '*']
