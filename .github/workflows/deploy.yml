@@ -60,20 +60,46 @@ jobs:
           $VENV_PYTHON manage.py collectstatic --noinput --settings=nfc_hospital_system.settings.production
           $VENV_PYTHON manage.py migrate --noinput --settings=nfc_hospital_system.settings.production
 
-          # --- 6. 백엔드 서버 재시작 ---
-          echo ">>> 6. 백엔드 Daphne 서버를 재시작합니다..."
+          # --- 6. 서버 시작 스크립트 생성 ---
+          echo ">>> 6. 서버 시작 스크립트를 생성합니다..."
+          cat > $PROJECT_DIR/start_server.sh <<'EOF'
+          #!/bin/bash
+          # 서버 시작 스크립트 - 환경 변수를 확실하게 로드하고 Daphne 실행
+
+          # .env 파일이 있는 Django 프로젝트 폴더로 이동
+          cd ~/nfc-hospital/backend/nfc_hospital_system
+
+          # .env 파일이 존재하면, 파일의 내용을 현재 셸 세션의 환경 변수로 로드
+          if [ -f .env ]; then
+            export $(grep -v '^#' .env | xargs)
+          fi
+
+          # Django 설정 모듈 명시적 설정
+          export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.production'
+
+          # Daphne 서버 실행
+          ~/nfc-hospital/backend/venv/bin/daphne -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
+          EOF
+
+          # 생성된 스크립트에 실행 권한 부여
+          chmod +x $PROJECT_DIR/start_server.sh
+
+          # --- 7. 백엔드 서버 재시작 ---
+          echo ">>> 7. 백엔드 Daphne 서버를 재시작합니다..."
           screen -S django -X quit || true
           sleep 2
-          screen -dmS django bash -c "export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.production'; $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application"
+          
+          # 새 screen 세션에서 start_server.sh 스크립트를 실행
+          screen -dmS django $PROJECT_DIR/start_server.sh
 
-          # --- 7. 프론트엔드 빌드 파일 복사 ---
-          echo ">>> 7. 프론트엔드 빌드 파일을 Nginx 디렉터리로 복사합니다..."
+          # --- 8. 프론트엔드 빌드 파일 복사 ---
+          echo ">>> 8. 프론트엔드 빌드 파일을 Nginx 디렉터리로 복사합니다..."
           sudo mkdir -p $FRONTEND_BUILD_PATH
           sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH/
           sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH
 
-          # --- 8. Nginx 설정 및 재시작 ---
-          echo ">>> 8. Nginx를 설정하고 재시작합니다..."
+          # --- 9. Nginx 설정 및 재시작 ---
+          echo ">>> 9. Nginx를 설정하고 재시작합니다..."
           sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
           server {
               listen 80;
@@ -103,8 +129,8 @@ jobs:
           sudo nginx -t
           sudo systemctl restart nginx
 
-          # --- 9. 최종 검증 ---
-          echo ">>> 9. 배포 상태를 검증합니다..."
+          # --- 10. 최종 검증 ---
+          echo ">>> 10. 배포 상태를 검증합니다..."
           sleep 5
           if screen -list | grep -q "django"; then
               echo "✅ 백엔드 서버가 정상적으로 실행 중입니다."
