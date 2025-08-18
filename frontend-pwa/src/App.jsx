@@ -8,6 +8,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import Layout from './components/common/Layout';
 import Home from './pages/Home';
+import PublicHome from './pages/PublicHome';
 import Login from './pages/Login';
 import KakaoOAuth from './components/auth/KakaoOAuth';
 import Exam from './pages/Exam';
@@ -94,14 +95,19 @@ function AppContent() {
           />
           
           <Routes>
+          {/* 비로그인 사용자를 위한 홈 화면 - Layout 밖에 배치 */}
+          <Route path="/" element={<PublicHome />} />
           <Route path="/login" element={<Login />} />
           <Route path="/oauth/kakao" element={<KakaoOAuth />} />
           <Route path="/public-guide" element={<PublicGuide />} />
           <Route path="/chatbot-test" element={<ChatbotTest />} />
           <Route path="/map-test" element={<MapTest />} />
+          {/* Public NFC route - no authentication required */}
+          <Route path="/nfc/:tagId" element={<Home />} />
+          
           <Route element={<Layout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/nfc/:tagId" element={
+            {/* 로그인 사용자를 위한 홈 화면 */}
+            <Route path="/home" element={
               <PrivateRoute>
                 <Home />
               </PrivateRoute>

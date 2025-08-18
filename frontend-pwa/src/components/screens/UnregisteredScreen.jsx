@@ -15,23 +15,25 @@ export default function UnregisteredScreen({ taggedLocation }) {
   const navigationKeywords = generateNavigationKeywords(taggedLocation, destination);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white pb-20">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 pb-20">
+      <div className="max-w-4xl mx-auto px-6 py-8">
         <div className="h-[calc(100vh-100px)]">
           <SlideNavigation 
             defaultSlide={initialSlide}
             showDots={true}
           >
           {/* 슬라이드 1: 환영 메시지 및 접수 안내 */}
-          <div className="h-full overflow-y-auto py-6 space-y-6">
+          <div className="h-full overflow-y-auto py-8 space-y-8">
             {/* NFC 태그 위치 정보 표시 */}
             {taggedLocation && (
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6 animate-fade-in">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">📍</span>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-3xl p-6 mb-8 shadow-lg animate-fade-in">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="text-3xl">📍</span>
+                  </div>
                   <div>
-                    <p className="font-semibold text-blue-900">현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}</p>
-                    <p className="text-blue-700 text-sm mt-1">
+                    <p className="text-xl font-bold text-blue-900 mb-2">현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}</p>
+                    <p className="text-lg text-blue-700 leading-relaxed">
                       {locationInfo.isNearby && taggedLocation.room?.includes('원무')
                         ? '✅ 이곳이 접수창구입니다. 바로 접수하실 수 있습니다.'
                         : '📍 초진 접수는 본관 1층 원무과에서 하실 수 있습니다. 다음 화면에서 길찾기를 확인하세요.'
@@ -43,24 +45,30 @@ export default function UnregisteredScreen({ taggedLocation }) {
             )}
 
             {/* 환영 메시지 */}
-            <div className="text-center mb-8">
-              <div className="text-7xl mb-4">🏥</div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                병원에 오신 것을 환영합니다
+            <div className="text-center mb-10">
+              <div className="w-32 h-32 bg-gradient-to-br from-blue-100 to-green-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl">
+                <span className="text-8xl">🏥</span>
+              </div>
+              <h1 className="text-5xl font-extrabold text-gray-900 mb-6 leading-tight">
+                병원에 오신 것을<br/>
+                <span className="text-blue-600">환영합니다</span>
               </h1>
-              <p className="text-xl text-gray-600">
-                {user?.name ? `${user.name}님, ` : ''}간편하게 접수하고 진료받으세요
+              <p className="text-2xl text-gray-700 font-medium leading-relaxed">
+                {user?.name ? `${user.name}님, ` : ''}간편하게 접수하고<br/>편안하게 진료받으세요
               </p>
             </div>
 
             {/* 메인 CTA 버튼 */}
             <button 
               onClick={() => navigate('/login')}
-              className="w-full bg-blue-600 text-white rounded-3xl py-6 text-2xl 
-                       font-bold hover:bg-blue-700 transition-all duration-300
-                       shadow-lg hover:shadow-xl transform hover:-translate-y-1
-                       mb-6 animate-pulse">
-              📱 간편 접수하기
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-3xl py-8 text-3xl 
+                       font-extrabold hover:from-blue-700 hover:to-blue-800 transition-all duration-300
+                       shadow-2xl hover:shadow-3xl transform hover:-translate-y-2 hover:scale-[1.02]
+                       mb-8 border-4 border-blue-200 min-h-[80px]">
+              <div className="flex items-center justify-center gap-4">
+                <span className="text-4xl">📱</span>
+                <span>간편 접수하기</span>
+              </div>
             </button>
 
             {/* 접수 방법 안내 */}

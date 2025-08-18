@@ -128,6 +128,20 @@
 .stagger-item:nth-child(4) { animation-delay: 0.7s; }
 .stagger-item:nth-child(5) { animation-delay: 0.9s; }
 
+/* 반짝이는 광택 효과 */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(300%) skewX(-12deg);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 6s ease-in-out infinite;
+}
+
 /* CSS 변수 정의 */
 :root {
   /* Primary Colors */

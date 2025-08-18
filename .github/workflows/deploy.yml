@@ -112,17 +112,26 @@ jobs:
           fi
           
           # 6. 백엔드 서버 재시작 (코드 변경이 있을 때만)
+          # 임시: 설정 문제 해결을 위해 항상 재시작
+          BACKEND_CODE_CHANGED="true"
           if [ -n "$BACKEND_CODE_CHANGED" ] || [ -n "$BACKEND_DEPS_CHANGED" ]; then
               echo ">>> 6. Backend code changed. Restarting Daphne..."
               pkill -f "^$VENV_DAPHNE" || true
               sleep 2
               
-              # 마이그레이션 실행
+              # 마이그레이션 및 정적 파일 수집
               cd $DJANGO_DIR
               $VENV_PYTHON manage.py migrate --noinput || true
+              $VENV_PYTHON manage.py collectstatic --noinput || true
               
-              # Daphne 재시작
-              screen -dmS django $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
+              # .env 파일에 운영 환경 설정 추가
+              cd $DJANGO_DIR
+              echo "DJANGO_ENVIRONMENT=production" >> .env
+              echo "ALLOWED_HOSTS=localhost,127.0.0.1,$EC2_HOST" >> .env
+              echo "CORS_ALLOWED_ORIGINS=http://$EC2_HOST,http://$EC2_HOST:5174,http://$EC2_HOST:5173" >> .env
+              
+              # Daphne 재시작 - production 환경으로 실행
+              screen -dmS django bash -c "cd $DJANGO_DIR && export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings' && export DJANGO_ENVIRONMENT='production' && $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application"
           else
               echo ">>> 6. Backend unchanged. Keeping current server running."
           fi
@@ -148,6 +157,11 @@ jobs:
           server {
               listen 80;
               server_name $EC2_HOST;
+              
+              # 타임아웃 설정 증가
+              proxy_connect_timeout 60s;
+              proxy_send_timeout 60s;
+              proxy_read_timeout 60s;
               
               # 프론트엔드 (React PWA) - 캐시 제어 강화
               location / {
@@ -182,6 +196,8 @@ jobs:
                   proxy_set_header X-Real-IP \$remote_addr;
                   proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
                   proxy_set_header X-Forwarded-Proto \$scheme;
+                  proxy_connect_timeout 300s;
+                  proxy_send_timeout 300s;
                   proxy_read_timeout 86400;
                   
                   # API 응답 캐시 방지

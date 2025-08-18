@@ -1,18 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useJourneyStore from '../../store/journeyStore';
-import Lottie from 'lottie-react';
-import AppointmentList from '../journey/AppointmentList';
-import ProgressBar from '../journey/ProgressBar';
-import SimpleProgressBar from '../journey/SimpleProgressBar';
 import Modal from '../common/Modal';
 import MapModal from '../common/MapModal';
 import SlideNavigation from '../common/SlideNavigation';
 import { format, differenceInMinutes } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import Lottie from 'lottie-react';
 import CurrentTaskCard from '../journey/CurrentTaskCard';
 import UpcomingTasksCard from '../journey/UpcomingTasksCard';
 import { calculateNFCDistance, getDestinationByState, getInitialSlideIndex, generateNavigationKeywords } from '../../utils/nfcLocation';
+import UnifiedHeader from '../common/UnifiedHeader';
 
 // Lottie 애니메이션 데이터 (체크마크)
 const checkmarkAnimation = {
@@ -45,56 +43,96 @@ const checkmarkAnimation = {
       ty: "gr",
       it: [
         {
-          ind: 0,
           ty: "sh",
+          d: 1,
           ks: {
             a: 0,
             k: {
               i: [[0, 0], [0, 0], [0, 0]],
               o: [[0, 0], [0, 0], [0, 0]],
-              v: [[-30, 0], [-10, 20], [30, -20]],
+              v: [[-50, 0], [-20, 30], [50, -40]],
               c: false
             }
           }
         },
         {
           ty: "st",
-          c: { a: 0, k: [0.122, 0.467, 0.878, 1] },
+          c: { a: 0, k: [0.2, 0.6, 1, 1] },
           o: { a: 0, k: 100 },
-          w: { a: 0, k: 8 },
+          w: { a: 0, k: 12 },
           lc: 2,
-          lj: 2
+          lj: 2,
+          ml: 4,
+          bm: 0
+        },
+        {
+          ty: "tr",
+          p: { a: 0, k: [0, 0] },
+          a: { a: 0, k: [0, 0] },
+          s: { a: 0, k: [100, 100] },
+          r: { a: 0, k: 0 },
+          o: { a: 0, k: 100 },
+          sk: { a: 0, k: 0 },
+          sa: { a: 0, k: 0 }
         }
       ]
-    }]
+    }],
+    trim: {
+      ty: "tm",
+      s: { a: 0, k: 0 },
+      e: { a: 1, k: [
+        { i: { x: [0.667], y: [1] }, o: { x: [0.333], y: [0] }, t: 25, s: [0] },
+        { t: 45, s: [100] }
+      ] },
+      o: { a: 0, k: 0 },
+      m: 1
+    }
   }]
 };
 
 export default function RegisteredScreen({ taggedLocation, current_task, upcoming_tasks }) {
   const navigate = useNavigate();
-  const { user, todaysAppointments } = useJourneyStore();
-  const [selectedAppointment, setSelectedAppointment] = useState(null);
-  const [showAnimation, setShowAnimation] = useState(true);
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [locationAppointment, setLocationAppointment] = useState(null);
-  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const { user, todaysAppointments, currentQueues = [] } = useJourneyStore();
+  
+  // WaitingScreen처럼 journeyStore 데이터 우선 사용
+  // 현재 대기 중인 큐 찾기
+  const activeQueue = currentQueues.find(
+    q => q.state === 'waiting' || q.state === 'ongoing'
+  );
+  
+  // todaysAppointments에서 현재 진행중인 검사 찾기
+  const currentFromAppointments = todaysAppointments?.find(apt => 
+    ['waiting', 'called', 'ongoing'].includes(apt.status)
+  );
+  
+  // props보다 journeyStore 데이터를 우선시
+  const actualCurrentTask = currentFromAppointments || activeQueue || current_task;
+  
+  // 예정된 작업들 찾기
+  const upcomingFromAppointments = todaysAppointments?.filter(apt => 
+    apt.status === 'scheduled' || apt.status === 'pending'
+  ) || [];
+  
+  const actualUpcomingTasks = upcomingFromAppointments.length > 0 ? upcomingFromAppointments : 
+    (upcoming_tasks || []);
+  
+  // journeyStore의 데이터를 우선 사용
+  const displayCurrentTask = actualCurrentTask;
+  const displayUpcomingTasks = actualUpcomingTasks;
+  
+  // 디버깅 로그
+  console.log('🔍 RegisteredScreen 데이터:');
+  console.log('  - todaysAppointments:', todaysAppointments);
+  console.log('  - displayCurrentTask:', displayCurrentTask);
+  console.log('  - displayUpcomingTasks:', displayUpcomingTasks);
+  const [currentSlide, setCurrentSlide] = useState(0);
   
   // 다음 검사 찾기
   const nextAppointment = todaysAppointments?.find(apt => 
     apt.status === 'pending' || apt.status === 'waiting'
   ) || current_task;
 
-  // NFC 위치 판별 및 슬라이드 설정
-  const nextExam = current_task?.exam || todaysAppointments?.[0]?.exam;
-  const destination = getDestinationByState('REGISTERED', nextExam);
-  const locationInfo = taggedLocation ? calculateNFCDistance(taggedLocation, destination) : { isNearby: false };
-  const initialSlide = getInitialSlideIndex(locationInfo.isNearby);
-  const navigationKeywords = generateNavigationKeywords(taggedLocation, destination);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setShowAnimation(false), 3000);
-    return () => clearTimeout(timer);
-  }, []);
 
   const getTimeUntilFirst = () => {
     if (!todaysAppointments || todaysAppointments.length === 0) return null;
@@ -116,193 +154,221 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
     return mins > 0 ? `${hours}시간 ${mins}분 후` : `${hours}시간 후`;
   };
 
+  // 슬라이드 정의
+  const slides = [
+    { id: 'schedule', title: '오늘 일정' },
+    { id: 'actions', title: '추가 메뉴' }
+  ];
+  
+  // 모달 상태 추가
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [locationAppointment, setLocationAppointment] = useState(null);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+
+  const totalSlides = slides.length;
+  const canGoPrev = currentSlide > 0;
+  const canGoNext = currentSlide < totalSlides - 1;
+
+  const goToPrevSlide = () => {
+    if (canGoPrev) setCurrentSlide(currentSlide - 1);
+  };
+
+  const goToNextSlide = () => {
+    if (canGoNext) setCurrentSlide(currentSlide + 1);
+  };
+
+  const [showWelcome, setShowWelcome] = useState(true);
+  
+  // 3초 후 자동으로 슬라이드로 이동
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowWelcome(false);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {showAnimation && (
-        <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
-          <div className="text-center">
-            <Lottie 
-              animationData={checkmarkAnimation} 
-              loop={false}
-              style={{ width: 200, height: 200 }}
-            />
-            <h1 className="text-3xl font-bold text-green-600 mt-4">
-              접수가 완료되었습니다!
-            </h1>
-            <p className="text-xl text-gray-600 mt-2">
-              {user?.name}님, 오늘 진료 잘 받으세요
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                안녕하세요, {user?.name}님
-              </h1>
-              <p className="text-lg text-gray-600 mt-1">
-                오늘의 검사 일정을 확인하세요
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-gray-500">첫 검사까지</p>
-              <p className="text-2xl font-bold text-blue-600">
-                {getTimeUntilFirst() || '-'}
-              </p>
-            </div>
-          </div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 relative">
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        {/* 통합 헤더 - 등록 상태 표시 */}
+        <UnifiedHeader currentState="REGISTERED" />
       </div>
-
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* 전체 진행 상황 표시 - 고정 */}
-        <div className="mb-4">
-          <SimpleProgressBar 
-            patientState={user?.state || 'REGISTERED'} 
-            appointments={todaysAppointments}
-            showLabel={true}
-          />
+      
+      {showWelcome ? (
+        /* 환영 화면 */
+        <div className="h-[calc(100vh-200px)] flex flex-col justify-center px-6">
+          <div className="text-center">
+            {/* Lottie 애니메이션 */}
+            <div className="mb-8">
+              <div className="w-48 h-48 mx-auto">
+                <Lottie 
+                  animationData={checkmarkAnimation}
+                  loop={false}
+                  autoplay={true}
+                />
+              </div>
+            </div>
+            
+            {/* 메인 메시지 */}
+            <h1 className="text-5xl sm:text-6xl font-bold text-gray-900 mb-6">
+              접수가 완료되었습니다
+            </h1>
+            <p className="text-3xl text-gray-700">
+              {user?.name}님, 안녕하세요
+            </p>
+            
+            <button
+              onClick={() => setShowWelcome(false)}
+              className="mt-12 text-blue-600 text-xl hover:text-blue-800 transition-colors"
+            >
+              계속하기 →
+            </button>
+          </div>
         </div>
-
-        <div className="h-[calc(100vh-200px)]">
+      ) : (
+        /* 슬라이드 네비게이션 */
+        <div className="h-[calc(100vh-200px)] flex flex-col">
           <SlideNavigation 
-            defaultSlide={initialSlide}
+            defaultSlide={0}
             showDots={true}
           >
-            {/* 슬라이드 1: 검사 준비사항 및 안내 */}
-            <div className="h-full overflow-y-auto py-6 space-y-6">
-              {/* NFC 태그 위치에 따른 맞춤형 안내 */}
-              {taggedLocation && (
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-4 animate-fade-in">
-                  <div className="flex items-start gap-3">
-                    <span className="text-2xl">📍</span>
+            {/* 슬라이드 1: 오늘의 일정 */}
+          <div className="h-full flex flex-col px-6 py-8 overflow-y-auto">
+            <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 text-center mb-6">
+              오늘의 검사 일정
+            </h2>
+            
+            {/* 첫 검사 시간 */}
+            {getTimeUntilFirst() && (
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-3xl p-6 mb-8 mx-auto shadow-lg">
+                <p className="text-xl text-blue-800 font-medium text-center">
+                  첫 검사까지 <span className="font-bold text-2xl text-blue-900">{getTimeUntilFirst()}</span>
+                </p>
+              </div>
+            )}
+            
+            {/* 현재 진행할 검사 */}
+            {displayCurrentTask ? (
+              <div className="mb-8">
+                <h3 className="text-2xl font-semibold text-gray-700 mb-6 flex items-center gap-3">
+                  <span className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></span>
+                  지금 해야 할 일
+                </h3>
+                <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-3xl p-8 shadow-lg 
+                             border-2 border-blue-200 hover:shadow-xl transition-all duration-300">
+                  <div className="flex items-center gap-6 mb-4">
+                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl 
+                                flex items-center justify-center shadow-lg">
+                      <span className="text-white text-3xl font-bold">1</span>
+                    </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-green-900">
-                        현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
-                      </p>
-                      <p className="text-green-700 mt-1">
-                        {locationInfo.isNearby 
-                          ? '✅ 검사실 근처에 계십니다. 준비사항을 확인해주세요.'
-                          : '📍 위치 정보를 확인했습니다. 검사실 길찾기를 위해 다음 화면을 확인하세요.'
-                        }
+                      <p className="text-2xl font-bold text-gray-900 mb-2">{displayCurrentTask.exam?.title}</p>
+                      <p className="text-xl text-gray-700">
+                        <span className="text-blue-600 font-semibold">
+                          {displayCurrentTask.exam?.building} {displayCurrentTask.exam?.floor}층 {displayCurrentTask.exam?.room}
+                        </span>
                       </p>
                     </div>
                   </div>
-                </div>
-              )}
-
-              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-3xl">ℹ️</span>
-                  <div>
-                    <h3 className="font-semibold text-blue-900">오늘의 안내</h3>
-                    <p className="text-blue-800 mt-1">
-                      각 검사 시간 10분 전까지 해당 검사실 앞에서 대기해주세요.
-                      검사 준비사항은 아래에서 확인하실 수 있습니다.
-                    </p>
-                  </div>
+                  {displayCurrentTask.scheduled_at && (
+                    <div className="bg-white/70 rounded-2xl px-6 py-3 inline-block">
+                      <p className="text-xl text-blue-800 font-medium">
+                        예약 시간: <span className="font-bold text-2xl">
+                          {format(new Date(displayCurrentTask.scheduled_at), 'HH:mm', { locale: ko })}
+                        </span>
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
-
-            {/* 현재 진행할 작업 카드 */}
-            {current_task && (
-              <div className="mb-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  지금 해야 할 일
-                </h2>
-                <CurrentTaskCard appointment={current_task} />
+            ) : (
+              <div className="mb-8 bg-gray-100 rounded-3xl p-8 text-center">
+                <p className="text-xl text-gray-600">현재 진행할 검사가 없습니다</p>
               </div>
             )}
-
-            {/* 예정된 작업 카드 */}
-            {upcoming_tasks && upcoming_tasks.length > 0 && (
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  오늘의 남은 일정
-                </h2>
-                <UpcomingTasksCard appointments={upcoming_tasks} />
+            
+            {/* 예정된 검사 목록 */}
+            {displayUpcomingTasks && displayUpcomingTasks.length > 0 && (
+              <div className="flex-1">
+                <h3 className="text-2xl font-semibold text-gray-700 mb-6">다음 일정</h3>
+                <div className="space-y-5">
+                  {displayUpcomingTasks.slice(0, 3).map((task, index) => (
+                    <div key={task.appointment_id || index} 
+                         className="bg-white rounded-3xl p-7 shadow-lg hover:shadow-xl 
+                                  border border-gray-200 transition-all duration-300 
+                                  transform hover:scale-[1.02]">
+                      <div className="flex items-center gap-5">
+                        <div className="w-16 h-16 bg-gradient-to-br from-gray-200 to-gray-300 
+                                    rounded-2xl flex items-center justify-center shadow-md">
+                          <span className="text-gray-700 text-2xl font-bold">{index + 2}</span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-xl font-semibold text-gray-900 mb-1">{task.exam?.title}</p>
+                          <p className="text-lg text-gray-600">
+                            {task.scheduled_at && format(new Date(task.scheduled_at), 'HH:mm', { locale: ko })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-
-          {/* 슬라이드 2: 지도 및 길찾기 */}
-          <div className="h-full overflow-y-auto py-6 space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">
-              검사실 위치 안내
-            </h2>
-
-            {/* [NAVIGATION-COMPONENT] 지도 컴포넌트가 들어갈 자리 */}
-            <div className="bg-white rounded-2xl shadow-lg border-2 border-dashed border-gray-300 p-8 text-center">
-              <div className="text-6xl mb-4">🗺️</div>
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                [NAVIGATION-COMPONENT]
-              </h3>
-              <p className="text-gray-600 mb-4">
-                실시간 병원 지도 컴포넌트가 여기에 표시됩니다
-              </p>
+          
+          {/* 슬라이드 2: 추가 메뉴 */}
+          <div className="h-full flex flex-col justify-center px-6">
+            <div className="max-w-2xl mx-auto w-full">
+              <h2 className="text-4xl font-bold text-gray-900 mb-10 text-center">
+                추가 메뉴
+              </h2>
               
-              {destination && (
-                <div className="bg-blue-50 rounded-xl p-4 mb-4">
-                  <p className="text-sm text-blue-600 mb-1">목적지</p>
-                  <p className="text-lg font-bold text-blue-900">
-                    {destination.building} {destination.floor}층 {destination.room}
+              <div className="space-y-6">
+                {/* 검사 목록 보기 버튼 */}
+                <button 
+                  onClick={() => navigate('/my-exams')}
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white 
+                           rounded-3xl py-8 px-10 text-2xl font-bold shadow-2xl
+                           hover:shadow-3xl hover:from-blue-700 hover:to-blue-800 
+                           transform hover:scale-[1.03] transition-all duration-300
+                           flex items-center justify-center gap-4"
+                >
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} 
+                          d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  검사 목록 보기
+                </button>
+                
+                {/* 병원 전체 지도 버튼 */}
+                <button 
+                  onClick={() => setIsMapModalOpen(true)}
+                  className="w-full bg-white border-3 border-blue-300 text-blue-700 
+                           rounded-3xl py-8 px-10 text-2xl font-bold shadow-lg
+                           hover:shadow-2xl hover:border-blue-500 hover:bg-blue-50
+                           transform hover:scale-[1.03] transition-all duration-300
+                           flex items-center justify-center gap-4"
+                >
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} 
+                          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  병원 전체 지도 보기
+                </button>
+                
+                {/* 도움말 */}
+                <div className="bg-gray-100 rounded-2xl p-6 mt-8">
+                  <p className="text-xl text-gray-700 text-center">
+                    도움이 필요하시면 <span className="font-semibold text-blue-600">안내 데스크</span>에 문의하세요
                   </p>
-                  <p className="text-blue-700">{destination.description}</p>
                 </div>
-              )}
-
-              {taggedLocation && (
-                <div className="bg-green-50 rounded-xl p-4">
-                  <p className="text-sm text-green-600 mb-1">현재 위치</p>
-                  <p className="text-lg font-bold text-green-900">
-                    {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}
-                  </p>
-                </div>
-              )}
-
-              {/* [NAVIGATION-API] 검색 키워드 표시 */}
-              <div className="mt-4 p-3 bg-gray-100 rounded-lg text-sm">
-                <p className="font-mono text-gray-600">
-                  {navigationKeywords.apiKeyword}
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  API 검색: {navigationKeywords.searchParams.from} → {navigationKeywords.searchParams.to}
-                </p>
               </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <button 
-                onClick={() => navigate('/my-exams')}
-                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
-                           hover:shadow-md transition-all duration-300 text-left group">
-                <span className="text-3xl">📋</span>
-                <h3 className="text-lg font-semibold text-gray-900 mt-2 
-                             group-hover:text-blue-600 transition-colors">
-                  내 검사 목록
-                </h3>
-                <p className="text-gray-600 mt-1">모든 검사 내역 보기</p>
-              </button>
-              
-              <button 
-                onClick={() => setIsMapModalOpen(true)}
-                className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 
-                           hover:shadow-md transition-all duration-300 text-left group">
-                <span className="text-3xl">🗺️</span>
-                <h3 className="text-lg font-semibold text-gray-900 mt-2 
-                             group-hover:text-blue-600 transition-colors">
-                  병원 전체 지도
-                </h3>
-                <p className="text-gray-600 mt-1">다른 시설 위치 보기</p>
-              </button>
             </div>
           </div>
         </SlideNavigation>
         </div>
-      </div>
+      )}
 
       <Modal
         isOpen={!!selectedAppointment}

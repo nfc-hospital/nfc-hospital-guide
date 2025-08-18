@@ -58,11 +58,11 @@ export default function CurrentTaskCard({ appointment }) {
           <ClockIcon className="h-5 w-5 mr-2 text-gray-400" />
           <span className="text-sm">예정 시간: {formatTime(scheduled_at)}</span>
         </div>
-        {exam.location && (
+        {(exam.building || exam.floor || exam.room) && (
           <div className="flex items-center text-gray-700">
             <MapPinIcon className="h-5 w-5 mr-2 text-gray-400" />
             <span className="text-sm">
-              {exam.location.building} {exam.location.floor} {exam.location.room}
+              {exam.building} {exam.floor}층 {exam.room}
             </span>
           </div>
         )}

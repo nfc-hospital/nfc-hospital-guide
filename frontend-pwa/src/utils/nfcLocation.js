@@ -96,10 +96,10 @@ export function generateNavigationKeywords(from, to) {
     apiKeyword: '[NAVIGATION-API]',
     componentKeyword: '[NAVIGATION-COMPONENT]',
     searchParams: {
-      from: from ? `${from.building} ${from.floor}층 ${from.room}` : '현재 위치',
-      to: to ? `${to.building} ${to.floor}층 ${to.room}` : '목적지',
-      fromCoords: from ? { x: from.x_coord, y: from.y_coord } : null,
-      toCoords: to ? { x: to.x_coord, y: to.y_coord } : null,
+      from: from ? `${from.building || ''} ${from.floor || ''}층 ${from.room || ''}`.trim() : '현재 위치',
+      to: to ? `${to.building || ''} ${to.floor || ''}층 ${to.room || ''}`.trim() : '목적지',
+      fromCoords: from ? { x: from.x_coord || 0, y: from.y_coord || 0 } : null,
+      toCoords: to ? { x: to.x_coord || 0, y: to.y_coord || 0 } : null,
       needsElevator: from && to && from.floor !== to.floor,
       needsAccessibility: false // 추후 접근성 옵션 추가
     }

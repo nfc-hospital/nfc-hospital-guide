@@ -10,9 +10,10 @@ export default function CompletedTaskCard({ appointment }) {
     });
   };
 
-  const getLocationString = (location) => {
-    if (!location) return '';
-    return `${location.building} ${location.floor} ${location.room}`.trim();
+  const getLocationString = (exam) => {
+    if (!exam) return '';
+    const parts = [exam.building, exam.floor && `${exam.floor}층`, exam.room].filter(Boolean);
+    return parts.join(' ');
   };
 
   return (
@@ -33,10 +34,10 @@ export default function CompletedTaskCard({ appointment }) {
               <span>완료 시간: {formatTime(appointment.scheduled_at)}</span>
             </div>
             
-            {appointment.exam.location && (
+            {getLocationString(appointment.exam) && (
               <div className="flex items-center">
                 <span className="text-green-700">
-                  장소: {getLocationString(appointment.exam.location)}
+                  장소: {getLocationString(appointment.exam)}
                 </span>
               </div>
             )}

@@ -5,7 +5,11 @@ from .base import *
 DEBUG = False
 
 # 운영 환경 허용 호스트
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,15.164.94.194').split(',')
+
+# EC2 인스턴스 IP 주소 명시적으로 추가
+if '15.164.94.194' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('15.164.94.194')
 
 # 운영용 데이터베이스 (MySQL)
 DATABASES = {
@@ -35,9 +39,12 @@ if cors_origins:
 
 # 운영 환경 기본 도메인 추가
 CORS_ALLOWED_ORIGINS.extend([
-    "https://hospital.example.com",           # 실제 도메인으로 변경 필요
-    "https://admin.hospital.example.com",     # 관리자 도메인
-    "https://api.hospital.example.com",       # API 도메인
+    "http://15.164.94.194",                  # EC2 인스턴스 IP
+    "http://15.164.94.194:5174",             # React PWA
+    "http://15.164.94.194:5173",             # Admin Dashboard
+    "https://hospital.example.com",          # 실제 도메인으로 변경 필요 (추후)
+    "https://admin.hospital.example.com",    # 관리자 도메인 (추후)
+    "https://api.hospital.example.com",      # API 도메인 (추후)
 ])
 
 # CloudFront 또는 CDN 사용 시
@@ -90,15 +97,17 @@ CHANNEL_LAYERS = {
 }
 
 # 운영용 보안 설정
-SECURE_SSL_REDIRECT = True
-SECURE_HSTS_SECONDS = 31536000  # 1년
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+# HTTP 환경에서 테스트 중이므로 SSL 리다이렉션 비활성화
+SECURE_SSL_REDIRECT = False  # HTTP 환경에서는 False로 설정
+SECURE_HSTS_SECONDS = 0  # HTTP 환경에서는 0으로 설정
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# HTTPS가 아닌 환경이므로 주석 처리
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_SECURE = False  # HTTP 환경에서는 False로 설정
+CSRF_COOKIE_SECURE = False  # HTTP 환경에서는 False로 설정
 
 # 운영용 로깅 (파일 기반)
 LOGGING['handlers']['file']['filename'] = '/var/log/django/nfc_hospital.log'
@@ -142,9 +151,9 @@ if config('USE_S3', default=False, cast=bool):
     DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
     STATICFILES_STORAGE = 'storages.backends.s3boto3.S3StaticStorage'
 
-# 보안 설정 (HTTPS 환경)
-SECURE_SSL_REDIRECT = True
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# 보안 설정 (HTTPS 환경) - HTTP 테스트 환경에서는 주석 처리
+# SECURE_SSL_REDIRECT = True
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # 운영용 JWT 설정 (보안 강화)
 SIMPLE_JWT.update({

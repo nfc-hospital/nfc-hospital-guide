@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
 import { useNavigate } from 'react-router-dom';
-import SimpleProgressBar from '../journey/SimpleProgressBar';
+// import SimpleProgressBar from '../journey/SimpleProgressBar';
 import Modal from '../common/Modal';
+import UnifiedHeader from '../common/UnifiedHeader';
 
 export default function ArrivedScreen({ taggedLocation }) {
   const { user, todaysAppointments } = useJourneyStore();
@@ -12,14 +13,8 @@ export default function ArrivedScreen({ taggedLocation }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-20">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* 전체 진행 상황 표시 */}
-        <div className="mb-6">
-          <SimpleProgressBar 
-            patientState={user?.state || 'ARRIVED'} 
-            appointments={todaysAppointments}
-            showLabel={true}
-          />
-        </div>
+        {/* 통합 헤더 - 도착 상태 표시 */}
+        <UnifiedHeader currentState="ARRIVED" />
 
         {/* 환영 메시지 */}
         <div className="text-center mb-8">

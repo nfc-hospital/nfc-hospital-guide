@@ -10,9 +10,10 @@ export default function UpcomingTasksCard({ appointments }) {
     });
   };
 
-  const getLocationString = (location) => {
-    if (!location) return '';
-    return `${location.building} ${location.floor} ${location.room}`.trim();
+  const getLocationString = (exam) => {
+    if (!exam) return '';
+    const parts = [exam.building, exam.floor && `${exam.floor}층`, exam.room].filter(Boolean);
+    return parts.join(' ');
   };
 
   return (
@@ -37,10 +38,10 @@ export default function UpcomingTasksCard({ appointments }) {
                     <span>{formatTime(appointment.scheduled_at)}</span>
                   </div>
                   
-                  {appointment.exam.location && (
+                  {getLocationString(appointment.exam) && (
                     <div className="flex items-center">
                       <MapPinIcon className="h-4 w-4 mr-1 text-gray-400" />
-                      <span>{getLocationString(appointment.exam.location)}</span>
+                      <span>{getLocationString(appointment.exam)}</span>
                     </div>
                   )}
                 </div>

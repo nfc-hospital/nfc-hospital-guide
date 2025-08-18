@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.conf import settings
 from django.db import transaction
+from django.utils.dateparse import parse_datetime
 from nfc_hospital_system.utils import APIResponse
 from p_queue.models import PatientState, Queue, StateTransition
 from appointments.models import Appointment, Exam
@@ -201,12 +202,22 @@ def set_appointments(request):
             apt_id = apt_data.get('appointment_id', f'test-{uuid.uuid4().hex[:8]}')
             if not apt_id.startswith('test-'):
                 apt_id = f'test-{apt_id}'
+            
+            # scheduled_at 값을 datetime 객체로 변환
+            scheduled_at_str = apt_data.get('scheduled_at')
+            if scheduled_at_str:
+                scheduled_at_dt = parse_datetime(scheduled_at_str)
+                if scheduled_at_dt is None:
+                    # 파싱 실패시 기본값 사용
+                    scheduled_at_dt = datetime.now(timezone.utc)
+            else:
+                scheduled_at_dt = datetime.now(timezone.utc)
                 
             appointment = Appointment.objects.create(
                 appointment_id=apt_id,
                 user_id=user_id,
                 exam_id=apt_data['exam_id'],
-                scheduled_at=apt_data.get('scheduled_at', datetime.now(timezone.utc)),
+                scheduled_at=scheduled_at_dt,
                 status=apt_data.get('status', 'scheduled'),
                 arrival_confirmed=False
             )

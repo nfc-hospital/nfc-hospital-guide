@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
-import SimpleProgressBar from '../journey/SimpleProgressBar';
+// import SimpleProgressBar from '../journey/SimpleProgressBar';
 import Modal from '../common/Modal';
 import { generateNavigationKeywords } from '../../utils/nfcLocation';
+import UnifiedHeader from '../common/UnifiedHeader';
 
 export default function CalledScreen({ taggedLocation }) {
   const { user, currentQueues, todaysAppointments } = useJourneyStore();
@@ -47,51 +48,48 @@ export default function CalledScreen({ taggedLocation }) {
 
   return (
     <div className={`min-h-screen transition-colors duration-500 pb-20
-                    ${isBlinking ? 'bg-green-100' : 'bg-green-50'}`}>
-      <div className={`shadow-lg transition-colors duration-500
-                      ${isBlinking ? 'bg-green-600' : 'bg-green-500'}`}>
-        <div className="max-w-4xl mx-auto px-4 py-8 text-center">
-          <div className="animate-bounce mb-4">
-            <span className="text-6xl">🔔</span>
+                    ${isBlinking ? 'bg-gradient-to-br from-green-100 to-emerald-100' : 'bg-gradient-to-br from-green-50 to-emerald-50'}`}>
+      <div className={`shadow-2xl transition-all duration-500
+                      ${isBlinking ? 'bg-gradient-to-r from-green-600 to-emerald-600' : 'bg-gradient-to-r from-green-500 to-emerald-500'}`}>
+        <div className="max-w-4xl mx-auto px-6 py-12 text-center">
+          <div className="animate-bounce mb-6">
+            <div className="w-32 h-32 mx-auto bg-white/20 backdrop-blur-sm rounded-full 
+                         flex items-center justify-center shadow-2xl">
+              <span className="text-8xl">🔔</span>
+            </div>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">
+          <h1 className="text-5xl font-extrabold text-white mb-4">
             {user?.name}님, 호출되었습니다!
           </h1>
-          <p className="text-2xl text-green-100">
+          <p className="text-3xl text-green-100 font-semibold">
             검사실로 와주세요
           </p>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* 전체 진행 상황 표시 */}
-        <div className="mb-6">
-          <SimpleProgressBar 
-            patientState={user?.state || 'CALLED'} 
-            appointments={todaysAppointments}
-            showLabel={true}
-          />
-        </div>
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        {/* 통합 헤더 - 호출됨 상태 표시 */}
+        <UnifiedHeader currentState="CALLED" />
 
         {examInfo && (
-          <div className="bg-white rounded-3xl shadow-xl p-8 mb-6 
-                        transform scale-105 transition-transform">
-            <div className="text-center space-y-6">
+          <div className="bg-white rounded-3xl shadow-2xl p-10 mb-8 
+                        transform scale-105 transition-all duration-300 border-4 border-green-200">
+            <div className="text-center space-y-8">
               <div>
-                <p className="text-xl text-gray-600 mb-2">검사명</p>
-                <p className="text-3xl font-bold text-gray-900">
+                <p className="text-2xl text-gray-600 mb-4">검사명</p>
+                <p className="text-4xl font-extrabold text-gray-900">
                   {examInfo.title}
                 </p>
               </div>
 
-              <div className="w-full h-px bg-gray-200" />
+              <div className="w-full h-1 bg-gradient-to-r from-green-200 to-emerald-200 rounded-full" />
 
-              <div className="bg-blue-50 rounded-2xl p-6">
-                <p className="text-lg text-blue-600 mb-3">검사실 위치</p>
-                <div className="text-2xl font-bold text-blue-900">
-                  <p>{examInfo.building}</p>
-                  <p className="text-4xl my-2">{examInfo.floor}층</p>
-                  <p className="text-3xl">{examInfo.room}</p>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-3xl p-8 shadow-lg">
+                <p className="text-2xl text-blue-600 mb-6 font-bold">검사실 위치</p>
+                <div className="text-3xl font-extrabold text-blue-900">
+                  <p className="text-2xl">{examInfo.building}</p>
+                  <p className="text-6xl my-4 text-blue-600">{examInfo.floor}층</p>
+                  <p className="text-4xl">{examInfo.room}</p>
                 </div>
               </div>
 
@@ -100,22 +98,24 @@ export default function CalledScreen({ taggedLocation }) {
                   setShowNavigationModal(true);
                   // TODO: [NAVIGATION-API] 검사실 길안내 API 연동 필요
                 }}
-                className="w-full bg-blue-600 text-white rounded-2xl py-6 text-xl 
-                          font-bold hover:bg-blue-700 transition-all duration-300
-                          shadow-lg hover:shadow-xl transform hover:-translate-y-1
-                          flex items-center justify-center gap-3 group">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                        d="M15 11a3 3 0 11-6 0 3 3 0 616 0z" />
-                </svg>
+                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-3xl py-8 text-2xl 
+                          font-extrabold hover:from-blue-700 hover:to-indigo-700 transition-all duration-300
+                          shadow-2xl hover:shadow-3xl transform hover:-translate-y-2 hover:scale-[1.02]
+                          flex items-center justify-center gap-4 group border-4 border-blue-200">
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} 
+                          d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} 
+                          d="M15 11a3 3 0 11-6 0 3 3 0 616 0z" />
+                  </svg>
+                </div>
                 <span>
                   {taggedLocation ? '검사실까지 길안내' : '검사실 위치 보기'}
                 </span>
-                <svg className="w-6 h-6 group-hover:translate-x-1 transition-transform" 
+                <svg className="w-8 h-8 group-hover:translate-x-2 transition-transform" 
                      fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} 
                         d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -125,37 +125,45 @@ export default function CalledScreen({ taggedLocation }) {
 
         {/* NFC 태그 위치 정보가 있으면 현재 위치 표시 */}
         {taggedLocation && (
-          <div className="bg-green-50 border border-green-300 rounded-2xl p-4 mb-6 animate-fade-in">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">📍</span>
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-3xl p-8 mb-8 animate-fade-in shadow-xl">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 bg-gradient-to-br from-green-200 to-green-300 rounded-2xl 
+                          flex items-center justify-center flex-shrink-0 shadow-lg">
+                <span className="text-3xl">📍</span>
+              </div>
               <div>
-                <p className="font-semibold text-green-900">현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}</p>
+                <p className="text-2xl font-bold text-green-900 mb-2">현재 위치: {taggedLocation.building} {taggedLocation.floor}층 {taggedLocation.room}</p>
                 {examInfo && taggedLocation.building === examInfo.building && taggedLocation.floor === parseInt(examInfo.floor) ? (
-                  <p className="text-green-700 text-sm mt-1">✅ 같은 층에 있습니다. 검사실까지 길안내를 받으세요!</p>
+                  <p className="text-xl text-green-700 leading-relaxed">✅ 같은 층에 있습니다. 검사실까지 길안내를 받으세요!</p>
                 ) : (
-                  <p className="text-green-700 text-sm mt-1">검사실까지 최적 경로로 안내해 드릴게요.</p>
+                  <p className="text-xl text-green-700 leading-relaxed">검사실까지 최적 경로로 안내해 드릴게요.</p>
                 )}
               </div>
             </div>
           </div>
         )}
 
-        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-6
-                      flex items-start gap-4">
-          <span className="text-4xl">⏰</span>
+        <div className="bg-gradient-to-r from-amber-50 to-red-50 border-3 border-amber-300 rounded-3xl p-8
+                      flex items-start gap-6 shadow-xl">
+          <div className="w-20 h-20 bg-gradient-to-br from-amber-200 to-amber-300 rounded-3xl 
+                      flex items-center justify-center flex-shrink-0 shadow-lg">
+            <span className="text-4xl">⏰</span>
+          </div>
           <div>
-            <h3 className="text-xl font-semibold text-amber-900 mb-2">
+            <h3 className="text-2xl font-bold text-amber-900 mb-3">
               5분 이내 도착 필요
             </h3>
-            <p className="text-amber-800">
+            <p className="text-xl text-amber-800 leading-relaxed">
               호출 후 5분 이내에 검사실에 도착하지 않으시면 
               다음 환자분께 순서가 넘어갈 수 있습니다.
             </p>
           </div>
         </div>
 
-        <div className="mt-6 text-center">
-          <button className="text-gray-600 underline hover:text-gray-800">
+        <div className="mt-8 text-center">
+          <button className="bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 px-12 py-4 rounded-2xl 
+                           text-lg font-bold hover:from-gray-200 hover:to-gray-300 transition-all duration-300
+                           shadow-lg hover:shadow-xl">
             호출 확인했습니다
           </button>
         </div>
