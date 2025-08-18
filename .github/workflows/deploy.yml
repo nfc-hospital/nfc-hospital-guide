@@ -112,9 +112,12 @@ jobs:
           fi
           
           # 6. 백엔드 서버 재시작 (코드 변경이 있을 때만)
+          # 임시로 항상 재시작하도록 설정 (배포 문제 해결을 위해)
+          BACKEND_CODE_CHANGED="true"
           if [ -n "$BACKEND_CODE_CHANGED" ] || [ -n "$BACKEND_DEPS_CHANGED" ]; then
               echo ">>> 6. Backend code changed. Restarting Daphne..."
-              pkill -f "^$VENV_DAPHNE" || true
+              screen -S django -X quit || true
+              pkill -f "daphne" || true
               sleep 2
               
               # 마이그레이션 및 정적 파일 수집
@@ -122,13 +125,8 @@ jobs:
               $VENV_PYTHON manage.py migrate --noinput || true
               $VENV_PYTHON manage.py collectstatic --noinput || true
               
-              # 환경 변수 설정
-              export DJANGO_ENVIRONMENT=production
-              export ALLOWED_HOSTS="localhost,127.0.0.1,$EC2_HOST"
-              export CORS_ALLOWED_ORIGINS="http://$EC2_HOST,http://$EC2_HOST:5174,http://$EC2_HOST:5173"
-              
-              # Daphne 재시작
-              screen -dmS django $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application
+              # Daphne 재시작 - 환경 변수와 함께 실행
+              screen -dmS django bash -c "export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.development'; $VENV_DAPHNE -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application"
           else
               echo ">>> 6. Backend unchanged. Keeping current server running."
           fi
