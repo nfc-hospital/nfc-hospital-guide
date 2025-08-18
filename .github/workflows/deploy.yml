@@ -20,10 +20,12 @@ jobs:
 
           # --- 경로 변수 정의 ---
           PROJECT_DIR="$HOME/nfc-hospital"
+          BACKEND_DIR="$PROJECT_DIR/backend"
           FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
-          VENV_DAPHNE="$HOME/nfc-hospital/backend/venv/bin/daphne" # 절대 경로 사용
-          VENV_PYTHON="$HOME/nfc-hospital/backend/venv/bin/python" # 절대 경로 사용
-          DJANGO_DIR="$PROJECT_DIR/nfc_hospital_system"
+          VENV_DAPHNE="$BACKEND_DIR/venv/bin/daphne"
+          VENV_PIP="$BACKEND_DIR/venv/bin/pip"
+          VENV_PYTHON="$BACKEND_DIR/venv/bin/python"
+          DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
           FRONTEND_BUILD_PATH="/var/www/nfc-hospital"
           EC2_HOST="15.164.94.194"
 
@@ -50,7 +52,7 @@ jobs:
           # 오타 수정: 두 파일을 공백으로 구분하여 한 번에 생성
           sudo touch /var/log/django/error.log /var/log/django/nfc_hospital.log
           # 생성된 디렉터리와 그 안의 모든 파일 소유권을 EC2 접속 유저에게 부여
-          sudo chown -R ${{ secrets.EC2_USER }}:${{ secrets.EC2_USER }} /var/log/django
+          sudo chown -R $USER:$USER /var/log/django
 
           # --- 5. Django 애플리케이션 준비 ---
           echo ">>> 5. Django 마이그레이션을 실행하고 정적 파일을 수집합니다..."
@@ -73,25 +75,25 @@ jobs:
           # --- 8. Nginx 설정 및 재시작 ---
           echo ">>> 8. Nginx를 설정하고 재시작합니다..."
           sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
-server {
-    listen 80;
-    server_name 15.164.94.194;
+          server {
+              listen 80;
+              server_name 15.164.94.194;
 
-    location / {
-        root /var/www/nfc-hospital;
-        try_files $uri /index.html;
-    }
+              location / {
+                  root /var/www/nfc-hospital;
+                  try_files $uri /index.html;
+              }
 
-    location ~ ^/(api|admin|ws|static)/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_read_timeout 300s;
-    }
-}
-EOF
+              location ~ ^/(api|admin|ws|static)/ {
+                  proxy_pass http://127.0.0.1:8000;
+                  proxy_set_header Host $host;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_read_timeout 300s;
+              }
+          }
+          EOF
           sudo ln -sf /etc/nginx/sites-available/nfc-hospital /etc/nginx/sites-enabled/
           sudo rm -f /etc/nginx/sites-enabled/default
           sudo nginx -t
