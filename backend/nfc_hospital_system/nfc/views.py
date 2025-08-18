@@ -40,6 +40,89 @@ def _check_admin_permission(request):
         return False, "관리자 권한이 필요합니다."
     return True, None
 
+# 비로그인 사용자용 NFC 스캔 API
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def nfc_public_scan(request):
+    """
+    비로그인 사용자용 NFC 태그 스캔 처리 API - POST /nfc/public-info
+    
+    공개 정보만 제공 (위치 안내, 기본 정보)
+    """
+    try:
+        # 요청 데이터 검증
+        tag_id = request.data.get('tag_id')
+        if not tag_id:
+            return APIResponse.error(
+                message="태그 ID가 필요합니다.",
+                code="TAG_ID_REQUIRED",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 태그 찾기 (더 유연하게)
+        tag = None
+        
+        # 먼저 tag_id로 검색
+        if len(tag_id) == 36 and '-' in tag_id:
+            try:
+                tag = NFCTag.objects.get(tag_id=tag_id, is_active=True)
+            except NFCTag.DoesNotExist:
+                # tag_id로 못 찾으면 tag_uid로도 시도
+                try:
+                    tag = NFCTag.objects.get(tag_uid=tag_id, is_active=True)
+                except NFCTag.DoesNotExist:
+                    pass
+        
+        # UUID 형식이 아니면 tag_uid 또는 code로 검색
+        if not tag:
+            tag = NFCTag.objects.filter(
+                models.Q(tag_uid=tag_id) | models.Q(code=tag_id),
+                is_active=True
+            ).first()
+        
+        if not tag:
+            return APIResponse.error(
+                message="존재하지 않거나 비활성화된 NFC 태그입니다.",
+                code="TAG_NOT_FOUND",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 공개 정보만 반환
+        response_data = {
+            'location_info': {
+                'current_location': tag.get_location_display(),
+                'building': tag.building,
+                'floor': tag.floor,
+                'room': tag.room,
+                'x_coord': tag.x_coord,
+                'y_coord': tag.y_coord
+            },
+            'tag_info': {
+                'code': tag.code,
+                'description': tag.description
+            },
+            'next_action': {
+                'message': '로그인하시면 개인화된 안내를 받으실 수 있습니다.',
+                'route': '/login'
+            }
+        }
+        
+        logger.info(f"Public NFC scan - Tag: {tag.code}")
+        
+        return APIResponse.success(
+            data=response_data,
+            message=f"{tag.get_location_display()} 위치입니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"Public NFC scan error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="NFC 스캔 처리 중 오류가 발생했습니다.",
+            code="SCAN_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 # 환자용 API
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -61,20 +144,26 @@ def nfc_scan(request):
         tag_id = serializer.validated_data['tag_id']
         action_type = serializer.validated_data.get('action_type', 'scan')
         
-        # 태그 ID 또는 UID로 태그 찾기
+        # 태그 ID 또는 UID로 태그 찾기 (더 유연하게)
         tag = None
-        try:
-            # UUID 형식인 경우 tag_id로 검색
-            if len(tag_id) == 36 and '-' in tag_id:
+        
+        # 먼저 tag_id로 검색
+        if len(tag_id) == 36 and '-' in tag_id:
+            try:
                 tag = NFCTag.objects.get(tag_id=tag_id, is_active=True)
-            else:
-                # 그 외의 경우 tag_uid 또는 code로 검색
-                tag = NFCTag.objects.filter(
-                    models.Q(tag_uid=tag_id) | models.Q(code=tag_id),
-                    is_active=True
-                ).first()
-        except NFCTag.DoesNotExist:
-            pass
+            except NFCTag.DoesNotExist:
+                # tag_id로 못 찾으면 tag_uid로도 시도
+                try:
+                    tag = NFCTag.objects.get(tag_uid=tag_id, is_active=True)
+                except NFCTag.DoesNotExist:
+                    pass
+        
+        # UUID 형식이 아니면 tag_uid 또는 code로 검색
+        if not tag:
+            tag = NFCTag.objects.filter(
+                models.Q(tag_uid=tag_id) | models.Q(code=tag_id),
+                is_active=True
+            ).first()
         
         if not tag:
             return APIResponse.error(

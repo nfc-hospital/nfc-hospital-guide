@@ -91,11 +91,11 @@ const apiService = {
       }
     },
 
-    // 검사 상세 정보 조회
+    // 검사 상세 정보 조회 - 올바른 엔드포인트 사용
     getDetail: async (examId) => {
       try {
         const response = await api.get(`/appointments/exams/${examId}/`);
-        return response;
+        return response.data || response; // APIResponse 형식 처리
       } catch (error) {
         console.error('Failed to fetch exam detail:', error);
         throw error;
@@ -214,8 +214,53 @@ const apiService = {
   // 예약 관련 (appointmentAPI 래핑)
   appointments: appointmentAPI,
 
-  // 대기열 관련 (queueAPI 래핑)
-  queue: queueAPI,
+  // 대기열 관련 (queueAPI 래핑 + 추가 기능)
+  queue: {
+    ...queueAPI,
+    // 특정 검사의 대기열 현황 조회
+    getQueueByExam: async (examId) => {
+      try {
+        const response = await api.get('/queue/', { 
+          params: { exam: examId, state: 'waiting' } 
+        });
+        return response;
+      } catch (error) {
+        console.error(`Failed to fetch queue for exam ${examId}:`, error);
+        throw error;
+      }
+    },
+    // 검사별 대기열 상태 조회 (여러 검사 한번에)
+    getQueuesForExams: async (examIds) => {
+      try {
+        const promises = examIds.map(examId => 
+          api.get('/queue/', { 
+            params: { exam: examId, state__in: 'waiting,called,ongoing' } 
+          }).catch(err => {
+            console.warn(`Queue fetch failed for exam ${examId}:`, err);
+            return { data: [] };
+          })
+        );
+        const results = await Promise.all(promises);
+        return results.map((result, index) => ({
+          examId: examIds[index],
+          queues: result.data || result || []
+        }));
+      } catch (error) {
+        console.error('Failed to fetch queues for exams:', error);
+        throw error;
+      }
+    },
+    // 실시간 대기열 데이터 조회 (관리자용 API 활용)
+    getRealtimeData: async () => {
+      try {
+        const response = await api.get('/queue/dashboard/realtime-data/');
+        return response;
+      } catch (error) {
+        console.error('Failed to fetch realtime queue data:', error);
+        throw error;
+      }
+    }
+  },
 
   // 챗봇 관련 (chatbotAPI 래핑)
   chatbot: chatbotAPI,

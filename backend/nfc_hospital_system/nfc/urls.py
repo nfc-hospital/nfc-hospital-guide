@@ -15,8 +15,9 @@ urlpatterns = [
     path('', include(router.urls)),
 
     # 환자용 API
-    path('nfc/scan/', views.nfc_scan, name='nfc-scan'),
-    path('nfc/tags/<str:tag_id>/', views.get_tag_info, name='tag-info'),
+    path('scan/', views.nfc_scan, name='nfc-scan'),
+    path('public-info/', views.nfc_public_scan, name='nfc-public-info'),  # 비로그인용 별도 뷰
+    path('tags/<str:tag_id>/', views.get_tag_info, name='tag-info'),
     
     # 관리자용 API (기존 유지)
     # path('admin/nfc/tags/list/', views.admin_tag_list, name='admin-tag-list'),

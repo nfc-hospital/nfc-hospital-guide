@@ -27,6 +27,8 @@ import ChatbotTest from './pages/ChatbotTest';
 import MapTest from './pages/MapTest';
 // New Chatbot System
 import ChatbotSystem from './components/chatbot-v2';
+// Mock NFC Panel for development
+import MockNFCPanel from './components/MockNFCPanel';
 import './styles/global.css';
 
 // 메인 앱 컴포넌트
@@ -148,6 +150,9 @@ function AppContent() {
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
+        
+        {/* Mock NFC Panel - 개발 환경에서만 표시 */}
+        {process.env.NODE_ENV === 'development' && <MockNFCPanel />}
         
         {/* 개발용 컴포넌트들 - [테스트 버튼] */}
         {/* {process.env.NODE_ENV === 'development' && (

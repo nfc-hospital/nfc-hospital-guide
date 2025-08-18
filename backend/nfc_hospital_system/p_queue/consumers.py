@@ -269,6 +269,40 @@ class QueueConsumer(AsyncWebsocketConsumer):
             'data': event['data'],
             'timestamp': datetime.now().isoformat()
         }))
+    
+    # === NFC 스캔 관련 메서드 추가 ===
+    async def nfc_scan_update(self, event):
+        """NFC 태그 스캔 알림 (signals.py에서 호출)"""
+        await self.send(text_data=json.dumps({
+            'type': 'nfc_scan',
+            'data': event['message'],
+            'timestamp': datetime.now().isoformat()
+        }))
+        logger.info(f"NFC scan notification sent to user: {event['message']['user_id']}")
+    
+    async def location_update(self, event):
+        """환자 위치 업데이트 알림"""
+        await self.send(text_data=json.dumps({
+            'type': 'location_update',
+            'data': event['message'],
+            'timestamp': datetime.now().isoformat()
+        }))
+    
+    async def admin_nfc_notification(self, event):
+        """관리자용 NFC 알림"""
+        await self.send(text_data=json.dumps({
+            'type': 'admin_nfc',
+            'data': event['message'],
+            'timestamp': datetime.now().isoformat()
+        }))
+    
+    async def admin_tag_notification(self, event):
+        """관리자용 태그 업데이트 알림"""
+        await self.send(text_data=json.dumps({
+            'type': 'admin_tag_update',
+            'data': event['message'],
+            'timestamp': datetime.now().isoformat()
+        }))
 
     # === 데이터베이스 연동 헬퍼 메서드들 ===
     @database_sync_to_async

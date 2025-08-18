@@ -1,16 +1,25 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../api/apiService';
+import { scanNFCTag, checkInWithTag } from '../api/nfc';
 import toast from 'react-hot-toast';
 import useJourneyStore from '../store/journeyStore';
+import { useAuth } from '../context/AuthContext';
+import { 
+  calculateNFCDistance, 
+  getDestinationByState,
+  getInitialSlideIndex 
+} from '../utils/nfcLocation';
 
 export default function NFCReader({ onTagScanned, autoStart = true }) {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState(null);
   const [nfcSupported, setNfcSupported] = useState(false);
   const [lastScannedTag, setLastScannedTag] = useState(null);
+  const [processingTag, setProcessingTag] = useState(false);
   const navigate = useNavigate();
   const fetchJourneyData = useJourneyStore((state) => state.fetchJourneyData);
+  const { isAuthenticated } = useAuth();
 
   // NFC 스캔 시작 함수
   const startNFCScanning = useCallback(async () => {
@@ -30,6 +39,7 @@ export default function NFCReader({ onTagScanned, autoStart = true }) {
 
       ndef.addEventListener("reading", async ({ message, serialNumber }) => {
         console.log("🏷️ NFC 태그 인식:", serialNumber);
+        console.log("📝 NDEF 메시지:", message);
         
         // 중복 스캔 방지 (3초 이내 같은 태그 무시)
         if (lastScannedTag?.id === serialNumber && 
@@ -38,7 +48,14 @@ export default function NFCReader({ onTagScanned, autoStart = true }) {
           return;
         }
         
+        // 처리 중 플래그 확인
+        if (processingTag) {
+          console.log("⏳ 이전 태그 처리 중...");
+          return;
+        }
+        
         setLastScannedTag({ id: serialNumber, timestamp: Date.now() });
+        setProcessingTag(true);
         
         try {
           // 진동 피드백
@@ -46,21 +63,137 @@ export default function NFCReader({ onTagScanned, autoStart = true }) {
             navigator.vibrate(200);
           }
           
-          // 1. journeyStore를 통해 모든 최신 정보 로드 (NFC 정보 포함)
-          await fetchJourneyData(serialNumber);
+          // 1. 백엔드 API로 NFC 스캔 데이터 전송
+          const scanResult = await scanNFCTag(serialNumber, message);
+          console.log("📡 API 응답:", scanResult);
           
-          // 2. 태그 인식 후 처리 (예: 스캔 중 UI 숨기기)
-          if (onTagScanned) {
-            onTagScanned(serialNumber);
+          // 2. 응답에 따른 처리
+          if (scanResult.success) {
+            const responseData = scanResult.data;
+            
+            // 위치 안내 정보 표시
+            if (responseData.location_info) {
+              toast.success(`현재 위치: ${responseData.location_info.current_location}`);
+              
+              // nfcLocation.js 거리 계산 로직 추가
+              const currentLocation = {
+                building: responseData.location_info.building,
+                floor: responseData.location_info.floor,
+                room: responseData.location_info.room,
+                x_coord: responseData.location_info.x_coord,
+                y_coord: responseData.location_info.y_coord
+              };
+              
+              // 환자 상태와 현재 검사 정보 가져오기
+              const patientState = responseData.patient_state || 'REGISTERED';
+              const currentExam = responseData.exam_info;
+              
+              // 목적지 결정
+              const destination = getDestinationByState(patientState, currentExam);
+              
+              if (destination) {
+                // 거리 계산
+                const distanceInfo = calculateNFCDistance(currentLocation, destination);
+                
+                // 거리에 따른 안내 메시지
+                if (distanceInfo.isNearby) {
+                  toast.success(`목적지가 가까이 있습니다! (${distanceInfo.distance === 'same_room' ? '같은 위치' : '같은 층'})`, {
+                    icon: '📍',
+                    duration: 3000
+                  });
+                } else {
+                  toast(`목적지: ${destination.description} (${destination.building} ${destination.floor}층)`, {
+                    icon: '🗺️',
+                    duration: 4000
+                  });
+                }
+                
+                // 슬라이드 초기 인덱스 결정 (근거리면 준비사항, 원거리면 지도)
+                const initialSlide = getInitialSlideIndex(distanceInfo.isNearby);
+                responseData.initialSlideIndex = initialSlide;
+              }
+            }
+            
+            // 검사 준비사항 안내
+            if (responseData.exam_info?.preparations) {
+              const prepCount = responseData.exam_info.preparations.length;
+              toast(
+                `검사 준비사항 ${prepCount}개가 있습니다.`,
+                { icon: '📋', duration: 4000 }
+              );
+            }
+            
+            // 대기열 정보 업데이트
+            if (responseData.queue_info) {
+              const { queue_number, estimated_wait_time, state } = responseData.queue_info;
+              if (state === 'called') {
+                toast.error('호출되었습니다! 검사실로 이동해주세요.', {
+                  duration: 5000,
+                  icon: '🔔'
+                });
+              } else if (queue_number) {
+                toast(`대기번호: ${queue_number}번 (예상 ${estimated_wait_time}분)`, {
+                  icon: '⏰'
+                });
+              }
+            }
+            
+            // 체크인 처리 (로그인 상태이고 예약이 있을 때)
+            if (isAuthenticated && responseData.appointment_info?.appointment_id) {
+              try {
+                await checkInWithTag(serialNumber, responseData.appointment_info.appointment_id);
+                toast.success('체크인 완료!', { icon: '✅' });
+              } catch (checkInError) {
+                console.warn('체크인 실패:', checkInError);
+              }
+            }
+            
+            // 3. journeyStore로 전체 여정 데이터 업데이트
+            await fetchJourneyData(serialNumber);
+            
+            // 4. 태그 인식 콜백
+            if (onTagScanned) {
+              onTagScanned(serialNumber, scanResult);
+            }
+            
+            // 5. 적절한 페이지로 이동
+            if (responseData.next_action?.route) {
+              navigate(responseData.next_action.route);
+            } else if (responseData.exam_info) {
+              // 검사 정보가 있으면 검사 페이지로
+              navigate(`/exam/${responseData.exam_info.exam_id}`);
+            } else {
+              // 기본적으로 홈으로
+              navigate('/');
+            }
+            
+          } else if (scanResult.offline) {
+            // 오프라인 모드
+            toast.warning('오프라인 모드로 작동 중입니다.', {
+              icon: '📡',
+              duration: 3000
+            });
+            
+            // 오프라인에서도 기본 동작 수행
+            if (onTagScanned) {
+              onTagScanned(serialNumber, scanResult);
+            }
+            navigate('/');
+          } else {
+            throw new Error(scanResult.error || '알 수 없는 오류');
           }
           
-          // 3. Home 페이지로 이동하여 상태에 맞는 화면을 보여주도록 위임
-          navigate('/');
-          
-          toast.success('태그가 인식되었습니다!');
         } catch (error) {
-          console.error("데이터 로딩 실패:", error);
-          toast.error('환자 정보를 불러오는 데 실패했습니다.');
+          console.error("데이터 처리 실패:", error);
+          toast.error(error.message || '태그 처리 중 오류가 발생했습니다.');
+          
+          // 에러 발생시에도 기본 동작
+          if (onTagScanned) {
+            onTagScanned(serialNumber, null);
+          }
+        } finally {
+          // 처리 완료 플래그 해제
+          setProcessingTag(false);
         }
       });
 
@@ -83,7 +216,7 @@ export default function NFCReader({ onTagScanned, autoStart = true }) {
       
       setScanning(false);
     }
-  }, [navigate, onTagScanned, lastScannedTag, fetchJourneyData]);
+  }, [navigate, onTagScanned, lastScannedTag, fetchJourneyData, isAuthenticated, processingTag]);
 
   // 컴포넌트 마운트 시 자동 스캔
   useEffect(() => {
