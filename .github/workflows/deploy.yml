@@ -56,6 +56,10 @@ jobs:
           echo ">>> 5. Creating log directory for Django..."
           sudo mkdir -p /var/log/django
           sudo chown $USER:$USER /var/log/django
+          sudo chmod 755 /var/log/django
+          # 로그 파일도 미리 생성하여 권한 문제 방지
+          sudo touch /var/log/django/nfc_hospital.log /var/log/django/error.log
+          sudo chown $USER:$USER /var/log/django/*.log
 
           # --- 6. 백엔드 서버 재시작 ---
           echo ">>> 6. Restarting backend server..."
