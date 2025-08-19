@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { getFacilityRoute } from '../data/facilityRoutes';
+import React, { useEffect, useRef, useState } from 'react';
+import { getFacilityRoute } from '../api/facilityRoutes';
 
 // 시설별 SVG element ID 매핑 (컴포넌트 밖으로 이동)
 const facilityMapping = {
@@ -27,24 +27,24 @@ const MapNavigator = ({ mapId, highlightRoom, facilityName }) => {
 
   const mapSrc = mapImages[mapId] || mapImages.default;
 
-  // useMemo를 사용하여 facilityName이 변경될 때만 경로 데이터를 다시 계산
-  const { corridorNodes, corridorEdges } = useMemo(() => {
-    if (facilityName) {
-      const savedRoute = getFacilityRoute(facilityName);
-      if (savedRoute && savedRoute.nodes && savedRoute.nodes.length > 0) {
-        return {
-          corridorNodes: savedRoute.nodes,
-          corridorEdges: savedRoute.edges || [],
-        };
+  const [corridorNodes, setCorridorNodes] = useState([]);
+  const [corridorEdges, setCorridorEdges] = useState([]);
+  
+  // facilityName이 변경될 때 경로 데이터 가져오기
+  useEffect(() => {
+    const loadRoute = async () => {
+      if (facilityName) {
+        const route = await getFacilityRoute(facilityName);
+        setCorridorNodes(route.nodes || []);
+        setCorridorEdges(route.edges || []);
+      } else {
+        setCorridorNodes([]);
+        setCorridorEdges([]);
       }
-    }
-    
-    // 저장된 경로가 없으면 빈 배열 반환
-    return {
-      corridorNodes: [],
-      corridorEdges: []
     };
-  }, [facilityName]); // facilityName이 바뀔 때만 다시 계산
+    
+    loadRoute();
+  }, [facilityName]);
 
   useEffect(() => {
     if (svgContainerRef.current) {

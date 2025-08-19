@@ -300,3 +300,23 @@ class NFCTagExam(models.Model):
 
     def __str__(self):
         return f"{self.tag.code} - {self.exam.title}"
+
+
+class FacilityRoute(models.Model):
+    """시설별 경로 데이터를 DB에 저장"""
+    facility_name = models.CharField(max_length=100, unique=True)
+    nodes = models.JSONField(default=list)  # 노드 배열
+    edges = models.JSONField(default=list)  # 엣지 배열
+    map_id = models.CharField(max_length=50)
+    svg_element_id = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        db_table = 'facility_routes'
+        verbose_name = '시설 경로'
+        verbose_name_plural = '시설 경로 목록'
+        
+    def __str__(self):
+        return f"{self.facility_name} 경로"

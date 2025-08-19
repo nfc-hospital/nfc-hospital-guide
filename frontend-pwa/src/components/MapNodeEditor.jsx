@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { TrashIcon, ArrowPathIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
-import { facilityRoutes, saveRoute, getFacilityRoute } from '../data/facilityRoutes';
+import { facilityRoutes } from '../data/facilityRoutes';
+import { saveRoute, getFacilityRoute } from '../api/facilityRoutes';
 
 const MapNodeEditor = () => {
   const svgContainerRef = useRef(null);
@@ -30,27 +31,32 @@ const MapNodeEditor = () => {
       const facility = facilityRoutes[selectedFacility];
       setMapId(facility.mapId);
       
-      // 저장된 경로가 있으면 불러오기
-      const savedRoute = getFacilityRoute(selectedFacility);
-      if (savedRoute && savedRoute.nodes && savedRoute.nodes.length > 0) {
-        console.log('저장된 노드 불러오기:', savedRoute.nodes.length, '개');
-        
-        // 중복 제거를 위해 ID 기준으로 유니크한 노드만 저장
-        const uniqueNodes = [];
-        const seenIds = new Set();
-        
-        savedRoute.nodes.forEach(node => {
-          if (!seenIds.has(node.id)) {
-            seenIds.add(node.id);
-            uniqueNodes.push(node);
-          }
-        });
-        
-        setNodes(uniqueNodes);
-        setEdges(savedRoute.edges || []);
-        const maxId = Math.max(...uniqueNodes.map(n => parseInt(n.id.replace('node-', '')) || 0), 0);
-        setNodeIdCounter(maxId + 1);
-      }
+      // 저장된 경로가 있으면 불러오기 (비동기)
+      const loadSavedRoute = async () => {
+        const savedRoute = await getFacilityRoute(selectedFacility);
+        if (savedRoute && savedRoute.nodes && savedRoute.nodes.length > 0) {
+          console.log('저장된 노드 불러오기:', savedRoute.nodes.length, '개');
+          
+          // 중복 제거를 위해 ID 기준으로 유니크한 노드만 저장
+          const uniqueNodes = [];
+          const seenIds = new Set();
+          
+          savedRoute.nodes.forEach(node => {
+            if (!seenIds.has(node.id)) {
+              seenIds.add(node.id);
+              uniqueNodes.push(node);
+            }
+          });
+          
+          setNodes(uniqueNodes);
+          setEdges(savedRoute.edges || []);
+          
+          const maxId = Math.max(...uniqueNodes.map(n => parseInt(n.id.replace('node-', '')) || 0), 0);
+          setNodeIdCounter(maxId + 1);
+        }
+      };
+      
+      loadSavedRoute();
     }
   }, [selectedFacility]);
 
@@ -267,7 +273,7 @@ const MapNodeEditor = () => {
     console.log('=== 자동 정렬 완료 ===');
   };
 
-  const exportNodes = () => {
+  const exportNodes = async () => {
     if (!selectedFacility) {
       alert('시설을 선택해주세요!');
       return;
@@ -319,7 +325,7 @@ const MapNodeEditor = () => {
     }
     
     // 저장 및 코드 생성 시 정렬된 'sortedEdges'를 사용
-    const success = saveRoute(selectedFacility, nodes, sortedEdges.length > 0 ? sortedEdges : edges);
+    const success = await saveRoute(selectedFacility, nodes, sortedEdges.length > 0 ? sortedEdges : edges);
     
     if (success) {
       // MapNavigator 컴포넌트용 코드 생성

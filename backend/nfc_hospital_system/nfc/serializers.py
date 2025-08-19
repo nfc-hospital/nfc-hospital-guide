@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import NFCTag, TagLog, NFCTagExam
+from .models import NFCTag, TagLog, NFCTagExam, FacilityRoute
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from appointments.serializers import ExamSerializer
@@ -235,3 +235,22 @@ class AdminNFCTagUpdateSerializer(serializers.ModelSerializer):
         if self.instance and NFCTag.objects.filter(code=value).exclude(tag_id=self.instance.tag_id).exists():
             raise serializers.ValidationError("이미 사용 중인 태그 코드입니다.")
         return value
+
+
+class FacilityRouteSerializer(serializers.ModelSerializer):
+    """시설별 경로 데이터 직렬화"""
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
+    
+    class Meta:
+        model = FacilityRoute
+        fields = [
+            'id', 'facility_name', 'nodes', 'edges', 'map_id',
+            'svg_element_id', 'created_at', 'updated_at', 
+            'created_by', 'created_by_name'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
+    
+    def create(self, validated_data):
+        if self.context.get('request'):
+            validated_data['created_by'] = self.context['request'].user
+        return super().create(validated_data)

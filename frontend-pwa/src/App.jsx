@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { initializeCSRFToken } from './api/client';
 import useJourneyStore from './store/journeyStore';
+import { initializeDefaultRoutes } from './data/defaultRoutes';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import Layout from './components/common/Layout';
@@ -40,6 +41,12 @@ function AppContent() {
 
   // 앱 시작 시 토큰 확인 및 데이터 로딩
   useEffect(() => {
+    // 기본 경로 데이터 초기화 (최초 1회만)
+    const isInitialized = initializeDefaultRoutes();
+    if (isInitialized) {
+      console.log('✅ 기본 경로 데이터가 초기화되었습니다.');
+    }
+    
     const loadUserData = async () => {
       const token = localStorage.getItem('access_token');
       if (token && isAuthenticated) {

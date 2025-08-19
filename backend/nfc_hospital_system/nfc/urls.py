@@ -6,6 +6,7 @@ from . import views
 router = DefaultRouter()
 # router.register(r'admin/nfc/tags', views.AdminNFCTagViewSet, basename='admin-nfc-tags')
 router.register(r'tags', views.AdminNFCTagViewSet, basename='admin-nfc-tags')
+router.register(r'facility-routes', views.FacilityRouteViewSet, basename='facility-routes')
 
 
 app_name = 'nfc'

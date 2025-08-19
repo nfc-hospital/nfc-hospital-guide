@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.db import transaction
 import logging
 
-from .models import NFCTag, TagLog, NFCTagExam
+from .models import NFCTag, TagLog, NFCTagExam, FacilityRoute
 from appointments.models import Exam
 from p_queue.models import Queue, PatientState
 from .serializers import (
@@ -21,7 +21,8 @@ from .serializers import (
     NFCTagExamDetailSerializer, 
     NFCTagExamMappingRequestSerializer,
     AdminNFCTagCreateSerializer,
-    AdminNFCTagUpdateSerializer
+    AdminNFCTagUpdateSerializer,
+    FacilityRouteSerializer
 )
 from appointments.serializers import ExamSerializer 
 
@@ -1247,4 +1248,82 @@ def get_today_scans(request):
             message="오늘 스캔 통계 조회 중 오류가 발생했습니다.",
             code="TODAY_SCANS_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# 시설 경로 API
+class FacilityRouteViewSet(ModelViewSet):
+    """시설별 경로 데이터 관리 API"""
+    queryset = FacilityRoute.objects.all()
+    serializer_class = FacilityRouteSerializer
+    permission_classes = [permissions.AllowAny]  # 읽기는 모두 허용
+    
+    def get_permissions(self):
+        """메서드별 권한 설정"""
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+    
+    def get_queryset(self):
+        """시설명으로 필터링"""
+        queryset = super().get_queryset()
+        facility_name = self.request.query_params.get('facility_name')
+        if facility_name:
+            queryset = queryset.filter(facility_name=facility_name)
+        return queryset
+    
+    @action(detail=False, methods=['get'])
+    def by_facility(self, request):
+        """특정 시설의 경로 조회"""
+        facility_name = request.query_params.get('facility_name')
+        if not facility_name:
+            return Response(
+                {"error": "facility_name parameter is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            route = FacilityRoute.objects.get(facility_name=facility_name)
+            serializer = self.get_serializer(route)
+            return Response(serializer.data)
+        except FacilityRoute.DoesNotExist:
+            return Response(
+                {"nodes": [], "edges": []},
+                status=status.HTTP_200_OK
+            )
+    
+    @action(detail=False, methods=['post'])
+    def save_route(self, request):
+        """경로 저장/업데이트"""
+        facility_name = request.data.get('facility_name')
+        nodes = request.data.get('nodes', [])
+        edges = request.data.get('edges', [])
+        map_id = request.data.get('map_id', 'main_1f')
+        svg_element_id = request.data.get('svg_element_id', '')
+        
+        if not facility_name:
+            return Response(
+                {"error": "facility_name is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        route, created = FacilityRoute.objects.update_or_create(
+            facility_name=facility_name,
+            defaults={
+                'nodes': nodes,
+                'edges': edges,
+                'map_id': map_id,
+                'svg_element_id': svg_element_id,
+                'created_by': request.user if request.user.is_authenticated else None
+            }
+        )
+        
+        serializer = self.get_serializer(route)
+        return Response(
+            {
+                "data": serializer.data,
+                "created": created,
+                "message": f"{'Created' if created else 'Updated'} route for {facility_name}"
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
         )
