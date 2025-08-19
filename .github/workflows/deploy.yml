@@ -78,9 +78,12 @@ jobs:
           # --- 2. 프론트엔드 빌드 파일 배포 ---
           echo ">>> 2. 프론트엔드 빌드 파일 압축 해제 및 복사"
           sudo mkdir -p $FRONTEND_BUILD_PATH
+          # 권한 먼저 설정
+          sudo chown -R $USER:$USER $FRONTEND_BUILD_PATH
           # 이전 빌드 파일 삭제 후 압축 해제
           sudo rm -rf $FRONTEND_BUILD_PATH/*
-          tar -zxvf $PROJECT_DIR/frontend-build.tar.gz -C $FRONTEND_BUILD_PATH
+          tar -xzf $PROJECT_DIR/frontend-build.tar.gz -C $FRONTEND_BUILD_PATH/
+          # 압축 해제 후 웹서버 권한으로 변경
           sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH
           # 압축 파일 삭제 (정리)
           rm -f $PROJECT_DIR/frontend-build.tar.gz
