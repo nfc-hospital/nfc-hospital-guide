@@ -24,9 +24,20 @@ jobs:
         npm install
         npm run build
 
-    # --- 2. 빌드된 파일 압축 및 서버로 전송 ---
+    # --- 2. 빌드된 파일 압축 ---
     - name: Compress build files
-      run: tar -zcvf frontend-build.tar.gz -C frontend-pwa/dist .
+      run: |
+        cd frontend-pwa
+        tar -czf ../frontend-build.tar.gz -C dist .
+        cd ..
+        ls -lh frontend-build.tar.gz
+
+    # --- 3. 압축 파일만 별도 디렉토리로 이동 후 전송 ---
+    - name: Prepare for transfer
+      run: |
+        mkdir -p transfer
+        mv frontend-build.tar.gz transfer/
+        ls -la transfer/
 
     - name: Copy build files to server
       uses: appleboy/scp-action@master
@@ -34,10 +45,9 @@ jobs:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USER }}
         key: ${{ secrets.EC2_SSH_KEY }}
-        source: "frontend-build.tar.gz"
+        source: "transfer/frontend-build.tar.gz"
         target: "~/nfc-hospital"
-        rm: false
-        strip_components: 0
+        strip_components: 1
 
     # --- 3. EC2 서버에서 압축 해제 및 서버 재시작 ---
     - name: Deploy on EC2
