@@ -1,4 +1,4 @@
-name: Deploy Full Stack to EC2 - Final Version
+name: Deploy Full Stack to EC2 - Optimized Build
 
 on:
   push:
@@ -9,7 +9,36 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Deploy Full Stack to EC2
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    # --- 1. 프론트엔드 빌드 (GitHub Actions Runner에서 실행) ---
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install Frontend Dependencies & Build
+      run: |
+        cd frontend-pwa
+        npm install
+        npm run build
+
+    # --- 2. 빌드된 파일 압축 및 서버로 전송 ---
+    - name: Compress build files
+      run: tar -zcvf frontend-build.tar.gz -C frontend-pwa/dist .
+
+    - name: Copy build files to server
+      uses: appleboy/scp-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_SSH_KEY }}
+        source: "frontend-build.tar.gz"
+        target: "~/nfc-hospital"
+
+    # --- 3. EC2 서버에서 압축 해제 및 서버 재시작 ---
+    - name: Deploy on EC2
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.EC2_HOST }}
@@ -21,47 +50,43 @@ jobs:
           # --- 경로 변수 정의 ---
           PROJECT_DIR="$HOME/nfc-hospital"
           BACKEND_DIR="$PROJECT_DIR/backend"
-          FRONTEND_DIR="$PROJECT_DIR/frontend-pwa"
-          VENV_DAPHNE="$BACKEND_DIR/venv/bin/daphne"
-          VENV_PIP="$BACKEND_DIR/venv/bin/pip"
-          VENV_PYTHON="$BACKEND_DIR/venv/bin/python"
-          DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
           FRONTEND_BUILD_PATH="/var/www/nfc-hospital"
-          EC2_HOST="15.164.94.194"
+          DJANGO_DIR="$BACKEND_DIR/nfc_hospital_system"
+          VENV_PYTHON="$BACKEND_DIR/venv/bin/python"
+          VENV_PIP="$BACKEND_DIR/venv/bin/pip"
 
-          # --- 1. 코드 업데이트 ---
-          echo ">>> 1. git 리포지토리에서 코드를 업데이트합니다..."
+          # --- 1. 코드 업데이트 및 백엔드 의존성 설치 ---
+          echo ">>> 1. Git 리포지토리 업데이트 및 백엔드 의존성 설치"
           cd $PROJECT_DIR
           git reset --hard HEAD
           git pull origin main
-
-          # --- 2. 의존성 설치 ---
-          echo ">>> 2. 백엔드와 프론트엔드 의존성을 설치합니다..."
           cd $DJANGO_DIR
           $VENV_PIP install -r requirements.txt
-          cd $FRONTEND_DIR
-          npm install
 
-          # --- 3. 프론트엔드 빌드 ---
-          echo ">>> 3. 프론트엔드 애플리케이션을 빌드합니다..."
-          npm run build
+          # --- 2. 프론트엔드 빌드 파일 배포 ---
+          echo ">>> 2. 프론트엔드 빌드 파일 압축 해제 및 복사"
+          sudo mkdir -p $FRONTEND_BUILD_PATH
+          # 이전 빌드 파일 삭제 후 압축 해제
+          sudo rm -rf $FRONTEND_BUILD_PATH/*
+          tar -zxvf $PROJECT_DIR/frontend-build.tar.gz -C $FRONTEND_BUILD_PATH
+          sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH
+          # 압축 파일 삭제 (정리)
+          rm -f $PROJECT_DIR/frontend-build.tar.gz
 
-          # --- 4. 로그 디렉터리 및 파일 생성 (가장 중요!) ---
-          echo ">>> 4. Django를 위한 로그 디렉터리 및 파일을 먼저 생성하고 권한을 설정합니다..."
+          # --- 3. 로그 디렉터리 및 파일 생성 ---
+          echo ">>> 3. Django 로그 디렉터리 및 파일 생성"
           sudo mkdir -p /var/log/django
-          # 오타 수정: 두 파일을 공백으로 구분하여 한 번에 생성
           sudo touch /var/log/django/error.log /var/log/django/nfc_hospital.log
-          # 생성된 디렉터리와 그 안의 모든 파일 소유권을 EC2 접속 유저에게 부여
           sudo chown -R $USER:$USER /var/log/django
 
-          # --- 5. Django 애플리케이션 준비 ---
-          echo ">>> 5. Django 마이그레이션을 실행하고 정적 파일을 수집합니다..."
+          # --- 4. Django 애플리케이션 준비 ---
+          echo ">>> 4. Django 마이그레이션 및 정적 파일 수집"
           cd $DJANGO_DIR
           $VENV_PYTHON manage.py collectstatic --noinput --settings=nfc_hospital_system.settings.production
           $VENV_PYTHON manage.py migrate --noinput --settings=nfc_hospital_system.settings.production
 
-          # --- 6. 서버 시작 스크립트 생성 ---
-          echo ">>> 6. 서버 시작 스크립트를 생성합니다..."
+          # --- 5. 서버 시작 스크립트 생성 ---
+          echo ">>> 5. 서버 시작 스크립트 생성"
           cat > $PROJECT_DIR/start_server.sh <<'EOF'
           #!/bin/bash
           # 서버 시작 스크립트 - 환경 변수를 확실하게 로드하고 Daphne 실행
@@ -85,22 +110,14 @@ jobs:
           # 생성된 스크립트에 실행 권한 부여
           chmod +x $PROJECT_DIR/start_server.sh
 
-          # --- 7. 백엔드 서버 재시작 ---
-          echo ">>> 7. 백엔드 Daphne 서버를 재시작합니다..."
+          # --- 6. 백엔드 서버 재시작 ---
+          echo ">>> 6. 백엔드 Daphne 서버 재시작"
           screen -S django -X quit || true
           sleep 2
-          
-          # 새 screen 세션에서 start_server.sh 스크립트를 실행
           screen -dmS django $PROJECT_DIR/start_server.sh
 
-          # --- 8. 프론트엔드 빌드 파일 복사 ---
-          echo ">>> 8. 프론트엔드 빌드 파일을 Nginx 디렉터리로 복사합니다..."
-          sudo mkdir -p $FRONTEND_BUILD_PATH
-          sudo cp -r $FRONTEND_DIR/dist/* $FRONTEND_BUILD_PATH/
-          sudo chown -R www-data:www-data $FRONTEND_BUILD_PATH
-
-          # --- 9. Nginx 설정 및 재시작 ---
-          echo ">>> 9. Nginx를 설정하고 재시작합니다..."
+          # --- 7. Nginx 설정 및 재시작 ---
+          echo ">>> 7. Nginx 설정 및 재시작"
           sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
           server {
               listen 80;
@@ -130,8 +147,8 @@ jobs:
           sudo nginx -t
           sudo systemctl restart nginx
 
-          # --- 10. 최종 검증 ---
-          echo ">>> 10. 배포 상태를 검증합니다..."
+          # --- 8. 최종 검증 ---
+          echo ">>> 8. 배포 상태 검증"
           sleep 5
           if screen -list | grep -q "django"; then
               echo "✅ 백엔드 서버가 정상적으로 실행 중입니다."
