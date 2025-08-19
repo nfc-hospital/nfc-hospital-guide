@@ -136,7 +136,7 @@ jobs:
           sudo tee /etc/nginx/sites-available/nfc-hospital > /dev/null <<'EOF'
           server {
               listen 80;
-              server_name 15.164.94.194;
+              server_name 3.37.62.188;
 
               location / {
                   root /var/www/nfc-hospital;

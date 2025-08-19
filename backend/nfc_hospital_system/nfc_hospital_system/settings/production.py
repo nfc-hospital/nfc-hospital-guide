@@ -5,11 +5,11 @@ from .base import *
 DEBUG = False
 
 # 운영 환경 허용 호스트
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,15.164.94.194').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,3.37.62.188').split(',')
 
 # EC2 인스턴스 IP 주소 명시적으로 추가
-if '15.164.94.194' not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append('15.164.94.194')
+if '3.37.62.188' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('3.37.62.188')
 
 # 운영용 데이터베이스 (MySQL)
 DATABASES = {
@@ -39,9 +39,9 @@ if cors_origins:
 
 # 운영 환경 기본 도메인 추가
 CORS_ALLOWED_ORIGINS.extend([
-    "http://15.164.94.194",                  # EC2 인스턴스 IP
-    "http://15.164.94.194:5174",             # React PWA
-    "http://15.164.94.194:5173",             # Admin Dashboard
+    "http://3.37.62.188",                  # EC2 인스턴스 IP
+    "http://3.37.62.188:5174",             # React PWA
+    "http://3.37.62.188:5173",             # Admin Dashboard
     "https://hospital.example.com",          # 실제 도메인으로 변경 필요 (추후)
     "https://admin.hospital.example.com",    # 관리자 도메인 (추후)
     "https://api.hospital.example.com",      # API 도메인 (추후)
@@ -108,6 +108,15 @@ SECURE_BROWSER_XSS_FILTER = True
 # SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = False  # HTTP 환경에서는 False로 설정
 CSRF_COOKIE_SECURE = False  # HTTP 환경에서는 False로 설정
+
+# CSRF 설정 추가
+CSRF_TRUSTED_ORIGINS = [
+    'http://3.37.62.188',
+    'http://localhost:5174',
+    'http://localhost:5173',
+]
+CSRF_COOKIE_HTTPONLY = False  # JavaScript에서 접근 가능하도록
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 # 운영용 로깅 (파일 기반)
 LOGGING['handlers']['file']['filename'] = '/var/log/django/nfc_hospital.log'

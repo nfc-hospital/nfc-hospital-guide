@@ -1259,9 +1259,7 @@ class FacilityRouteViewSet(ModelViewSet):
     permission_classes = [permissions.AllowAny]  # 읽기는 모두 허용
     
     def get_permissions(self):
-        """메서드별 권한 설정"""
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated()]
+        """메서드별 권한 설정 - 개발 중에는 모두 허용"""
         return [permissions.AllowAny()]
     
     def get_queryset(self):
