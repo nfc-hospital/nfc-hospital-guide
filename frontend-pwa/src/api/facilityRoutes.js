@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+// 프로덕션 환경에서는 현재 도메인 사용
+const API_URL = import.meta.env.VITE_API_URL || 
+  (window.location.hostname === 'localhost' 
+    ? 'http://localhost:8000/api/v1' 
+    : `${window.location.protocol}//${window.location.host}/api/v1`);
 
 // 시설별 경로 가져오기 (DB에서)
 export const getFacilityRoute = async (facilityName) => {

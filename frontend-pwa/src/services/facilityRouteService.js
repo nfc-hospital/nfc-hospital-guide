@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+// 프로덕션 환경에서는 현재 도메인 사용
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (window.location.hostname === 'localhost' 
+    ? 'http://localhost:8000' 
+    : `${window.location.protocol}//${window.location.host}`);
 
 /**
  * 시설 경로 서비스
