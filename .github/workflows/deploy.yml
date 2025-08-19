@@ -36,6 +36,8 @@ jobs:
         key: ${{ secrets.EC2_SSH_KEY }}
         source: "frontend-build.tar.gz"
         target: "~/nfc-hospital"
+        rm: false
+        strip_components: 0
 
     # --- 3. EC2 서버에서 압축 해제 및 서버 재시작 ---
     - name: Deploy on EC2
