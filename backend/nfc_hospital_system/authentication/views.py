@@ -7,10 +7,7 @@ from rest_framework import status
 from django.conf import settings
 from nfc_hospital_system.utils import APIResponse
 from .models import User
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
-import json
+# 제거된 import: JsonResponse, csrf_exempt, require_http_methods, json (더 이상 사용하지 않음)
 from rest_framework.views import APIView
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
@@ -68,40 +65,17 @@ def simple_login(request):
         except Exception as create_error:
             return APIResponse.error(f"사용자 생성 실패: {str(create_error)}", code="AUTH_004")
         
-        # JWT 토큰 생성 (수동으로 생성)
+        # JWT 토큰 생성 (djangorestframework-simplejwt 사용)
         try:
-            try:
-                import jwt
-            except ImportError:
-                return APIResponse.error("PyJWT 패키지가 설치되지 않았습니다", code="AUTH_010")
+            from rest_framework_simplejwt.tokens import RefreshToken
             
-            from datetime import datetime, timedelta
-            from django.conf import settings
+            # RefreshToken 객체 생성
+            refresh = RefreshToken.for_user(user)
             
-            # UUID를 문자열로 변환
-            user_id_str = str(user.pk)  # UUID를 문자열로 변환
-            
-            # 페이로드 생성
-            payload = {
-                'user_id': user_id_str,  # 문자열로 변환된 ID 사용
-                'name': user.name,
-                'token_type': 'access',  # 토큰 타입 추가
-                'exp': datetime.utcnow() + timedelta(hours=1),  # 1시간 후 만료
-                'iat': datetime.utcnow(),  # 발급 시간
-            }
-            
-            # JWT 토큰 생성
-            access_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-            
-            # 리프레시 토큰 (7일)
-            refresh_payload = payload.copy()
-            refresh_payload['token_type'] = 'refresh'  # 리프레시 토큰 타입 설정
-            refresh_payload['exp'] = datetime.utcnow() + timedelta(days=7)
-            refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
-            
+            # 토큰 문자열 추출
             tokens = {
-                'refresh': refresh_token,
-                'access': access_token,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
                 'expires_in': 3600,
             }
         except Exception as token_error:
@@ -201,35 +175,17 @@ def kakao_login(request):
         except Exception as create_error:
             return APIResponse.error(f"카카오 사용자 생성 실패: {str(create_error)}", code="AUTH_006")
         
-        # 4. JWT 토큰 생성 (수동으로 생성)
+        # 4. JWT 토큰 생성 (djangorestframework-simplejwt 사용)
         try:
-            import jwt
-            from datetime import datetime, timedelta
+            from rest_framework_simplejwt.tokens import RefreshToken
             
-            # UUID를 문자열로 변환
-            user_id_str = str(user.pk)  # UUID를 문자열로 변환
+            # RefreshToken 객체 생성
+            refresh = RefreshToken.for_user(user)
             
-            # 페이로드 생성
-            payload = {
-                'user_id': user_id_str,  # 문자열로 변환된 ID 사용
-                'name': user.name,
-                'token_type': 'access',  # 토큰 타입 추가
-                'exp': datetime.utcnow() + timedelta(hours=1),  # 1시간 후 만료
-                'iat': datetime.utcnow(),  # 발급 시간
-            }
-            
-            # JWT 토큰 생성
-            access_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-            
-            # 리프레시 토큰 (7일)
-            refresh_payload = payload.copy()
-            refresh_payload['token_type'] = 'refresh'  # 리프레시 토큰 타입 설정
-            refresh_payload['exp'] = datetime.utcnow() + timedelta(days=7)
-            refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
-            
+            # 토큰 문자열 추출
             tokens = {
-                'refresh': refresh_token,
-                'access': access_token,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
                 'expires_in': 3600,
             }
         except Exception as token_error:
@@ -275,93 +231,29 @@ def logout(request):
 
 
 
-@csrf_exempt
-@require_http_methods(["GET"])
+from rest_framework.decorators import authentication_classes
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.permissions import IsAuthenticated
+
+@api_view(['GET'])
+@authentication_classes([JWTAuthentication])
+@permission_classes([IsAuthenticated])
 def profile(request):
-    """사용자 프로필 조회 - 일반 Django 뷰"""
+    """사용자 프로필 조회 - DRF 뷰로 변경"""
     try:
-        # Authorization 헤더에서 토큰 추출
-        auth_header = request.META.get('HTTP_AUTHORIZATION')
-        
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return JsonResponse({
-                "success": False,
-                "error": {
-                    "code": "AUTH_401",
-                    "message": "인증 토큰이 필요합니다"
-                }
-            }, status=401)
-        
-        token = auth_header.split(' ')[1]
-        
-        try:
-            import jwt
-            from datetime import datetime
-            
-            # 커스텀 JWT 토큰 디코딩
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=['HS256'])
-            user_id = payload.get('user_id')
-            
-        except jwt.ExpiredSignatureError:
-            return JsonResponse({
-                "success": False,
-                "error": {
-                    "code": "AUTH_402", 
-                    "message": "토큰이 만료되었습니다"
-                }
-            }, status=401)
-        except jwt.InvalidTokenError as e:
-            return JsonResponse({
-                "success": False,
-                "error": {
-                    "code": "AUTH_403",
-                    "message": f"유효하지 않은 토큰입니다: {str(e)}"
-                }
-            }, status=401)
-        
-        if not user_id:
-            return JsonResponse({
-                "success": False,
-                "error": {
-                    "code": "AUTH_404",
-                    "message": "토큰에 사용자 정보가 없습니다"
-                }
-            }, status=400)
-        
-        # 사용자 정보 조회
-        try:
-            from uuid import UUID
-            user = User.objects.get(pk=UUID(user_id))
-        except User.DoesNotExist:
-            return JsonResponse({
-                "success": False,
-                "error": {
-                    "code": "AUTH_405",
-                    "message": "사용자를 찾을 수 없습니다"
-                }
-            }, status=404)
+        # DRF가 이미 인증을 처리했으므로 request.user 사용
+        user = request.user
         
         # ProfileSerializer를 사용하여 사용자 정보 직렬화
         from .serializers import ProfileSerializer
         serializer = ProfileSerializer(user)
         
-        return JsonResponse({
-            "success": True,
-            "data": {
-                "user": serializer.data
-            },
-            "message": "프로필 조회 성공",
-            "timestamp": datetime.now().isoformat()
-        })
+        return APIResponse.success({
+            "user": serializer.data
+        }, message="프로필 조회 성공")
         
     except Exception as e:
-        return JsonResponse({
-            "success": False,
-            "error": {
-                "code": "AUTH_500",
-                "message": f"프로필 조회 중 오류: {str(e)}"
-            }
-        }, status=500)
+        return APIResponse.error(f"프로필 조회 중 오류: {str(e)}", code="AUTH_500")
 
 @method_decorator(ensure_csrf_cookie, name='dispatch')
 class CSRFTokenView(APIView):
@@ -431,34 +323,17 @@ def kakao_login_mock(request):
         except Exception as create_error:
             return APIResponse.error(f"카카오 사용자 생성 실패: {str(create_error)}", code="AUTH_006")
         
-        # JWT 토큰 생성
+        # JWT 토큰 생성 (djangorestframework-simplejwt 사용)
         try:
-            import jwt
-            from datetime import datetime, timedelta
+            from rest_framework_simplejwt.tokens import RefreshToken
             
-            # UUID를 문자열로 변환
-            user_id_str = str(user.pk)
+            # RefreshToken 객체 생성
+            refresh = RefreshToken.for_user(user)
             
-            # 페이로드 생성
-            payload = {
-                'user_id': user_id_str,
-                'name': user.name,
-                'exp': datetime.utcnow() + timedelta(hours=1),
-                'iat': datetime.utcnow(),
-            }
-            
-            # JWT 토큰 생성
-            access_token = jwt.encode(payload, settings.SECRET_KEY, algorithm='HS256')
-            
-            # 리프레시 토큰 (7일)
-            refresh_payload = payload.copy()
-            refresh_payload['token_type'] = 'refresh'  # 리프레시 토큰 타입 설정
-            refresh_payload['exp'] = datetime.utcnow() + timedelta(days=7)
-            refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
-            
+            # 토큰 문자열 추출
             tokens = {
-                'refresh': refresh_token,
-                'access': access_token,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
                 'expires_in': 3600,
             }
         except Exception as token_error:
