@@ -27,7 +27,10 @@ except ImportError:
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def simple_login(request):
-    """간편 로그인 (전화번호 뒷자리 + 생년월일)"""
+    """간편 로그인 (전화번호 뒷자리 + 생년월일)
+    
+    자동 로그인 옵션을 선택하면 refresh 토큰을 httpOnly 쿠키에 저장
+    """
     try:
         phone_last4 = request.data.get('phoneLast4')
         birth_date = request.data.get('birthDate')
@@ -60,22 +63,43 @@ def simple_login(request):
                     name=f'환자{phone_last4}',
                     phone_number=f'010****{phone_last4}',
                     birth_date=birth_date_formatted,
+                    email=f'patient{phone_last4}_{birth_date}@temp.com',  # 이메일 필드 추가
                 )
             
         except Exception as create_error:
             return APIResponse.error(f"사용자 생성 실패: {str(create_error)}", code="AUTH_004")
         
-        # JWT 토큰 생성 (djangorestframework-simplejwt 사용)
+        # JWT 토큰 생성 (수동 방식)
         try:
-            from rest_framework_simplejwt.tokens import RefreshToken
+            if not jwt:
+                return APIResponse.error("JWT 모듈이 설치되지 않았습니다", code="AUTH_005")
+                
+            # 토큰 페이로드 생성
+            now = datetime.utcnow()
+            access_payload = {
+                'user_id': str(user.user_id),
+                'email': user.email,
+                'name': user.name,
+                'role': user.role,
+                'token_type': 'access',
+                'exp': now + timedelta(hours=1),  # 1시간 만료
+                'iat': now,
+            }
             
-            # RefreshToken 객체 생성
-            refresh = RefreshToken.for_user(user)
+            refresh_payload = {
+                'user_id': str(user.user_id),
+                'token_type': 'refresh',
+                'exp': now + timedelta(days=7),  # 7일 만료
+                'iat': now,
+            }
             
-            # 토큰 문자열 추출
+            # 토큰 생성
+            access_token = jwt.encode(access_payload, settings.SECRET_KEY, algorithm='HS256')
+            refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
+            
             tokens = {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
+                'access': access_token,
+                'refresh': refresh_token,
                 'expires_in': 3600,
             }
         except Exception as token_error:
@@ -93,23 +117,61 @@ def simple_login(request):
         print(f"User 객체 속성들: {user_attrs}")
         print(f"사용자 ID: {user_id}, PK: {user.pk}")
         
-        return APIResponse.success({
+        # 자동 로그인 옵션 확인
+        remember_me = request.data.get('rememberMe', False)
+        
+        # 응답 생성
+        response_data = {
             "user": {
                 "id": str(user.pk),  # UUID를 문자열로 변환
                 "name": user.name,
                 "phone": phone_last4,  # 디버깅용
             },
             "tokens": tokens
-        }, message="간편 로그인 성공")
+        }
+        
+        response = APIResponse.success(response_data, message="간편 로그인 성공")
+        
+        # 자동 로그인이 선택된 경우 httpOnly 쿠키 설정
+        if remember_me:
+            # refresh 토큰을 httpOnly 쿠키에 저장
+            response.set_cookie(
+                key='refresh_token',
+                value=tokens['refresh'],
+                max_age=60 * 60 * 24 * 7,  # 7일
+                httponly=True,
+                secure=True if not settings.DEBUG else False,  # 운영 환경에서는 HTTPS만
+                samesite='Lax',
+                path='/'
+            )
+            
+            # access 토큰도 httpOnly 쿠키에 저장 (선택사항)
+            response.set_cookie(
+                key='access_token',
+                value=tokens['access'],
+                max_age=60 * 60,  # 1시간
+                httponly=True,
+                secure=True if not settings.DEBUG else False,
+                samesite='Lax',
+                path='/'
+            )
+        
+        return response
         
     except Exception as e:
-        return APIResponse.error(f"간편 로그인 처리 중 오류: {str(e)}", code="AUTH_500")
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"간편 로그인 오류 상세: {error_detail}")
+        return APIResponse.error(f"간편 로그인 처리 중 오류: {str(e)}", code="AUTH_500", data={"detail": str(e)})
 
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def kakao_login(request):
-    """카카오 OAuth 로그인"""
+    """카카오 OAuth 로그인
+    
+    자동 로그인 옵션을 선택하면 refresh 토큰을 httpOnly 쿠키에 저장
+    """
     try:
         code = request.data.get('code')
         if not code:
@@ -175,29 +237,81 @@ def kakao_login(request):
         except Exception as create_error:
             return APIResponse.error(f"카카오 사용자 생성 실패: {str(create_error)}", code="AUTH_006")
         
-        # 4. JWT 토큰 생성 (djangorestframework-simplejwt 사용)
+        # 4. JWT 토큰 생성 (수동 방식)
         try:
-            from rest_framework_simplejwt.tokens import RefreshToken
+            if not jwt:
+                return APIResponse.error("JWT 모듈이 설치되지 않았습니다", code="AUTH_007")
+                
+            # 토큰 페이로드 생성
+            now = datetime.utcnow()
+            access_payload = {
+                'user_id': str(user.user_id),
+                'email': user.email,
+                'name': user.name,
+                'role': user.role,
+                'token_type': 'access',
+                'exp': now + timedelta(hours=1),  # 1시간 만료
+                'iat': now,
+            }
             
-            # RefreshToken 객체 생성
-            refresh = RefreshToken.for_user(user)
+            refresh_payload = {
+                'user_id': str(user.user_id),
+                'token_type': 'refresh',
+                'exp': now + timedelta(days=7),  # 7일 만료
+                'iat': now,
+            }
             
-            # 토큰 문자열 추출
+            # 토큰 생성
+            access_token = jwt.encode(access_payload, settings.SECRET_KEY, algorithm='HS256')
+            refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
+            
             tokens = {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
+                'access': access_token,
+                'refresh': refresh_token,
                 'expires_in': 3600,
             }
         except Exception as token_error:
             return APIResponse.error(f"토큰 생성 실패: {str(token_error)}", code="AUTH_007")
         
-        return APIResponse.success({
+        # 자동 로그인 옵션 확인
+        remember_me = request.data.get('rememberMe', False)
+        
+        # 응답 생성
+        response_data = {
             "user": {
                 "id": str(user.pk),  # UUID를 문자열로 변환
                 "name": user.name,
             },
             "tokens": tokens
-        }, message="카카오 로그인 성공")
+        }
+        
+        response = APIResponse.success(response_data, message="카카오 로그인 성공")
+        
+        # 자동 로그인이 선택된 경우 httpOnly 쿠키 설정
+        if remember_me:
+            # refresh 토큰을 httpOnly 쿠키에 저장
+            response.set_cookie(
+                key='refresh_token',
+                value=tokens['refresh'],
+                max_age=60 * 60 * 24 * 7,  # 7일
+                httponly=True,
+                secure=True if not settings.DEBUG else False,  # 운영 환경에서는 HTTPS만
+                samesite='Lax',
+                path='/'
+            )
+            
+            # access 토큰도 httpOnly 쿠키에 저장 (선택사항)
+            response.set_cookie(
+                key='access_token',
+                value=tokens['access'],
+                max_age=60 * 60,  # 1시간
+                httponly=True,
+                secure=True if not settings.DEBUG else False,
+                samesite='Lax',
+                path='/'
+            )
+        
+        return response
         
     except Exception as e:
         return APIResponse.error(f"카카오 로그인 처리 중 오류: {str(e)}", code="AUTH_500")
@@ -212,37 +326,131 @@ def test_view(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-def logout(request):
-    """로그아웃"""
+def refresh_token_view(request):
+    """토큰 갱신 - refresh 토큰을 사용하여 새로운 access 토큰 발급"""
     try:
+        # refresh 토큰 추출 (request body 또는 쿠키에서)
         refresh_token = request.data.get('refresh_token')
-        if refresh_token:
-            # 토큰 블랙리스트 처리
-            success = JWTUtils.blacklist_token(refresh_token)
-            if success:
-                return APIResponse.success(message="로그아웃 성공")
-            else:
-                return APIResponse.error("토큰 무효화 실패", code="AUTH_008")
-        else:
-            return APIResponse.success(message="로그아웃 성공")
+        if not refresh_token and 'refresh_token' in request.COOKIES:
+            refresh_token = request.COOKIES.get('refresh_token')
+            
+        if not refresh_token:
+            return APIResponse.error("Refresh 토큰이 필요합니다", code="AUTH_406")
+            
+        # refresh 토큰 검증
+        try:
+            payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=['HS256'])
+            
+            # 토큰 타입 확인
+            if payload.get('token_type') != 'refresh':
+                return APIResponse.error("유효하지 않은 refresh 토큰입니다", code="AUTH_407")
+                
+            user_id = payload.get('user_id')
+            if not user_id:
+                return APIResponse.error("유효하지 않은 토큰입니다", code="AUTH_408")
+                
+            # 사용자 조회
+            user = User.objects.get(user_id=user_id, is_active=True)
+            
+            # 새로운 access 토큰 생성
+            now = datetime.utcnow()
+            access_payload = {
+                'user_id': str(user.user_id),
+                'email': user.email,
+                'name': user.name,
+                'role': user.role,
+                'token_type': 'access',
+                'exp': now + timedelta(hours=1),  # 1시간 만료
+                'iat': now,
+            }
+            
+            new_access_token = jwt.encode(access_payload, settings.SECRET_KEY, algorithm='HS256')
+            
+            response_data = {
+                "access": new_access_token,
+                "expires_in": 3600,
+            }
+            
+            response = APIResponse.success(response_data, message="토큰 갱신 성공")
+            
+            # access_token 쿠키가 있었다면 갱신
+            if 'access_token' in request.COOKIES:
+                response.set_cookie(
+                    key='access_token',
+                    value=new_access_token,
+                    max_age=60 * 60,  # 1시간
+                    httponly=True,
+                    secure=True if not settings.DEBUG else False,
+                    samesite='Lax',
+                    path='/'
+                )
+            
+            return response
+            
+        except jwt.ExpiredSignatureError:
+            return APIResponse.error("Refresh 토큰이 만료되었습니다", code="AUTH_409")
+        except jwt.InvalidTokenError:
+            return APIResponse.error("유효하지 않은 refresh 토큰입니다", code="AUTH_410")
+        except User.DoesNotExist:
+            return APIResponse.error("사용자를 찾을 수 없습니다", code="AUTH_411")
+            
+    except Exception as e:
+        return APIResponse.error(f"토큰 갱신 중 오류: {str(e)}", code="AUTH_500")
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def logout(request):
+    """로그아웃 - 쿠키 삭제"""
+    try:
+        response = APIResponse.success(message="로그아웃 성공")
+        
+        # httpOnly 쿠키 삭제
+        response.delete_cookie('access_token', path='/')
+        response.delete_cookie('refresh_token', path='/')
+        
+        return response
     except Exception as e:
         return APIResponse.error(f"로그아웃 처리 중 오류: {str(e)}", code="AUTH_500")
     
 
 
 
-from rest_framework.decorators import authentication_classes
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework.permissions import IsAuthenticated
-
 @api_view(['GET'])
-@authentication_classes([JWTAuthentication])
-@permission_classes([IsAuthenticated])
+@permission_classes([AllowAny])  # JWT를 수동으로 검증할 것이므로 AllowAny
 def profile(request):
-    """사용자 프로필 조회 - DRF 뷰로 변경"""
+    """사용자 프로필 조회 - 수동 JWT 검증"""
     try:
-        # DRF가 이미 인증을 처리했으므로 request.user 사용
-        user = request.user
+        # Authorization 헤더에서 토큰 추출
+        auth_header = request.headers.get('Authorization', '')
+        
+        # 쿠키에서 토큰 확인 (헤더에 없는 경우)
+        access_token = None
+        if auth_header.startswith('Bearer '):
+            access_token = auth_header.split(' ')[1]
+        elif 'access_token' in request.COOKIES:
+            access_token = request.COOKIES.get('access_token')
+        
+        if not access_token:
+            return APIResponse.error("인증 토큰이 필요합니다", code="AUTH_401")
+        
+        # JWT 토큰 검증
+        try:
+            payload = jwt.decode(access_token, settings.SECRET_KEY, algorithms=['HS256'])
+            user_id = payload.get('user_id')
+            
+            if not user_id:
+                return APIResponse.error("유효하지 않은 토큰입니다", code="AUTH_402")
+                
+            # 사용자 조회
+            user = User.objects.get(user_id=user_id, is_active=True)
+            
+        except jwt.ExpiredSignatureError:
+            return APIResponse.error("토큰이 만료되었습니다", code="AUTH_403")
+        except jwt.InvalidTokenError:
+            return APIResponse.error("유효하지 않은 토큰입니다", code="AUTH_404")
+        except User.DoesNotExist:
+            return APIResponse.error("사용자를 찾을 수 없습니다", code="AUTH_405")
         
         # ProfileSerializer를 사용하여 사용자 정보 직렬화
         from .serializers import ProfileSerializer
@@ -265,22 +473,7 @@ class CSRFTokenView(APIView):
 
     def get(self, request):
         return Response({"success": True, "detail": "CSRF cookie set"})
-    
 
-
-# views.py에 추가할 테스트용 뷰
-
-# JWT 토큰 관련 커스텀 뷰 추가
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView, TokenVerifyView
-
-class CustomTokenObtainPairView(TokenObtainPairView):
-    permission_classes = [AllowAny]
-
-class CustomTokenRefreshView(TokenRefreshView):
-    permission_classes = [AllowAny]
-
-class CustomTokenVerifyView(TokenVerifyView):
-    permission_classes = [AllowAny]
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
@@ -323,17 +516,37 @@ def kakao_login_mock(request):
         except Exception as create_error:
             return APIResponse.error(f"카카오 사용자 생성 실패: {str(create_error)}", code="AUTH_006")
         
-        # JWT 토큰 생성 (djangorestframework-simplejwt 사용)
+        # JWT 토큰 생성 (수동 방식)
         try:
-            from rest_framework_simplejwt.tokens import RefreshToken
+            if not jwt:
+                return APIResponse.error("JWT 모듈이 설치되지 않았습니다", code="AUTH_007")
+                
+            # 토큰 페이로드 생성
+            now = datetime.utcnow()
+            access_payload = {
+                'user_id': str(user.user_id),
+                'email': user.email,
+                'name': user.name,
+                'role': user.role,
+                'token_type': 'access',
+                'exp': now + timedelta(hours=1),  # 1시간 만료
+                'iat': now,
+            }
             
-            # RefreshToken 객체 생성
-            refresh = RefreshToken.for_user(user)
+            refresh_payload = {
+                'user_id': str(user.user_id),
+                'token_type': 'refresh',
+                'exp': now + timedelta(days=7),  # 7일 만료
+                'iat': now,
+            }
             
-            # 토큰 문자열 추출
+            # 토큰 생성
+            access_token = jwt.encode(access_payload, settings.SECRET_KEY, algorithm='HS256')
+            refresh_token = jwt.encode(refresh_payload, settings.SECRET_KEY, algorithm='HS256')
+            
             tokens = {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
+                'access': access_token,
+                'refresh': refresh_token,
                 'expires_in': 3600,
             }
         except Exception as token_error:

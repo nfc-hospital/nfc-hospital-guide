@@ -19,6 +19,9 @@ from appointments.serializers import AppointmentSerializer
 from authentication.models import User
 from nfc_hospital_system.utils import APIResponse
 
+# 수동 JWT 인증 사용
+from authentication.jwt_auth import ManualJWTAuthentication
+
 logger = logging.getLogger(__name__)
 
 class QueueJoinView(APIView):
@@ -147,8 +150,9 @@ class MyCurrentQueuesView(ListAPIView):
     현재 내 대기열 API
     GET /api/v1/queues/my-current/
     """
+    authentication_classes = [ManualJWTAuthentication]
+    permission_classes = [permissions.IsAuthenticated]
     serializer_class = QueueSerializer
-    # permission_classes는 전역 설정(IsAuthenticated)을 사용
 
     def get_queryset(self):
         return Queue.objects.filter(

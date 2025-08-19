@@ -76,6 +76,7 @@ jobs:
 
           # Django 설정 모듈 명시적 설정
           export DJANGO_SETTINGS_MODULE='nfc_hospital_system.settings.production'
+          export DJANGO_ENVIRONMENT='production'
 
           # Daphne 서버 실행
           ~/nfc-hospital/backend/venv/bin/daphne -b 127.0.0.1 -p 8000 nfc_hospital_system.asgi:application

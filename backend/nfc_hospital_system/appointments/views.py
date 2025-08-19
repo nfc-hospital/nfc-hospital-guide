@@ -7,6 +7,9 @@ from rest_framework.views import APIView
 from datetime import date
 from django.utils import timezone
 
+# 수동 JWT 인증 사용
+from authentication.jwt_auth import ManualJWTAuthentication
+
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
@@ -131,8 +134,9 @@ class TodaysAppointmentsView(ListAPIView):
     오늘의 예약 목록 API
     GET /api/v1/appointments/today/
     """
+    authentication_classes = [ManualJWTAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = AppointmentSerializer
-    # permission_classes는 전역 설정(IsAuthenticated)을 사용
 
     def get_queryset(self):
         today = timezone.now().date()
