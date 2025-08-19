@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from appointments.models import Exam
 import uuid
+import json
 
 User = get_user_model()
 
