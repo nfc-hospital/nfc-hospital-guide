@@ -134,5 +134,19 @@ export const clearAllRoutes = () => {
 // 특정 시설의 경로 가져오기
 export const getFacilityRoute = (facilityName) => {
   const routes = loadSavedRoutes();
-  return routes[facilityName] || null;
+  const facilityData = routes[facilityName];
+  
+  // 저장된 데이터가 있고 유효한 경우만 반환
+  if (facilityData && facilityData.nodes && facilityData.nodes.length > 0) {
+    return {
+      nodes: facilityData.nodes,
+      edges: facilityData.edges || []
+    };
+  }
+  
+  // 저장된 경로가 없으면 빈 배열 반환
+  return {
+    nodes: [],
+    edges: []
+  };
 };

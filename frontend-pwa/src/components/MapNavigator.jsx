@@ -34,65 +34,15 @@ const MapNavigator = ({ mapId, highlightRoom, facilityName }) => {
       if (savedRoute && savedRoute.nodes && savedRoute.nodes.length > 0) {
         return {
           corridorNodes: savedRoute.nodes,
-          corridorEdges: savedRoute.edges,
+          corridorEdges: savedRoute.edges || [],
         };
       }
     }
     
-    // 저장된 경로가 없을 경우 기본 경로 사용
+    // 저장된 경로가 없으면 빈 배열 반환
     return {
-      corridorNodes: [
-        // 메인 복도 (가로)
-        { id: 'node-1', x: 100, y: 250, name: '좌측 복도 시작' },
-        { id: 'node-2', x: 200, y: 250, name: '응급실 앞' },
-        { id: 'node-3', x: 300, y: 250, name: '중앙 복도 1' },
-        { id: 'node-4', x: 380, y: 250, name: '원무과 앞' },
-        { id: 'node-5', x: 450, y: 250, name: '중앙 홀' },
-        { id: 'node-6', x: 530, y: 250, name: '약국 앞' },
-        { id: 'node-7', x: 620, y: 250, name: '은행 앞' },
-        { id: 'node-8', x: 700, y: 250, name: '우측 복도 끝' },
-        
-        // 세로 복도
-        { id: 'node-9', x: 450, y: 100, name: '정문' },
-        { id: 'node-10', x: 450, y: 170, name: '진단검사 앞' },
-        { id: 'node-11', x: 450, y: 320, name: '카페 앞' },
-        { id: 'node-12', x: 450, y: 400, name: '남측 복도' },
-        { id: 'node-13', x: 450, y: 480, name: '원무과 입구' },
-        
-        // 좌측 세로 복도
-        { id: 'node-14', x: 140, y: 350, name: '헌혈실 앞' },
-        { id: 'node-15', x: 140, y: 400, name: '좌측 하단' },
-        
-        // 우측 세로 복도
-        { id: 'node-16', x: 680, y: 170, name: '채혈실 앞' },
-        { id: 'node-17', x: 680, y: 350, name: '은행 중앙' },
-      ],
-      corridorEdges: [
-        // 메인 가로 복도
-        ['node-1', 'node-2'],
-        ['node-2', 'node-3'],
-        ['node-3', 'node-4'],
-        ['node-4', 'node-5'],
-        ['node-5', 'node-6'],
-        ['node-6', 'node-7'],
-        ['node-7', 'node-8'],
-        
-        // 중앙 세로 복도
-        ['node-9', 'node-10'],
-        ['node-10', 'node-5'],
-        ['node-5', 'node-11'],
-        ['node-11', 'node-12'],
-        ['node-12', 'node-13'],
-        
-        // 좌측 연결
-        ['node-2', 'node-14'],
-        ['node-14', 'node-15'],
-        
-        // 우측 연결
-        ['node-10', 'node-16'],
-        ['node-7', 'node-17'],
-        ['node-16', 'node-17'],
-      ]
+      corridorNodes: [],
+      corridorEdges: []
     };
   }, [facilityName]); // facilityName이 바뀔 때만 다시 계산
 
