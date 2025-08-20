@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Typography from './common/Typography';
 import Button from './common/Button';
+import useJourneyStore from '../store/journeyStore';
 
 const AccessibilityOptions = ({ options, onChange }) => (
   <div className="bg-white rounded-xl p-4 mb-6">
@@ -91,6 +92,20 @@ const Navigation = () => {
     voiceGuide: false,
   });
 
+  // journeyStore에서 현재 위치 정보 가져오기
+  const { currentLocation, taggedLocationInfo } = useJourneyStore();
+  
+  // 현재 위치 표시 로직
+  const getCurrentLocationText = () => {
+    if (taggedLocationInfo) {
+      return `${taggedLocationInfo.building || ''} ${taggedLocationInfo.floor || ''}층 ${taggedLocationInfo.room || ''}`.trim();
+    }
+    if (currentLocation) {
+      return `${currentLocation.building || ''} ${currentLocation.floor || ''}층 ${currentLocation.room || ''}`.trim();
+    }
+    return '위치를 확인 중...';
+  };
+
   const navigationSteps = [
     {
       number: 1,
@@ -141,7 +156,7 @@ const Navigation = () => {
 
           <div className="flex justify-between items-center mb-4">
             <Typography variant="h3">
-              현재 위치: 1층 로비
+              현재 위치: {getCurrentLocationText()}
             </Typography>
             <Button
               variant="secondary"

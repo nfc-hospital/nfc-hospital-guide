@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
+<<<<<<< Updated upstream
 import MapNavigator from '../MapNavigator';
+=======
+import useJourneyStore from '../../store/journeyStore';
+>>>>>>> Stashed changes
 
 // 상태와 NFC 태그 정보를 기반으로 다음 행동 안내 문구 생성
 const getNextActionText = (patientState, currentExam, taggedLocation, nextLocation) => {
@@ -68,8 +72,14 @@ const FormatATemplate = ({
   const [showDemoMap, setShowDemoMap] = useState(false);
   const [isDemoExpanded, setIsDemoExpanded] = useState(true);
   
+  // journeyStore에서 현재 위치 정보 가져오기
+  const { currentLocation, taggedLocationInfo } = useJourneyStore();
+  
+  // 실제 현재 위치 정보 우선 사용
+  const actualCurrentLocation = taggedLocationInfo || taggedLocation || currentLocation;
+  
   // nextAction이 없으면 자동 생성
-  const displayNextAction = nextAction || getNextActionText(patientState, currentExam, taggedLocation, locationInfo);
+  const displayNextAction = nextAction || getNextActionText(patientState, currentExam, actualCurrentLocation, locationInfo);
 
   const toggleExpanded = (index) => {
     setExpandedItems(prev => 
@@ -98,12 +108,6 @@ const FormatATemplate = ({
           isFixed: false
         });
       });
-    } else {
-      // todaySchedule이 없을 때 기본 검사 추가 (테스트용)
-      console.warn('⚠️ todaySchedule이 비어있습니다. 기본 검사를 추가합니다.');
-      steps.push({ state: 'EXAM', label: '채혈실', status: 'waiting', isFixed: false });
-      steps.push({ state: 'EXAM', label: '심전도', status: 'scheduled', isFixed: false });
-      steps.push({ state: 'EXAM', label: 'X-ray', status: 'scheduled', isFixed: false });
     }
     
     // 마지막 고정 단계들
@@ -191,22 +195,24 @@ const FormatATemplate = ({
     const allSteps = buildFullJourneySteps();
     const currentIdx = getCurrentStepIndex(allSteps);
     
-    // 디버깅을 위한 로그
-    console.log('📊 진행 상태 디버그:', {
-      patientState,
-      currentExam,
-      todaySchedule: todaySchedule?.map(s => ({ name: s.examName, status: s.status })),
-      allSteps: allSteps.map((s, i) => ({ 
-        index: i, 
-        label: s.label, 
-        state: s.state, 
-        status: s.status, 
-        isFixed: s.isFixed 
-      })),
-      currentIdx,
-      currentStep: allSteps[currentIdx],
-      visibleRange: `${Math.max(0, currentIdx - 1)} to ${Math.min(allSteps.length - 1, currentIdx + 1)}`
-    });
+    // 디버깅을 위한 로그 (개발 환경에서만)
+    if (import.meta.env.DEV) {
+      console.log('📊 진행 상태 디버그:', {
+        patientState,
+        currentExam,
+        todaySchedule: todaySchedule?.map(s => ({ name: s.examName, status: s.status })),
+        allSteps: allSteps.map((s, i) => ({ 
+          index: i, 
+          label: s.label, 
+          state: s.state, 
+          status: s.status, 
+          isFixed: s.isFixed 
+        })),
+        currentIdx,
+        currentStep: allSteps[currentIdx],
+        visibleRange: `${Math.max(0, currentIdx - 1)} to ${Math.min(allSteps.length - 1, currentIdx + 1)}`
+      });
+    }
     
     // 이전, 현재, 다음 단계 선택
     const visibleSteps = [];
@@ -267,40 +273,34 @@ const FormatATemplate = ({
             }} />
           )}
           
-          {/* 단계 원 - 작고 미니멀한 디자인 */}
+          {/* 단계 원 - 컴팩트한 디자인 */}
           <div className="relative">
-            {/* 현재 단계 강조 효과 */}
-            {isCurrent && (
-              <>
-                <div className="absolute inset-0 w-10 h-10 sm:w-12 sm:h-12 bg-amber-400/30 rounded-full blur-xl animate-pulse" />
-                <div className="absolute inset-0 w-10 h-10 sm:w-12 sm:h-12 bg-white/20 rounded-full blur-2xl animate-pulse" style={{animationDelay: '0.5s'}} />
-              </>
-            )}
+            {/* 현재 단계 강조 효과 - 제거 */}
             
             {/* 메인 원 */}
             <div className={`
-              relative w-8 h-8 sm:w-10 sm:h-10 rounded-full 
-              flex items-center justify-center transition-all duration-700 
+              relative w-7 h-7 sm:w-8 sm:h-8 rounded-full 
+              flex items-center justify-center transition-all duration-500 
               ${isCompleted 
-                ? 'bg-white shadow-lg hover:shadow-xl' 
+                ? 'bg-white shadow-md' 
                 : isCurrent 
-                ? 'bg-amber-400 shadow-2xl ring-4 ring-white/40 scale-110' 
-                : 'bg-white/15 backdrop-blur-sm border border-white/25 hover:bg-white/20'
+                ? 'bg-amber-400 shadow-lg ring-2 ring-white/30 scale-110' 
+                : 'bg-white/15 backdrop-blur-sm border border-white/25'
               }
             `}>
               {isCompleted ? (
-                <CheckIcon className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
               ) : isCurrent ? (
-                <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white rounded-full shadow-inner" />
+                <div className="w-2 h-2 bg-white rounded-full" />
               ) : (
-                <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white/50 rounded-full" />
+                <div className="w-1.5 h-1.5 bg-white/50 rounded-full" />
               )}
             </div>
           </div>
           
-          {/* 단계 라벨 - 깔끔하고 읽기 쉽게 */}
-          <div className="mt-2.5">
-            <div className={`text-xs sm:text-sm font-medium transition-all duration-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[80px] sm:max-w-[100px] ${
+          {/* 단계 라벨 - 작게 */}
+          <div className="mt-2">
+            <div className={`text-xs font-medium transition-all duration-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[70px] ${
               isCurrent ? 'text-white' : isCompleted ? 'text-white/90' : 'text-white/60'
             }`}>
               {step.label}
@@ -348,16 +348,15 @@ const FormatATemplate = ({
 
   return (
     <div className="w-full">
-      {/* 상단 영역 - 파란색 배경 */}
-      <div className="relative bg-gradient-to-br from-blue-600 to-blue-700 overflow-hidden">
-          {/* 부드러운 장식 요소 */}
+      {/* 상단 영역 - 파란색 배경 - 높이 축소 */}
+      <div className="relative bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 overflow-hidden">
+          {/* 살짝의 장식 요소 */}
           <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-32 -right-32 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-0 -left-16 w-48 h-48 bg-blue-400/20 rounded-full blur-2xl" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
+            <div className="absolute -top-24 -right-24 w-48 h-48 bg-white/5 rounded-full blur-3xl" />
+            <div className="absolute bottom-0 -left-12 w-36 h-36 bg-blue-400/10 rounded-full blur-2xl" />
           </div>
           
-          <div className="relative px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-8 sm:pb-10">
+          <div className="relative px-6 sm:px-8 lg:px-10 py-6 pb-8">
             {/* 진행 상태바 */}
             <div className="mb-6">
               <div className="flex items-center justify-between gap-4">
@@ -451,34 +450,29 @@ const FormatATemplate = ({
                 {/* 위치 정보 - 깔끔한 카드 디자인 */}
                 {locationInfo && (
                   <div className="mb-4">
-                    {/* 현재 위치와 목적지 정보 */}
-                    {taggedLocation && (
-                      <div className="bg-gray-50 rounded-xl p-3 mb-3 flex items-center gap-2 text-sm">
-                        <span className="text-gray-500">현재 위치:</span>
-                        <span className="font-medium text-gray-700">
-                          {taggedLocation.description || `${taggedLocation.building} ${taggedLocation.floor}층`}
-                        </span>
-                        <span className="text-gray-400 ml-auto mr-2">→</span>
-                        <span className="font-semibold text-blue-600">
-                          {locationInfo.name}
-                        </span>
-                      </div>
-                    )}
-                    
                     {/* 목적지 정보 - 현재 위치 -> 목적지 형식 */}
                     <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
                       <div className="flex items-center justify-center text-sm sm:text-base">
                         <div className="flex items-center gap-2">
                           <span className="text-gray-600">현재:</span>
                           <span className="font-medium text-gray-800">
-                            {taggedLocation?.description || taggedLocation?.building || '현재 위치'}
+                            {(() => {
+                              if (actualCurrentLocation?.description) {
+                                return actualCurrentLocation.description;
+                              }
+                              if (actualCurrentLocation?.building && actualCurrentLocation?.floor) {
+                                const room = actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : '';
+                                return `${actualCurrentLocation.building} ${actualCurrentLocation.floor}층${room}`;
+                              }
+                              return '현재 위치';
+                            })()}
                           </span>
                         </div>
                         <span className="text-gray-400 mx-4">→</span>
                         <div className="flex items-center gap-2">
                           <span className="text-gray-600">목적지:</span>
                           <span className="font-semibold text-blue-700">
-                            {locationInfo.name}
+                            {locationInfo.name || locationInfo.room || '목적지'}
                           </span>
                         </div>
                       </div>
@@ -486,6 +480,7 @@ const FormatATemplate = ({
                   </div>
                 )}
                 
+<<<<<<< Updated upstream
                 {/* 지도 표시 영역 - 항상 표시 */}
                 <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden relative">
                   <div>
@@ -505,6 +500,15 @@ const FormatATemplate = ({
 
                     {/* 실제 지도 (데이터 연동) */}
                     <div className={showDemoMap ? 'opacity-30' : ''}>
+=======
+                {/* 지도 표시 영역 */}
+                <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden">
+                  {actualCurrentLocation ? (
+                    <div>
+                      {/* 지도 헤더 제거 - 위의 목적지 정보로 통합됨 */}
+                      
+                      {/* [NAVIGATION-COMPONENT] 실시간 지도 컴포넌트 */}
+>>>>>>> Stashed changes
                       <div className="p-6">
                         <MapNavigator 
                           mapId={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}

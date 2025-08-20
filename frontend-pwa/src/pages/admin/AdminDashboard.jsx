@@ -126,12 +126,8 @@ const AdminDashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* 헤더 */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">관리자 대시보드</h1>
-          <p className="text-gray-600 mt-1">병원 NFC 시스템 실시간 모니터링</p>
-        </div>
+      {/* 실시간 상태만 표시 */}
+      <div className="flex justify-end items-center">
         <div className="flex items-center space-x-2">
           <div className={`w-3 h-3 rounded-full ${realTimeConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
           <span className="text-sm text-gray-600">

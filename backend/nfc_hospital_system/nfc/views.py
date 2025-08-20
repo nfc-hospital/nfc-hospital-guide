@@ -220,16 +220,24 @@ def get_tag_info(request, tag_id):
     """
     try:
         # 태그 조회 (tag_id, tag_uid, code 모두 지원)
+        logger.info(f"🔍 태그 조회 시작 - tag_id: {tag_id}")
         tag = None
         try:
             if len(tag_id) == 36 and '-' in tag_id:
+                logger.info(f"UUID 형식으로 조회 시도: {tag_id}")
                 tag = NFCTag.objects.get(tag_id=tag_id, is_active=True)
             else:
+                logger.info(f"코드 또는 UID로 조회 시도: {tag_id}")
                 tag = NFCTag.objects.filter(
                     models.Q(tag_uid=tag_id) | models.Q(code=tag_id),
                     is_active=True
                 ).first()
+                if tag:
+                    logger.info(f"✅ 태그 찾음: {tag.code} - {tag.get_location_display()}")
+                else:
+                    logger.warning(f"⚠️ 태그를 찾을 수 없음: {tag_id}")
         except NFCTag.DoesNotExist:
+            logger.warning(f"⚠️ UUID로 태그를 찾을 수 없음: {tag_id}")
             pass
             
         if not tag:

@@ -53,7 +53,12 @@ const useJourneyStore = create(
 
         // 메인 데이터 페칭 함수 - 역할에 따른 선택적 로딩
         fetchJourneyData: async (tagId = null) => {
-          set({ isLoading: true, error: null, taggedLocationInfo: null });
+          set({ isLoading: true, error: null });
+          
+          // tagId가 없으면 기존 위치 정보 유지, 있으면 초기화
+          if (tagId) {
+            set({ taggedLocationInfo: null });
+          }
           
           try {
             // 1. 병렬로 사용자 프로필과 NFC 태그 정보 가져오기
@@ -78,13 +83,32 @@ const useJourneyStore = create(
             const profileResponse = responses[0];
             console.log('📦 프로필 API 응답:', profileResponse);
             
-            // NFC 태그 정보가 있다면 상태에 저장
+            // NFC 태그 정보가 있다면 상태에 저장하고 현재 위치 업데이트
             if (tagId && responses.length > 1 && responses[1]) {
+              // API 응답 구조 확인
+              const tagResponse = responses[1];
+              console.log('📡 태그 정보 API 응답:', tagResponse);
+              
+              // data 또는 직접 응답 처리
+              const tagInfo = tagResponse.data || tagResponse;
+              
               set({ 
-                taggedLocationInfo: responses[1].data,
+                taggedLocationInfo: tagInfo,
+                currentLocation: {
+                  building: tagInfo.building,
+                  floor: tagInfo.floor,
+                  room: tagInfo.room,
+                  x_coord: tagInfo.x_coord,
+                  y_coord: tagInfo.y_coord,
+                  description: tagInfo.description,
+                  timestamp: new Date().toISOString()
+                },
                 isTagLoading: false
               });
-              console.log('✅ NFC 태그 정보 로드 완료:', responses[1].data);
+              console.log('✅ NFC 태그 정보 및 현재 위치 업데이트 완료:', {
+                taggedLocationInfo: tagInfo,
+                currentLocation: get().currentLocation
+              });
             } else if (tagId) {
               set({ isTagLoading: false });
             }
@@ -369,12 +393,22 @@ const useJourneyStore = create(
           
           try {
             const response = await apiService.nfc.getTagInfo(tagId);
+            const tagInfo = response.data;
+            
             set({ 
-              taggedLocationInfo: response.data,
+              taggedLocationInfo: tagInfo,
+              currentLocation: {
+                building: tagInfo.building,
+                floor: tagInfo.floor,
+                room: tagInfo.room,
+                x_coord: tagInfo.x_coord,
+                y_coord: tagInfo.y_coord,
+                timestamp: new Date().toISOString()
+              },
               isTagLoading: false
             });
-            console.log('✅ NFC 태그 정보 로드 완료:', response.data);
-            return response.data;
+            console.log('✅ NFC 태그 정보 및 현재 위치 업데이트 완료:', tagInfo);
+            return tagInfo;
           } catch (error) {
             console.error('❌ NFC 태그 정보 로드 실패:', error);
             set({ 
@@ -390,7 +424,8 @@ const useJourneyStore = create(
           set({ 
             taggedLocationInfo: null,
             isTagLoading: false,
-            tagError: null 
+            tagError: null,
+            // 현재 위치는 유지 (완전히 초기화하지 않음)
           });
         },
 

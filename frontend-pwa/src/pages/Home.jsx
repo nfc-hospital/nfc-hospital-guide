@@ -17,28 +17,50 @@ import CalledScreen from '../components/screens/CalledScreen';
 import PaymentScreen from '../components/screens/PaymentScreen';
 import FinishedScreen from '../components/screens/FinishedScreen';
 
-// 카드 컴포넌트들 import
-import CompletedTaskCard from '../components/journey/CompletedTaskCard';
-import UpcomingTasksCard from '../components/journey/UpcomingTasksCard';
+// 템플릿 및 카드 컴포넌트들 import
+import FormatATemplate from '../components/templates/FormatATemplate';
+import CalledModal from '../components/modals/CalledModal';
 
 // ONGOING과 COMPLETED는 WaitingScreen을 재사용 (유사한 UI)
 const OngoingScreen = WaitingScreen;
-const CompletedScreen = ({ upcoming_tasks, completed_tasks }) => (
-  <div className="min-h-screen bg-gray-50 pb-20">
-    <div className="bg-white shadow-sm">
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          검사가 완료되었습니다
-        </h1>
-        <p className="text-lg text-gray-600 mt-1">
-          다음 일정을 확인해주세요
-        </p>
-      </div>
-    </div>
-    
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+const CompletedScreen = ({ taggedLocation, upcoming_tasks, completed_tasks }) => {
+  const { user, todaysAppointments = [], patientState } = useJourneyStore();
+  
+  // 오늘의 일정 준비
+  const todaySchedule = todaysAppointments?.map((apt, index) => ({
+    id: apt.appointment_id,
+    examName: apt.exam?.title || `검사 ${index + 1}`,
+    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
+    status: apt.status,
+    description: apt.exam?.description,
+    purpose: apt.exam?.description || '건강 상태 확인 및 진단',
+    preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
+    duration: apt.exam?.average_duration || 30,
+    scheduled_at: apt.scheduled_at,
+    department: apt.exam?.department
+  })) || [];
+  
+  // 현재 단계 계산 - 완료된 검사들 중 최신
+  const currentStep = todaySchedule.findIndex(s => s.status === 'completed');
+  const actualCurrentStep = currentStep === -1 ? 0 : currentStep;
+  
+  return (
+    <FormatATemplate
+      screenType="completed"
+      currentStep={actualCurrentStep}
+      totalSteps={todaySchedule.length || 7}
+      nextAction="다음 검사실로 이동하기"
+      waitingInfo={null}
+      locationInfo={null}
+      todaySchedule={todaySchedule}
+      queueData={null}
+      taggedLocation={taggedLocation}
+      patientState={patientState || 'COMPLETED'}
+      currentExam={null}
+    >
+      {/* 완료 메시지 */}
       <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center">
-        <div className="text-6xl mb-4">✅</div>
+        <div className="text-5xl mb-4">✅</div>
         <h2 className="text-xl font-semibold text-green-900 mb-2">
           검사가 성공적으로 완료되었습니다
         </h2>
@@ -46,24 +68,9 @@ const CompletedScreen = ({ upcoming_tasks, completed_tasks }) => (
           잠시 후 다음 일정이 안내됩니다
         </p>
       </div>
-      
-      {/* 완료된 검사 표시 */}
-      {completed_tasks && completed_tasks.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900">방금 완료한 검사</h3>
-          {completed_tasks.slice(-1).map((task) => (
-            <CompletedTaskCard key={task.appointment_id} appointment={task} />
-          ))}
-        </div>
-      )}
-      
-      {/* 다음 일정 표시 */}
-      {upcoming_tasks && upcoming_tasks.length > 0 && (
-        <UpcomingTasksCard appointments={upcoming_tasks} />
-      )}
-    </div>
-  </div>
-);
+    </FormatATemplate>
+  );
+};
 
 const ErrorScreen = ({ message }) => (
   <div className="min-h-screen bg-background-secondary p-6">
@@ -220,16 +227,56 @@ const Home = () => {
 
     // 환자 상태에 따른 화면 렌더링
     const currentState = patientState?.current_state || patientState;
-    const locationType = taggedLocationInfo?.type; // 'exam_room', 'reception', 'lobby' 등
+    
+    // NFC 태그 위치 정보를 기반으로 위치 타입 판별
+    const getLocationType = (locationInfo) => {
+      if (!locationInfo) return null;
+      
+      const { building, floor, room, description } = locationInfo;
+      const roomLower = room?.toLowerCase() || '';
+      const descLower = description?.toLowerCase() || '';
+      
+      // 검사실 타입 판별
+      if (roomLower.includes('검사') || roomLower.includes('ct') || roomLower.includes('mri') || 
+          roomLower.includes('x-ray') || roomLower.includes('초음파') || roomLower.includes('채혈') ||
+          descLower.includes('검사') || descLower.includes('ct') || descLower.includes('mri')) {
+        return 'exam_room';
+      }
+      
+      // 접수/원무과 타입 판별
+      if (roomLower.includes('접수') || roomLower.includes('원무') || 
+          descLower.includes('접수') || descLower.includes('원무')) {
+        return 'reception';
+      }
+      
+      // 수납 타입 판별
+      if (roomLower.includes('수납') || descLower.includes('수납')) {
+        return 'payment';
+      }
+      
+      // 로비 타입 판별
+      if (roomLower.includes('로비') || descLower.includes('로비')) {
+        return 'lobby';
+      }
+      
+      // 대기실 타입 판별
+      if (roomLower.includes('대기') || descLower.includes('대기')) {
+        return 'waiting_area';
+      }
+      
+      return 'other';
+    };
+    
+    const locationType = getLocationType(taggedLocationInfo);
     
     // WaitingScreen에서 데이터를 자체적으로 처리하므로 간단하게 전달
     
     // --- 분기 로직 시작 ---
     
-    // 1순위: 호출 상태는 항상 최우선으로 표시
-    if (currentState === 'CALLED') {
-      return <CalledScreen taggedLocation={taggedLocationInfo} />;
-    }
+    // CalledModal 상태 체크 (다른 화면들 위에 모달로 표시)
+    const isCalledModalOpen = currentState === 'CALLED';
+    
+    // 호출 상태가 아닌 다른 상태들 처리
     
     // 2순위: 검사실 NFC를 태그했고, 대기 또는 진행중인 검사가 있는 경우
     if (locationType === 'exam_room' && (currentState === 'WAITING' || currentState === 'ONGOING')) {
@@ -242,61 +289,94 @@ const Home = () => {
       />;
     }
     
-    // 3순위: 그 외 상태별 기본 화면
+    // 3순위: 그 외 상태별 기본 화면 (CALLED 상태는 제외)
+    let currentScreen;
     switch (currentState) {
       case 'UNREGISTERED':
-        return <UnregisteredScreen taggedLocation={taggedLocationInfo} />;
+        currentScreen = <UnregisteredScreen taggedLocation={taggedLocationInfo} />;
+        break;
       
       case 'ARRIVED':
-        return <ArrivedScreen taggedLocation={taggedLocationInfo} />;
+        currentScreen = <ArrivedScreen taggedLocation={taggedLocationInfo} />;
+        break;
       
       case 'REGISTERED':
         // 접수 완료 상태에서 로비 태그 -> 접수 완료 화면
         // 접수 완료 상태에서 검사실 태그 -> 2순위에서 처리됨
-        return <RegisteredScreen 
+        currentScreen = <RegisteredScreen 
           taggedLocation={taggedLocationInfo} 
           current_task={scheduleData.currentTask}
           upcoming_tasks={scheduleData.upcomingTasks}
         />;
+        break;
       
       case 'WAITING': // 검사실 태그 없이 대기 상태일 경우 (예: 앱 재시작)
-        return <WaitingScreen 
+        currentScreen = <WaitingScreen 
           taggedLocation={taggedLocationInfo} 
           current_task={scheduleData.currentTask}
           upcoming_tasks={scheduleData.upcomingTasks}
         />;
+        break;
+
+      case 'CALLED':
+        // CALLED 상태는 대기 화면을 보여주되, 모달로 호출 알림 표시
+        currentScreen = <WaitingScreen 
+          taggedLocation={taggedLocationInfo} 
+          current_task={scheduleData.currentTask}
+          upcoming_tasks={scheduleData.upcomingTasks}
+        />;
+        break;
       
       case 'ONGOING':
-        return <WaitingScreen 
+        currentScreen = <WaitingScreen 
           taggedLocation={taggedLocationInfo} 
           current_task={scheduleData.currentTask}
           upcoming_tasks={scheduleData.upcomingTasks}
         />; // ONGOING도 WaitingScreen 재사용
+        break;
       
       case 'COMPLETED':
-        return <CompletedScreen 
+        currentScreen = <CompletedScreen 
           taggedLocation={taggedLocationInfo} 
           upcoming_tasks={scheduleData.upcomingTasks}
           completed_tasks={scheduleData.completedTasks}
         />;
+        break;
       
       case 'PAYMENT':
-        return <PaymentScreen taggedLocation={taggedLocationInfo} />;
+        currentScreen = <PaymentScreen taggedLocation={taggedLocationInfo} />;
+        break;
       
       case 'FINISHED':
-        return <FinishedScreen 
+        currentScreen = <FinishedScreen 
           taggedLocation={taggedLocationInfo} 
           completed_tasks={scheduleData.completedTasks}
         />;
+        break;
       
       default:
         console.warn('Unknown patient state:', currentState);
-        return <RegisteredScreen 
+        currentScreen = <RegisteredScreen 
           taggedLocation={taggedLocationInfo} 
           current_task={scheduleData.currentTask}
           upcoming_tasks={scheduleData.upcomingTasks}
         />; // 기본값으로 등록 완료 화면 표시
+        break;
     }
+
+    // 기본 화면 + CalledModal 오버레이
+    return (
+      <>
+        {currentScreen}
+        <CalledModal 
+          isOpen={isCalledModalOpen} 
+          onClose={() => {
+            // 모달 닫기 시 상태를 WAITING으로 변경하거나 다른 처리
+            console.log('CalledModal closed');
+          }} 
+        />
+      </>
+    );
   }
 
   // 알 수 없는 역할

@@ -11,44 +11,81 @@ const parseNDEFRecord = (record) => {
   // 레코드 타입 판별
   const recordType = decoder.decode(record.recordType);
   
-  switch (recordType) {
-    case 'T': // Text Record
-      // 텍스트 레코드 파싱 (첫 바이트는 언어 코드 길이)
-      const langCodeLength = record.data.getUint8(0);
-      const textData = record.data.slice(1 + langCodeLength);
-      return {
-        type: 'text',
-        data: decoder.decode(textData)
-      };
-      
-    case 'U': // URI Record
-      // URI 접두사 디코딩
-      const uriPrefixes = [
-        '', 'http://www.', 'https://www.', 'http://', 'https://',
-        'tel:', 'mailto:', 'ftp://anonymous:anonymous@', 'ftp://ftp.',
-        'ftps://', 'sftp://', 'smb://', 'nfs://', 'ftp://', 'dav://',
-        'news:', 'telnet://', 'imap:', 'rtsp://', 'urn:', 'pop:', 'sip:',
-        'sips:', 'tftp:', 'btspp://', 'btl2cap://', 'btgoep://', 'tcpobex://',
-        'irdaobex://', 'file://', 'urn:epc:id:', 'urn:epc:tag:', 'urn:epc:pat:',
-        'urn:epc:raw:', 'urn:epc:', 'urn:nfc:'
-      ];
-      
-      const prefixByte = record.data.getUint8(0);
-      const uriData = record.data.slice(1);
-      const prefix = uriPrefixes[prefixByte] || '';
-      
-      return {
-        type: 'uri',
-        data: prefix + decoder.decode(uriData)
-      };
-      
-    default:
-      // 알 수 없는 타입은 원시 데이터로 반환
-      return {
-        type: 'unknown',
-        recordType: recordType,
-        data: decoder.decode(record.data)
-      };
+  try {
+    switch (recordType) {
+      case 'T': // Text Record
+        // DataView 객체인지 확인
+        if (record.data instanceof DataView) {
+          // 텍스트 레코드 파싱 (첫 바이트는 언어 코드 길이)
+          const langCodeLength = record.data.getUint8(0);
+          const textData = new Uint8Array(record.data.buffer, record.data.byteOffset + 1 + langCodeLength);
+          return {
+            type: 'text',
+            data: decoder.decode(textData)
+          };
+        } else {
+          // ArrayBuffer나 다른 형태의 데이터
+          const view = new DataView(record.data);
+          const langCodeLength = view.getUint8(0);
+          const textData = new Uint8Array(record.data, 1 + langCodeLength);
+          return {
+            type: 'text',
+            data: decoder.decode(textData)
+          };
+        }
+        
+      case 'U': // URI Record
+        let prefixByte, uriData;
+        
+        if (record.data instanceof DataView) {
+          prefixByte = record.data.getUint8(0);
+          uriData = new Uint8Array(record.data.buffer, record.data.byteOffset + 1);
+        } else {
+          const view = new DataView(record.data);
+          prefixByte = view.getUint8(0);
+          uriData = new Uint8Array(record.data, 1);
+        }
+        
+        // URI 접두사 디코딩
+        const uriPrefixes = [
+          '', 'http://www.', 'https://www.', 'http://', 'https://',
+          'tel:', 'mailto:', 'ftp://anonymous:anonymous@', 'ftp://ftp.',
+          'ftps://', 'sftp://', 'smb://', 'nfs://', 'ftp://', 'dav://',
+          'news:', 'telnet://', 'imap:', 'rtsp://', 'urn:', 'pop:', 'sip:',
+          'sips:', 'tftp:', 'btspp://', 'btl2cap://', 'btgoep://', 'tcpobex://',
+          'irdaobex://', 'file://', 'urn:epc:id:', 'urn:epc:tag:', 'urn:epc:pat:',
+          'urn:epc:raw:', 'urn:epc:', 'urn:nfc:'
+        ];
+        
+        const prefix = uriPrefixes[prefixByte] || '';
+        
+        return {
+          type: 'uri',
+          data: prefix + decoder.decode(uriData)
+        };
+        
+      default:
+        // 알 수 없는 타입은 원시 데이터로 반환
+        let rawData;
+        if (record.data instanceof DataView) {
+          rawData = new Uint8Array(record.data.buffer, record.data.byteOffset, record.data.byteLength);
+        } else {
+          rawData = new Uint8Array(record.data);
+        }
+        
+        return {
+          type: 'unknown',
+          recordType: recordType,
+          data: decoder.decode(rawData)
+        };
+    }
+  } catch (error) {
+    console.warn('NDEF 레코드 파싱 실패, 기본 처리 사용:', error);
+    // 파싱에 실패하면 기본적으로 텍스트로 처리
+    return {
+      type: 'text',
+      data: record.data ? decoder.decode(new Uint8Array(record.data)) : ''
+    };
   }
 };
 
@@ -134,25 +171,30 @@ export const scanNFCTag = async (serialNumber, ndefMessage = null) => {
       const response = await api.post('/nfc/scan/', requestData);
       
       // 스캔 로그 기록 (비동기, 실패해도 무시)
-      api.post('/nfc/scan-log', {
-        tag_id: serialNumber,
-        action_type: 'scan',
-        timestamp: requestData.timestamp
-      }).catch(err => console.warn('스캔 로그 기록 실패:', err));
+      // 백엔드에 실제 구현된 엔드포인트가 없으므로 임시 비활성화
+      // api.post('/nfc/scan-log', {
+      //   tag_id: serialNumber,
+      //   action_type: 'scan',
+      //   timestamp: requestData.timestamp
+      // }).catch(err => console.warn('스캔 로그 기록 실패:', err));
       
+      // API 응답 구조 표준화
+      const responseData = response.data || response;
       return {
         success: true,
         authenticated: true,
-        data: response.data || response  // response.data가 있으면 사용, 없으면 response 전체
+        data: responseData
       };
     } else {
       // 비로그인 상태: 공개 정보만 제공
       const response = await api.post('/nfc/public-info/', requestData);
       
+      // API 응답 구조 표준화
+      const responseData = response.data || response;
       return {
         success: true,
         authenticated: false,
-        data: response.data || response  // response.data가 있으면 사용, 없으면 response 전체
+        data: responseData
       };
     }
   } catch (error) {
@@ -183,7 +225,8 @@ export const scanNFCTag = async (serialNumber, ndefMessage = null) => {
  */
 export const getTagInfo = async (tagId) => {
   try {
-    const response = await api.get(`/nfc/tags/${tagId}/`);
+    // URL 경로 수정: /nfc/tags/{tagId}/ (슬래시 없음)
+    const response = await api.get(`/nfc/tags/${tagId}`);
     return response;
   } catch (error) {
     console.error('태그 정보 조회 실패:', error);

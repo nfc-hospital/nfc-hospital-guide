@@ -334,21 +334,13 @@ const QueueMonitoring = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
       <div className="max-w-7xl mx-auto p-6">
-        {/* 헤더 */}
-        <div className="mb-8 bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                대기열 모니터링
-              </h1>
-              <p className="text-gray-600">실시간 환자 대기 현황 및 관리 시스템</p>
-            </div>
-            <div className="flex items-center space-x-3 px-4 py-2 bg-gray-50 rounded-full">
-              <div className={`w-3 h-3 rounded-full ${realTimeConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-              <span className="text-sm font-medium text-gray-700">
-                {realTimeConnected ? '실시간 연결됨' : '연결 끊김'}
-              </span>
-            </div>
+        {/* 실시간 상태만 표시 */}
+        <div className="mb-8 flex justify-end">
+          <div className="flex items-center space-x-3 px-4 py-2 bg-white rounded-full shadow-sm">
+            <div className={`w-3 h-3 rounded-full ${realTimeConnected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
+            <span className="text-sm font-medium text-gray-700">
+              {realTimeConnected ? '실시간 연결됨' : '연결 끊김'}
+            </span>
           </div>
         </div>
 

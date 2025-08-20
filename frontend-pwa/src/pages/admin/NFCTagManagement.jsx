@@ -157,11 +157,7 @@ const NFCTagManagement = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6">
-      {/* 헤더 */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">NFC 태그 관리</h1>
-        <p className="text-gray-600 mt-1">병원 내 NFC 태그 등록, 수정, 모니터링</p>
-      </div>
+      {/* 헤더 제거 */}
 
       {/* 필터 및 액션 버튼 */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">

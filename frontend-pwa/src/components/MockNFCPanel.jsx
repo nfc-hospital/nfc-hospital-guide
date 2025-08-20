@@ -3,6 +3,7 @@ import { scanNFCTag } from '../api/nfc';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import useJourneyStore from '../store/journeyStore';
 
 // DB에 있는 실제 태그 데이터 사용
 // 주의: uid 필드는 tag_uid 값이 아니라 tag_id 값임
@@ -26,6 +27,7 @@ export default function MockNFCPanel() {
   const [isExpanded, setIsExpanded] = useState(false);
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const fetchJourneyData = useJourneyStore((state) => state.fetchJourneyData);
 
   // 개발 환경에서만 표시
   if (process.env.NODE_ENV !== 'development') {
@@ -75,10 +77,10 @@ export default function MockNFCPanel() {
         ]
       };
       
-      console.log('🏷️ Mock NFC 스캔:', tag.uid, mockNDEFMessage);
+      console.log('🏷️ Mock NFC 스캔:', tag.code, mockNDEFMessage);
       
-      // 실제 API 호출
-      const result = await scanNFCTag(tag.uid, mockNDEFMessage);
+      // 실제 API 호출 - 백엔드에서 code 필드로 검색하므로 tag.code 사용
+      const result = await scanNFCTag(tag.code, mockNDEFMessage);
       
       console.log('📡 API 응답:', result);
       
@@ -98,6 +100,9 @@ export default function MockNFCPanel() {
             duration: 3000
           });
         }
+        
+        // journeyStore로 전체 여정 데이터 업데이트 (태그 ID 포함)
+        await fetchJourneyData(tag.code);
         
         // 검사 정보가 있으면 해당 페이지로 이동
         if (responseData.exam_info?.exam_id) {

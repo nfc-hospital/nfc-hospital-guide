@@ -85,14 +85,8 @@ const AnalyticsDashboard = () => {
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
-      {/* 헤더 */}
-      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center space-y-4 lg:space-y-0">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">통계 및 분석</h1>
-          <p className="text-gray-600 mt-1">환자 동선, 대기시간, 시스템 사용률 분석</p>
-        </div>
-        
-        {/* 날짜 선택 및 내보내기 */}
+      {/* 날짜 선택 및 내보내기 */}
+      <div className="flex justify-end">
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-4">
           <div className="flex space-x-2">
             <input

@@ -24,7 +24,7 @@ def nfc_scan_notification(sender, instance, created, **kwargs):
                     "data": {
                         "tagCode": instance.tag.code,
                         "location": instance.tag.get_location_display(),
-                        "user": instance.user.username if instance.user else "Unknown",
+                        "user": instance.user.name if hasattr(instance.user, 'name') and instance.user.name else (instance.user.email if instance.user else "Unknown"),
                         "timestamp": instance.timestamp.isoformat(),
                         "actionType": instance.action_type
                     }
