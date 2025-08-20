@@ -3,26 +3,34 @@ import useJourneyStore from '../../store/journeyStore';
 import FormatATemplate from '../templates/FormatATemplate';
 
 export default function PaymentScreen({ taggedLocation }) {
-  const { user, todaysAppointments, patientState } = useJourneyStore();
+  const { user, todaysAppointments, patientState, currentQueues = [] } = useJourneyStore();
   
   // 완료된 검사 목록
   const completedExams = todaysAppointments?.filter(
     apt => apt.status === 'completed'
   ) || [];
   
-  // 오늘의 일정을 포맷 A에 맞게 변환
+  // 오늘의 일정을 포맷 A에 맞게 변환 - exam의 description 필드 활용
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
+    id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building} ${apt.exam?.floor}층 ${apt.exam?.room}`,
+    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
     status: apt.status,
-    purpose: '건강 상태 확인 및 진단',
+    description: apt.exam?.description,
+    purpose: apt.exam?.description || '건강 상태 확인 및 진단',
     preparation: null,
     duration: apt.exam?.average_duration || 30,
-    scheduled_at: apt.scheduled_at
+    scheduled_at: apt.scheduled_at,
+    department: apt.exam?.department
   })) || [];
   
   // 수납 단계는 모든 검사가 완료된 후이므로 마지막 단계
   const currentStep = todaySchedule.length - 1;
+  
+  // 수납 대기 큐 찾기
+  const paymentQueue = currentQueues.find(q => 
+    q.exam?.department === '원무과' || q.exam?.title?.includes('수납')
+  );
   
   // 위치 정보 - 원무과
   const locationInfo = {
@@ -30,11 +38,15 @@ export default function PaymentScreen({ taggedLocation }) {
     building: '본관',
     floor: '1층',
     room: '중앙홀 우측',
+    department: '원무과',
     directions: '엘리베이터로 1층 이동 후 오른쪽으로 가시면 됩니다'
   };
   
-  // 수납 정보
-  const paymentInfo = {
+  // 수납 대기 정보 - 실제 큐 데이터가 있으면 사용
+  const paymentInfo = paymentQueue ? {
+    peopleAhead: Math.max(0, (paymentQueue.queue_number || 1) - 1),
+    estimatedTime: paymentQueue.estimated_wait_time || 15
+  } : {
     peopleAhead: 5,
     estimatedTime: 15
   };
@@ -44,12 +56,13 @@ export default function PaymentScreen({ taggedLocation }) {
       screenType="payment"
       currentStep={currentStep}
       totalSteps={todaySchedule.length || 7}
-      nextAction="원무과에서 수납하기"
+      nextAction={null} // 자동 생성되도록 null 전달
       waitingInfo={paymentInfo}
       locationInfo={locationInfo}
       todaySchedule={todaySchedule}
       taggedLocation={taggedLocation}
-      patientState={patientState?.current_state || 'PAYMENT'}
+      patientState={user?.state || patientState || 'PAYMENT'}
+      currentExam={null} // 수납은 검사가 아니므로 null
     >
       {/* 추가 콘텐츠 영역 - 수납 안내 */}
       <div className="space-y-4">

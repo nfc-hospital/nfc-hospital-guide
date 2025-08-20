@@ -92,15 +92,15 @@ const ErrorScreen = ({ message }) => (
 // 메인 Home 컴포넌트 - 동적 라우팅 컨트롤러
 const Home = () => {
   const { tagId } = useParams(); // URL에서 NFC 태그 ID 가져오기
-  const { 
-    user, 
-    patientState, 
+  const {
+    user,
+    patientState,
     taggedLocationInfo,
     todaysAppointments,
-    isLoading, 
-    error, 
+    isLoading,
+    error,
     fetchJourneyData,
-    clearTagInfo 
+    clearTagInfo
   } = useJourneyStore();
 
   // 일정 데이터 상태 관리

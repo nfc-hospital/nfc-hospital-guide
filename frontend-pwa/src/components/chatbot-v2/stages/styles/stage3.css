@@ -70,11 +70,11 @@
 }
 
 .nav-btn:focus {
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
 }
 
 .back-btn {
-  color: #667eea;
+  color: var(--primary-blue, #2563EB);
   font-weight: 600;
 }
 
@@ -206,8 +206,8 @@
 }
 
 .suggestion-tag {
-  background: #e3f2fd;
-  color: #1565c0;
+  background: var(--primary-blue-light, #DBEAFE);
+  color: var(--primary-blue, #2563EB);
   padding: 6px 12px;
   border-radius: 16px;
   font-size: 14px;
@@ -272,7 +272,7 @@
 }
 
 .bot-avatar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--primary-blue, #2563EB);
 }
 
 .user-avatar {
@@ -304,7 +304,7 @@
 }
 
 .user-message .message-text {
-  background: #667eea;
+  background: var(--primary-blue, #2563EB);
   color: white;
 }
 
@@ -392,7 +392,7 @@
   width: 44px;
   height: 44px;
   border: none;
-  background: #667eea;
+  background: var(--primary-blue, #2563EB);
   color: white;
   border-radius: 50%;
   cursor: pointer;
@@ -405,7 +405,7 @@
 }
 
 .voice-btn:hover:not(:disabled) {
-  background: #5a67d8;
+  background: var(--primary-blue-dark, #1D4ED8);
   transform: scale(1.05);
 }
 
@@ -456,7 +456,7 @@
   width: 44px;
   height: 44px;
   border: none;
-  background: #28a745;
+  background: var(--primary-blue, #2563EB);
   color: white;
   border-radius: 50%;
   cursor: pointer;
@@ -469,7 +469,7 @@
 }
 
 .send-btn:hover:not(:disabled) {
-  background: #218838;
+  background: var(--primary-blue-dark, #1D4ED8);
   transform: scale(1.05);
 }
 

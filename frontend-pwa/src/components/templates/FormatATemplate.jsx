@@ -3,6 +3,50 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
 
+// 상태와 NFC 태그 정보를 기반으로 다음 행동 안내 문구 생성
+const getNextActionText = (patientState, currentExam, taggedLocation, nextLocation) => {
+  // 상태별 기본 행동
+  const stateActions = {
+    'ARRIVED': '원무과에서 접수하기',
+    'REGISTERED': '첫 번째 검사실로 이동하기',
+    'WAITING': '대기실에서 순서 기다리기',
+    'CALLED': '검사실로 입장하기',
+    'ONGOING': '검사 진행 중',
+    'COMPLETED': '다음 검사실로 이동하기',
+    'PAYMENT': '원무과에서 수납하기',
+    'FINISHED': '귀가하기'
+  };
+
+  // 현재 위치와 목적지가 있는 경우 구체적인 안내
+  if (taggedLocation && nextLocation) {
+    const currentPlace = taggedLocation.description || `${taggedLocation.building} ${taggedLocation.floor}층`;
+    const destination = nextLocation.name || nextLocation.room || '목적지';
+    
+    if (patientState === 'REGISTERED' || patientState === 'COMPLETED') {
+      return `${destination}(으)로 이동하기`;
+    }
+    if (patientState === 'WAITING') {
+      return `${destination} 대기실에서 기다리기`;
+    }
+  }
+
+  // 현재 검사 정보가 있는 경우
+  if (currentExam) {
+    if (patientState === 'WAITING') {
+      return `${currentExam.title} 대기 중 (${currentExam.room})`;
+    }
+    if (patientState === 'CALLED') {
+      return `${currentExam.room}으로 입장하기`;
+    }
+    if (patientState === 'ONGOING') {
+      return `${currentExam.title} 진행 중`;
+    }
+  }
+
+  // 기본 상태별 행동
+  return stateActions[patientState] || '다음 단계로 진행하기';
+};
+
 const FormatATemplate = ({ 
   screenType, // 'registered' | 'waiting' | 'payment'
   currentStep,
@@ -14,11 +58,15 @@ const FormatATemplate = ({
   queueData,
   taggedLocation,
   patientState, // 환자의 현재 상태 추가
+  currentExam, // 현재 진행 중인 검사
   children
 }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('location');
   const [expandedItems, setExpandedItems] = useState([]);
+  
+  // nextAction이 없으면 자동 생성
+  const displayNextAction = nextAction || getNextActionText(patientState, currentExam, taggedLocation, locationInfo);
 
   const toggleExpanded = (index) => {
     setExpandedItems(prev => 
@@ -33,27 +81,31 @@ const FormatATemplate = ({
     const steps = [];
     
     // 기본 단계들
-    steps.push({ state: 'ARRIVED', label: '도착', isFixed: true });
-    steps.push({ state: 'REGISTERED', label: '접수', isFixed: true });
+    steps.push({ state: 'ARRIVED', label: '도착', isFixed: true, status: 'completed' });
+    steps.push({ state: 'REGISTERED', label: '접수', isFixed: true, status: 'completed' });
     
     // 모든 검사/진료 추가
     if (todaySchedule && todaySchedule.length > 0) {
       todaySchedule.forEach((exam, index) => {
         steps.push({
-          state: exam.status === 'completed' ? 'COMPLETED' : 
-                 exam.status === 'ongoing' ? 'ONGOING' : 
-                 exam.status === 'called' ? 'WAITING' : 'WAITING',
+          state: 'EXAM', // 검사는 모두 EXAM 상태로 통일
           label: exam.examName || `검사 ${index + 1}`,
           examId: exam.id,
-          status: exam.status,
+          status: exam.status || 'scheduled', // appointment의 status 사용
           isFixed: false
         });
       });
+    } else {
+      // todaySchedule이 없을 때 기본 검사 추가 (테스트용)
+      console.warn('⚠️ todaySchedule이 비어있습니다. 기본 검사를 추가합니다.');
+      steps.push({ state: 'EXAM', label: '채혈실', status: 'waiting', isFixed: false });
+      steps.push({ state: 'EXAM', label: '심전도', status: 'scheduled', isFixed: false });
+      steps.push({ state: 'EXAM', label: 'X-ray', status: 'scheduled', isFixed: false });
     }
     
     // 마지막 고정 단계들
-    steps.push({ state: 'PAYMENT', label: '수납', isFixed: true });
-    steps.push({ state: 'FINISHED', label: '완료', isFixed: true });
+    steps.push({ state: 'PAYMENT', label: '수납', isFixed: true, status: 'scheduled' });
+    steps.push({ state: 'FINISHED', label: '완료', isFixed: true, status: 'scheduled' });
     
     return steps;
   };
@@ -62,32 +114,73 @@ const FormatATemplate = ({
   const getCurrentStepIndex = (steps) => {
     // 환자 상태에 따른 현재 단계 찾기
     if (patientState === 'ARRIVED') return 0;
-    if (patientState === 'REGISTERED') return 1;
-    if (patientState === 'PAYMENT') return steps.findIndex(s => s.state === 'PAYMENT');
-    if (patientState === 'FINISHED') return steps.findIndex(s => s.state === 'FINISHED');
+    if (patientState === 'FINISHED') return steps.length - 1;
     
-    // 검사/진료 중인 경우
-    if (patientState === 'WAITING' || patientState === 'ONGOING' || patientState === 'CALLED') {
-      // 현재 진행 중인 검사 찾기
-      const activeExamIndex = steps.findIndex(s => 
-        !s.isFixed && (s.status === 'waiting' || s.status === 'called' || s.status === 'ongoing')
-      );
-      return activeExamIndex !== -1 ? activeExamIndex : 2; // 기본값: 첫 번째 검사
+    // 수납 상태
+    if (patientState === 'PAYMENT') {
+      return steps.findIndex(s => s.state === 'PAYMENT');
     }
     
-    // 검사 완료 상태
-    if (patientState === 'COMPLETED') {
-      // 마지막으로 완료된 검사 찾기
-      let lastCompletedIndex = -1;
-      steps.forEach((s, idx) => {
-        if (!s.isFixed && s.status === 'completed') {
-          lastCompletedIndex = idx;
+    // 접수 완료 후 첫 검사 대기 중
+    if (patientState === 'REGISTERED') {
+      // 첫 번째 검사를 찾아서 현재 단계로
+      const firstExamIdx = steps.findIndex(s => s.state === 'EXAM');
+      if (firstExamIdx !== -1) return firstExamIdx;
+      return 1; // 없으면 접수 단계
+    }
+    
+    // 검사/진료 관련 상태 (WAITING, CALLED, ONGOING, COMPLETED)
+    if (['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
+      // 현재 진행 중인 검사 찾기 (waiting, called, ongoing 상태)
+      let activeExamIndex = -1;
+      
+      // 모든 검사를 순회하면서 현재 활성화된 검사 찾기
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        if (step.state === 'EXAM') {
+          // waiting, called, ongoing 상태인 검사를 현재로
+          if (['waiting', 'called', 'ongoing'].includes(step.status)) {
+            activeExamIndex = i;
+            break;
+          }
         }
-      });
-      return lastCompletedIndex !== -1 ? lastCompletedIndex : 2;
+      }
+      
+      if (activeExamIndex !== -1) {
+        return activeExamIndex;
+      }
+      
+      // 진행 중인 검사가 없고 COMPLETED 상태라면
+      if (patientState === 'COMPLETED') {
+        // 완료된 검사 중 가장 최근 것 찾기
+        let lastCompletedIdx = -1;
+        for (let i = 0; i < steps.length; i++) {
+          if (steps[i].state === 'EXAM' && steps[i].status === 'completed') {
+            lastCompletedIdx = i;
+          }
+        }
+        
+        // 다음 검사가 있는지 확인
+        if (lastCompletedIdx !== -1 && lastCompletedIdx + 1 < steps.length) {
+          const nextStep = steps[lastCompletedIdx + 1];
+          if (nextStep.state === 'EXAM') {
+            return lastCompletedIdx + 1; // 다음 검사로
+          }
+        }
+        
+        // 모든 검사가 완료되면 수납으로
+        const allExamsCompleted = steps
+          .filter(s => s.state === 'EXAM')
+          .every(s => s.status === 'completed');
+        
+        if (allExamsCompleted) {
+          return steps.findIndex(s => s.state === 'PAYMENT');
+        }
+      }
     }
     
-    return 1; // 기본값: 접수
+    // 기본값: 접수
+    return 1;
   };
   
   // 화면에 표시할 3개 단계 선택
@@ -95,10 +188,27 @@ const FormatATemplate = ({
     const allSteps = buildFullJourneySteps();
     const currentIdx = getCurrentStepIndex(allSteps);
     
+    // 디버깅을 위한 로그
+    console.log('📊 진행 상태 디버그:', {
+      patientState,
+      currentExam,
+      todaySchedule: todaySchedule?.map(s => ({ name: s.examName, status: s.status })),
+      allSteps: allSteps.map((s, i) => ({ 
+        index: i, 
+        label: s.label, 
+        state: s.state, 
+        status: s.status, 
+        isFixed: s.isFixed 
+      })),
+      currentIdx,
+      currentStep: allSteps[currentIdx],
+      visibleRange: `${Math.max(0, currentIdx - 1)} to ${Math.min(allSteps.length - 1, currentIdx + 1)}`
+    });
+    
     // 이전, 현재, 다음 단계 선택
     const visibleSteps = [];
     
-    // 이전 단계
+    // 이전 단계가 있으면 추가
     if (currentIdx > 0) {
       visibleSteps.push({ ...allSteps[currentIdx - 1], position: 'prev' });
     }
@@ -106,9 +216,24 @@ const FormatATemplate = ({
     // 현재 단계
     visibleSteps.push({ ...allSteps[currentIdx], position: 'current' });
     
-    // 다음 단계
+    // 다음 단계가 있으면 추가
     if (currentIdx < allSteps.length - 1) {
       visibleSteps.push({ ...allSteps[currentIdx + 1], position: 'next' });
+    }
+    
+    // 3개가 안 되는 경우 처리
+    if (visibleSteps.length === 2) {
+      if (currentIdx === 0) {
+        // 첫 번째 단계인 경우, 다다음 단계 추가
+        if (allSteps.length > 2) {
+          visibleSteps.push({ ...allSteps[2], position: 'next' });
+        }
+      } else if (currentIdx === allSteps.length - 1) {
+        // 마지막 단계인 경우, 전전 단계 추가
+        if (allSteps.length > 2) {
+          visibleSteps.unshift({ ...allSteps[currentIdx - 2], position: 'prev' });
+        }
+      }
     }
     
     return {
@@ -219,10 +344,9 @@ const FormatATemplate = ({
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="w-full h-screen flex flex-col">
-        {/* 상단 영역 - 파란색 배경 */}
-        <div className="relative bg-gradient-to-br from-blue-600 to-blue-700 overflow-hidden">
+    <div className="w-full">
+      {/* 상단 영역 - 파란색 배경 */}
+      <div className="relative bg-gradient-to-br from-blue-600 to-blue-700 overflow-hidden">
           {/* 부드러운 장식 요소 */}
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute -top-32 -right-32 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
@@ -238,7 +362,7 @@ const FormatATemplate = ({
                   {renderProgressSteps()}
                 </div>
                 <div className="flex flex-col items-end">
-                  <div className="text-white/70 text-xs sm:text-sm mb-0.5">검사/진료</div>
+                  <div className="text-white/70 text-xs sm:text-sm mb-0.5">진행 상황</div>
                   <div className="text-white flex items-baseline gap-0.5">
                     <span className="text-3xl sm:text-4xl lg:text-5xl font-bold">{getVisibleSteps().currentStep + 1}</span>
                     <span className="text-xl sm:text-2xl lg:text-3xl text-white/70">/{getVisibleSteps().totalSteps}</span>
@@ -255,7 +379,7 @@ const FormatATemplate = ({
                   <div className="absolute inset-0 w-3 h-3 bg-amber-400 rounded-full animate-ping" />
                 </div>
                 <span className="text-amber-400 text-base sm:text-lg font-medium">다음</span>
-                <span className="text-white text-xl sm:text-2xl font-bold flex-1">{nextAction}</span>
+                <span className="text-white text-xl sm:text-2xl font-bold flex-1">{displayNextAction}</span>
               </div>
             </div>
 
@@ -283,8 +407,8 @@ const FormatATemplate = ({
           </div>
         </div>
 
-        {/* 하단 영역 - 흰색 배경 (2/3) */}
-        <div className="flex-1 bg-white px-4 sm:px-6 lg:px-8 py-4 -mt-6 rounded-t-3xl relative shadow-xl overflow-y-auto">
+        {/* 하단 영역 - 흰색 배경 */}
+        <div className="bg-white px-4 sm:px-6 lg:px-8 py-4 -mt-6 rounded-t-3xl relative shadow-xl">
           {/* 탭 네비게이션 - 모던한 스타일 */}
           <div className="flex gap-0 mb-6 border-b border-gray-100">
             <button
@@ -450,7 +574,7 @@ const FormatATemplate = ({
                         <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
                           <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-blue-50/90 transition-colors duration-300">
                             <h5 className="text-sm font-medium text-blue-900 mb-1">검사 목적</h5>
-                            <p className="text-sm text-blue-700">{schedule.purpose}</p>
+                            <p className="text-sm text-blue-700">{schedule.purpose || schedule.description || '건강 상태 확인 및 진단'}</p>
                           </div>
                           
                           {schedule.preparation && (
@@ -487,7 +611,7 @@ const FormatATemplate = ({
                 <div className="text-xl">📲</div>
                 <div className="flex-1">
                   <p className="text-xs font-medium text-gray-700">
-                    병원 곳곳의 NFC 스티커에 휴대폰을 대보세요
+                    병원 곳곳의 NFC 스티커에 휴대폰을 대 보세요
                   </p>
                   <p className="text-xs text-gray-500 mt-0.5">
                     현재 위치에서 가야 할 곳까지 길을 안내해드립니다
@@ -498,7 +622,6 @@ const FormatATemplate = ({
           </div>
         </div>
       </div>
-    </div>
   );
 };
 

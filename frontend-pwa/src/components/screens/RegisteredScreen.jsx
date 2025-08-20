@@ -19,16 +19,20 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
   );
   
   const currentTask = currentFromAppointments || activeQueue || current_task;
+  const currentExam = currentTask?.exam;
   
-  // 오늘의 일정 준비
+  // 오늘의 일정 준비 - exam의 description 필드 활용
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
+    id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building} ${apt.exam?.floor}층 ${apt.exam?.room}`,
+    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
     status: apt.status,
-    purpose: '건강 상태 확인 및 진단',
+    description: apt.exam?.description, // exam의 description 필드 추가
+    purpose: apt.exam?.description || '건강 상태 확인 및 진단',
     preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
     duration: apt.exam?.average_duration || 30,
-    scheduled_at: apt.scheduled_at
+    scheduled_at: apt.scheduled_at,
+    department: apt.exam?.department
   })) || [];
   
   // 현재 단계 계산
@@ -37,18 +41,20 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
   );
   const actualCurrentStep = currentStep === -1 ? 0 : currentStep;
   
-  // 대기 정보
+  // 대기 정보 - 실제 큐 데이터 사용
   const waitingInfo = activeQueue ? {
-    peopleAhead: activeQueue.queue_number || 0,
+    peopleAhead: activeQueue.queue_number - 1 || 0,
     estimatedTime: activeQueue.estimated_wait_time || 15
   } : null;
   
-  // 위치 정보
-  const locationInfo = currentTask?.exam ? {
-    name: currentTask.exam.title,
-    building: currentTask.exam.building,
-    floor: `${currentTask.exam.floor}층`,
-    room: currentTask.exam.room,
+  // 위치 정보 - 첫 번째 검사실
+  const firstExam = todaysAppointments?.[0]?.exam;
+  const locationInfo = firstExam ? {
+    name: firstExam.title,
+    building: firstExam.building || '본관',
+    floor: `${firstExam.floor || '2'}층`,
+    room: firstExam.room,
+    department: firstExam.department,
     directions: '엘리베이터를 타고 이동 후 안내 표지판을 따라가세요'
   } : null;
 
@@ -57,13 +63,14 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
       screenType="registered"
       currentStep={actualCurrentStep}
       totalSteps={todaySchedule.length || 7}
-      nextAction={locationInfo ? `${locationInfo.name}로 이동하기` : '검사실로 이동하기'}
+      nextAction={null} // 자동 생성되도록 null 전달
       waitingInfo={waitingInfo}
       locationInfo={locationInfo}
       todaySchedule={todaySchedule}
       queueData={activeQueue}
       taggedLocation={taggedLocation}
-      patientState={patientState?.current_state || 'REGISTERED'}
+      patientState={user?.state || patientState || 'REGISTERED'}
+      currentExam={currentExam}
     />
   );
 }

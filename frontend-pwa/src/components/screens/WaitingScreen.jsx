@@ -9,26 +9,30 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
   
   // 현재 대기 중인 큐 찾기
   const activeQueue = currentQueues.find(
-    q => q.state === 'waiting' || q.state === 'ongoing'
+    q => q.state === 'waiting' || q.state === 'called' || q.state === 'ongoing'
   );
 
-  // 진행 중인 검사 찾기
-  const ongoingAppointment = todaysAppointments.find(
-    apt => apt.status === 'ongoing'
+  // 진행 중인 검사 찾기 - waiting, called, ongoing 상태 모두 포함
+  const currentAppointment = todaysAppointments.find(
+    apt => ['waiting', 'called', 'ongoing'].includes(apt.status)
   );
 
-  const currentExam = ongoingAppointment || activeQueue;
-  const isOngoing = user?.state === 'ONGOING' || activeQueue?.state === 'ongoing';
+  const currentExam = currentAppointment?.exam || activeQueue?.exam;
+  const isOngoing = patientState === 'ONGOING' || activeQueue?.state === 'ongoing';
+  const isCalled = patientState === 'CALLED' || activeQueue?.state === 'called';
 
-  // 오늘의 일정 준비
+  // 오늘의 일정 준비 - exam의 description 필드 활용
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
+    id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building} ${apt.exam?.floor}층 ${apt.exam?.room}`,
+    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
     status: apt.status,
-    purpose: '건강 상태 확인 및 진단',
+    description: apt.exam?.description,
+    purpose: apt.exam?.description || '건강 상태 확인 및 진단',
     preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
     duration: apt.exam?.average_duration || 30,
-    scheduled_at: apt.scheduled_at
+    scheduled_at: apt.scheduled_at,
+    department: apt.exam?.department
   })) || [];
   
   // 현재 단계 계산
@@ -37,19 +41,20 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
   );
   const actualCurrentStep = currentStep === -1 ? 0 : currentStep;
   
-  // 대기 정보
+  // 대기 정보 - 실제 큐 데이터 사용
   const waitingInfo = activeQueue ? {
-    peopleAhead: activeQueue.queue_number || 0,
+    peopleAhead: Math.max(0, (activeQueue.queue_number || 1) - 1),
     estimatedTime: activeQueue.estimated_wait_time || 15
   } : null;
   
   // 위치 정보
-  const locationInfo = currentExam?.exam ? {
-    name: currentExam.exam.title,
-    building: currentExam.exam.building,
-    floor: `${currentExam.exam.floor}층`,
-    room: currentExam.exam.room,
-    directions: '대기실에서 잠시 기다려주세요. 곧 호출해드리겠습니다.'
+  const locationInfo = currentExam ? {
+    name: currentExam.title,
+    building: currentExam.building || '본관',
+    floor: `${currentExam.floor || '2'}층`,
+    room: currentExam.room,
+    department: currentExam.department,
+    directions: isCalled ? '검사실로 입장해주세요' : '대기실에서 잠시 기다려주세요. 곧 호출해드리겠습니다.'
   } : null;
   
   // 다음 행동 결정 - 환자가 waiting 상태인데 다음 검사실 근처에서 NFC를 찍었을 때
@@ -77,13 +82,14 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
       screenType="waiting"
       currentStep={actualCurrentStep}
       totalSteps={todaySchedule.length || 7}
-      nextAction={getNextAction()}
+      nextAction={null} // 자동 생성되도록 null 전달
       waitingInfo={waitingInfo}
       locationInfo={locationInfo}
       todaySchedule={todaySchedule}
       queueData={activeQueue}
       taggedLocation={taggedLocation}
-      patientState={patientState?.current_state || (isOngoing ? 'ONGOING' : 'WAITING')}
+      patientState={user?.state || patientState || (isOngoing ? 'ONGOING' : isCalled ? 'CALLED' : 'WAITING')}
+      currentExam={currentExam}
     >
       {/* 추가 콘텐츠 영역 - 상태별 안내 */}
       <div className="space-y-4">

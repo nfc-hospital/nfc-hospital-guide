@@ -44,20 +44,20 @@
 
 /* 접근성 개선 */
 .chatbot-system button:focus {
-  outline: 2px solid #667eea;
+  outline: 2px solid var(--primary-blue, #2563EB);
   outline-offset: 2px;
 }
 
 .chatbot-system input:focus,
 .chatbot-system textarea:focus {
-  outline: 2px solid #667eea;
+  outline: 2px solid var(--primary-blue, #2563EB);
   outline-offset: 1px;
 }
 
 /* 고대비 모드 지원 */
 @media (prefers-contrast: high) {
   .chatbot-system {
-    --primary-color: #000080;
+    --primary-color: var(--primary-blue, #2563EB);
     --secondary-color: #800000;
     --text-color: #000000;
     --bg-color: #ffffff;

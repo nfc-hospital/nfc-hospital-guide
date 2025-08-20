@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import VoiceInput from './VoiceInput';
 import DepartmentDirections from './maps/DepartmentDirections';
 import departmentAPI from '../services/departmentAPI';
+import AppHeader from './common/AppHeader';
 
 const PublicGuide = () => {
   const [isListening, setIsListening] = useState(false);
@@ -132,8 +133,10 @@ const PublicGuide = () => {
   }
 
   return (
-    <div className="mobile-container min-h-screen bg-background p-6">
-      <div className="max-w-lg mx-auto space-y-8">
+    <div className="min-h-screen bg-background">
+      <AppHeader />
+      <div className="mobile-container p-6">
+        <div className="max-w-lg mx-auto space-y-8">
         {/* 헤더 */}
         <div className="text-center space-y-4">
           <div className="w-20 h-20 bg-primary-blue rounded-2xl mx-auto flex items-center justify-center shadow-soft">
@@ -262,6 +265,7 @@ const PublicGuide = () => {
             <span className="text-2xl mr-2">💁</span>
             안내데스크로 가기
           </button>
+        </div>
         </div>
       </div>
     </div>

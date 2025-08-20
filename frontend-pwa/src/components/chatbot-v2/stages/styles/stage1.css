@@ -1,8 +1,8 @@
 .floating-button-stage1 {
   border: none;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+  background: var(--primary-blue, #2563EB);
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.3);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 9999;
@@ -13,7 +13,7 @@
 }
 
 .floating-button-stage1:focus {
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.6), 0 0 0 3px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.5), 0 0 0 3px rgba(37, 99, 235, 0.3);
 }
 
 .floating-button-stage1.normal-size {
@@ -28,7 +28,8 @@
 
 .floating-button-stage1:hover {
   transform: scale(1.1);
-  box-shadow: 0 15px 40px rgba(102, 126, 234, 0.5);
+  box-shadow: 0 15px 40px rgba(37, 99, 235, 0.4);
+  background: var(--primary-blue-dark, #1D4ED8);
 }
 
 .floating-button-stage1:active {
@@ -85,11 +86,11 @@
 
 @keyframes pulse {
   0%, 100% { 
-    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 10px 30px rgba(37, 99, 235, 0.3);
     transform: scale(1);
   }
   50% { 
-    box-shadow: 0 10px 50px rgba(102, 126, 234, 0.8);
+    box-shadow: 0 10px 50px rgba(37, 99, 235, 0.6);
     transform: scale(1.05);
   }
 }

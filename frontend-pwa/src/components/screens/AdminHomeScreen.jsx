@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useJourneyStore from '../../store/journeyStore';
 import LoadingSpinner from '../common/LoadingSpinner';
+import AppHeader from '../common/AppHeader';
 import toast from 'react-hot-toast';
 
 const AdminHomeScreen = () => {
@@ -93,17 +94,19 @@ const AdminHomeScreen = () => {
   const statusInfo = getStatusInfo(systemStatus);
 
   return (
-    <div className="min-h-screen bg-background-secondary p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* 헤더 */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-text-primary mb-2">
-            🏥 병원 관리 시스템
-          </h1>
-          <p className="text-xl text-text-secondary">
-            환영합니다, {user?.name || user?.username}님
-          </p>
-        </div>
+    <div className="min-h-screen bg-background-secondary">
+      <AppHeader />
+      <div className="p-6">
+        <div className="max-w-6xl mx-auto">
+          {/* 헤더 */}
+          <div className="mb-8">
+            <h1 className="text-3xl font-bold text-text-primary mb-2">
+              🏥 병원 관리 시스템
+            </h1>
+            <p className="text-xl text-text-secondary">
+              관리자 대시보드
+            </p>
+          </div>
 
         {/* 오늘의 핵심 지표 */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -220,11 +223,12 @@ const AdminHomeScreen = () => {
           </div>
         </div>
 
-        {/* 하단 정보 */}
-        <div className="text-center text-text-muted">
-          <p className="text-sm">
-            마지막 업데이트: {new Date(lastUpdated).toLocaleString('ko-KR')}
-          </p>
+          {/* 하단 정보 */}
+          <div className="text-center text-text-muted">
+            <p className="text-sm">
+              마지막 업데이트: {new Date(lastUpdated).toLocaleString('ko-KR')}
+            </p>
+          </div>
         </div>
       </div>
     </div>
