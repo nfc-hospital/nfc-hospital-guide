@@ -2,11 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
-<<<<<<< Updated upstream
 import MapNavigator from '../MapNavigator';
-=======
 import useJourneyStore from '../../store/journeyStore';
->>>>>>> Stashed changes
 
 // 상태와 NFC 태그 정보를 기반으로 다음 행동 안내 문구 생성
 const getNextActionText = (patientState, currentExam, taggedLocation, nextLocation) => {
@@ -480,7 +477,6 @@ const FormatATemplate = ({
                   </div>
                 )}
                 
-<<<<<<< Updated upstream
                 {/* 지도 표시 영역 - 항상 표시 */}
                 <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden relative">
                   <div>
@@ -500,15 +496,6 @@ const FormatATemplate = ({
 
                     {/* 실제 지도 (데이터 연동) */}
                     <div className={showDemoMap ? 'opacity-30' : ''}>
-=======
-                {/* 지도 표시 영역 */}
-                <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden">
-                  {actualCurrentLocation ? (
-                    <div>
-                      {/* 지도 헤더 제거 - 위의 목적지 정보로 통합됨 */}
-                      
-                      {/* [NAVIGATION-COMPONENT] 실시간 지도 컴포넌트 */}
->>>>>>> Stashed changes
                       <div className="p-6">
                         <MapNavigator 
                           mapId={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
