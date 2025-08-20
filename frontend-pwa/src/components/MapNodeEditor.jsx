@@ -29,6 +29,8 @@ const MapNodeEditor = () => {
     
     if (selectedFacility && facilityRoutes[selectedFacility]) {
       const facility = facilityRoutes[selectedFacility];
+      console.log('선택된 시설 정보:', facility);
+      console.log('지도 ID 변경:', facility.mapId);
       setMapId(facility.mapId);
       
       // 저장된 경로가 있으면 불러오기 (비동기)
@@ -72,7 +74,10 @@ const MapNodeEditor = () => {
     if (!svgLoaded || !svgContainerRef.current) return;
     
     const svg = svgContainerRef.current.querySelector('svg');
-    if (!svg) return;
+    if (!svg) {
+      console.log('SVG 요소가 아직 준비되지 않음');
+      return;
+    }
     
     const clickHandler = (e) => handleSvgClick(e);
     
@@ -80,11 +85,12 @@ const MapNodeEditor = () => {
     svg.removeEventListener('click', clickHandler);
     // 새 리스너 등록
     svg.addEventListener('click', clickHandler);
+    console.log('이벤트 리스너 등록 완료, 맵:', mapId);
     
     return () => {
       svg.removeEventListener('click', clickHandler);
     };
-  }, [svgLoaded, nodeIdCounter, nodes]); // svgLoaded 추가
+  }, [svgLoaded, mapId, nodeIdCounter]); // mapId 추가, nodes 제거
 
   const loadSvg = async () => {
     if (!svgContainerRef.current) return;
@@ -116,12 +122,18 @@ const MapNodeEditor = () => {
     if (!svgContainerRef.current) return;
     
     const svg = svgContainerRef.current.querySelector('svg');
+    if (!svg) {
+      console.error('SVG 요소를 찾을 수 없습니다');
+      return;
+    }
+    
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
     
     // 스크린 좌표를 SVG 좌표로 변환
     const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+    console.log('클릭 좌표:', { x: svgP.x, y: svgP.y }, '현재 맵:', mapId);
     
     // 기존 노드 클릭 확인
     const clickedNode = nodes.find(node => {
@@ -133,6 +145,7 @@ const MapNodeEditor = () => {
       handleNodeClick(clickedNode);
     } else if (!isConnecting) {
       // 빈 공간 클릭시 노드 추가
+      console.log('노드 추가 시도:', { x: svgP.x, y: svgP.y });
       addNode(svgP.x, svgP.y);
     }
   };
@@ -448,11 +461,25 @@ const MapNodeEditor = () => {
               className="px-4 py-2 border-2 rounded-lg text-sm font-medium bg-white"
             >
               <option value="">시설을 선택하세요</option>
-              {Object.keys(facilityRoutes).map(name => (
-                <option key={name} value={name}>{name}</option>
-              ))}
+              <optgroup label="일반 시설">
+                {Object.keys(facilityRoutes).filter(name => !name.startsWith('시연_')).map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </optgroup>
+              <optgroup label="🎬 시연용 경로">
+                {Object.keys(facilityRoutes).filter(name => name.startsWith('시연_')).map(name => (
+                  <option key={name} value={name}>
+                    {facilityRoutes[name].description || name.replace('시연_', '')}
+                  </option>
+                ))}
+              </optgroup>
             </select>
             <span className="text-sm text-gray-600">현재 맵: {mapId}</span>
+            {selectedFacility && selectedFacility.startsWith('시연_') && (
+              <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                🎬 시연 모드
+              </span>
+            )}
           </div>
           
           <div className="flex gap-2">

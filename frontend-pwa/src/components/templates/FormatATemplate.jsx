@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
+import MapNavigator from '../MapNavigator';
 
 // 상태와 NFC 태그 정보를 기반으로 다음 행동 안내 문구 생성
 const getNextActionText = (patientState, currentExam, taggedLocation, nextLocation) => {
@@ -64,6 +65,8 @@ const FormatATemplate = ({
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('location');
   const [expandedItems, setExpandedItems] = useState([]);
+  const [showDemoMap, setShowDemoMap] = useState(false);
+  const [isDemoExpanded, setIsDemoExpanded] = useState(true);
   
   // nextAction이 없으면 자동 생성
   const displayNextAction = nextAction || getNextActionText(patientState, currentExam, taggedLocation, locationInfo);
@@ -483,34 +486,54 @@ const FormatATemplate = ({
                   </div>
                 )}
                 
-                {/* 지도 표시 영역 */}
-                <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden">
-                  {taggedLocation ? (
-                    <div>
-                      {/* 지도 헤더 제거 - 위의 목적지 정보로 통합됨 */}
-                      
-                      {/* [NAVIGATION-COMPONENT] 실시간 지도 컴포넌트 */}
+                {/* 지도 표시 영역 - 항상 표시 */}
+                <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden relative">
+                  <div>
+                    {/* 시연 모드 토글 버튼 - 왼쪽 아래 */}
+                    <div className="absolute bottom-2 left-2 z-30">
+                      <button
+                        onClick={() => setShowDemoMap(!showDemoMap)}
+                        className={`w-10 h-10 rounded-full text-lg transition-all flex items-center justify-center ${
+                          showDemoMap 
+                            ? 'bg-blue-600 text-white shadow-lg' 
+                            : 'bg-white border-2 border-blue-600 hover:bg-blue-50'
+                        }`}
+                      >
+                        🎬
+                      </button>
+                    </div>
+
+                    {/* 실제 지도 (데이터 연동) */}
+                    <div className={showDemoMap ? 'opacity-30' : ''}>
                       <div className="p-6">
-                        <div className="bg-gray-50 rounded-xl p-8 border-2 border-dashed border-gray-300 text-center">
-                          <div className="text-5xl mb-3">🗺️</div>
-                          <p className="text-gray-600 font-medium">[NAVIGATION-COMPONENT]</p>
-                          <p className="text-sm text-gray-500 mt-2">
-                            실시간 길찾기 지도
-                          </p>
-                        </div>
+                        <MapNavigator 
+                          mapId={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
+                          highlightRoom={locationInfo?.name || ''}
+                          facilityName={locationInfo?.name || ''}
+                          multiFloor={false} // 실제 데이터는 단일 층만
+                          startFloor="main_1f"
+                          endFloor={locationInfo?.mapFile?.replace('.svg', '') || 'main_2f'}
+                        />
                       </div>
                     </div>
-                  ) : (
-                    <div className="p-8 text-center">
-                      <div className="text-5xl mb-4">📍</div>
-                      <p className="text-lg text-gray-700 font-medium mb-2">
-                        지도를 보려면 NFC 스티커를 찍어주세요
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        병원 곳곳에 있는 파란색 NFC 스티커를 찾아보세요
-                      </p>
-                    </div>
-                  )}
+
+                    {/* 시연용 지도 오버레이 */}
+                    {showDemoMap && (
+                      <div className="absolute inset-0 bg-white transition-all duration-300">
+                        {/* 시연용 지도 내용 - 심플하게 */}
+                        <div className="p-4 h-full">
+                          <MapNavigator 
+                            mapId="main_1f"
+                            highlightRoom="내과 대기실"
+                            facilityName="시연_1층_로비에서_엘리베이터" // 시연용 경로 사용
+                            multiFloor={true} // 시연용은 다중 층 활성화
+                            startFloor="main_1f"
+                            endFloor="main_2f"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* 다른 장소 찾기 버튼 */}

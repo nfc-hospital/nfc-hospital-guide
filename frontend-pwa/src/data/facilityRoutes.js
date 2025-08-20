@@ -77,6 +77,27 @@ export const facilityRoutes = {
     edges: [],
     mapId: 'annex_2f',
     svgElementId: 'center-checkup'
+  },
+  // 시연용 경로
+  '시연_1층_로비에서_엘리베이터': {
+    nodes: [],
+    edges: [],
+    mapId: 'main_1f',
+    svgElementId: 'elevator-1f',
+    description: '시연용: 1층 로비 → 엘리베이터'
+  },
+  '시연_2층_엘리베이터에서_내과대기실': {
+    nodes: [],
+    edges: [],
+    mapId: 'main_2f',
+    svgElementId: 'clinic-internal-1',
+    description: '시연용: 2층 엘리베이터 → 내과 대기실'
+  },
+  '채혈실': {
+    nodes: [],
+    edges: [],
+    mapId: 'main_1f',
+    svgElementId: 'room-blood-collection'
   }
 };
 

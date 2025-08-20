@@ -3,6 +3,7 @@ import useJourneyStore from '../../store/journeyStore';
 import FormatATemplate from '../templates/FormatATemplate';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { getFacilityByName } from '../../data/facilityManagement';
 
 export default function WaitingScreen({ taggedLocation, current_task, upcoming_tasks }) {
   const { user, currentQueues = [], todaysAppointments = [], patientState } = useJourneyStore();
@@ -48,13 +49,18 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
   } : null;
   
   // 위치 정보
+  // facilityManagement에서 시설 정보 찾기
+  const facilityData = currentExam ? getFacilityByName(currentExam.title) : null;
+  
   const locationInfo = currentExam ? {
     name: currentExam.title,
     building: currentExam.building || '본관',
     floor: `${currentExam.floor || '2'}층`,
     room: currentExam.room,
     department: currentExam.department,
-    directions: isCalled ? '검사실로 입장해주세요' : '대기실에서 잠시 기다려주세요. 곧 호출해드리겠습니다.'
+    directions: isCalled ? '검사실로 입장해주세요' : '대기실에서 잠시 기다려주세요. 곧 호출해드리겠습니다.',
+    mapFile: facilityData?.mapFile || 'main_1f.svg', // 지도 파일 추가
+    svgId: facilityData?.svgId // SVG 요소 ID 추가
   } : null;
   
   // 다음 행동 결정 - 환자가 waiting 상태인데 다음 검사실 근처에서 NFC를 찍었을 때

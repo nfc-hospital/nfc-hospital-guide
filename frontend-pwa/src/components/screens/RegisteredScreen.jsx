@@ -4,6 +4,7 @@ import useJourneyStore from '../../store/journeyStore';
 import FormatATemplate from '../templates/FormatATemplate';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
+import { getFacilityByName } from '../../data/facilityManagement';
 
 export default function RegisteredScreen({ taggedLocation, current_task, upcoming_tasks }) {
   const navigate = useNavigate();
@@ -49,13 +50,19 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
   
   // 위치 정보 - 첫 번째 검사실
   const firstExam = todaysAppointments?.[0]?.exam;
+  
+  // facilityManagement에서 시설 정보 찾기
+  const facilityData = firstExam ? getFacilityByName(firstExam.title) : null;
+  
   const locationInfo = firstExam ? {
     name: firstExam.title,
     building: firstExam.building || '본관',
     floor: `${firstExam.floor || '2'}층`,
     room: firstExam.room,
     department: firstExam.department,
-    directions: '엘리베이터를 타고 이동 후 안내 표지판을 따라가세요'
+    directions: '엘리베이터를 타고 이동 후 안내 표지판을 따라가세요',
+    mapFile: facilityData?.mapFile || 'main_1f.svg', // 지도 파일 추가
+    svgId: facilityData?.svgId // SVG 요소 ID 추가
   } : null;
 
   return (

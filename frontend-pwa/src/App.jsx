@@ -15,7 +15,7 @@ import KakaoOAuth from './components/auth/KakaoOAuth';
 import Exam from './pages/Exam';
 import MyExams from './pages/MyExams';
 import NotFound from './pages/NotFound';
-import PublicGuide from './components/PublicGuide';
+// PublicGuide 제거 - PublicHome에 통합됨
 import PrivateRoute from './components/common/PrivateRoute';
 import WebSocketTest from './components/WebSocketTest';
 import CSRFStatus from './components/dev/CSRFStatus';
@@ -109,7 +109,7 @@ function AppContent() {
           <Route path="/" element={<PublicHome />} />
           <Route path="/login" element={<Login />} />
           <Route path="/oauth/kakao" element={<KakaoOAuth />} />
-          <Route path="/public-guide" element={<PublicGuide />} />
+          {/* public-guide 제거 - PublicHome에 통합됨 */}
           <Route path="/chatbot-test" element={<ChatbotTest />} />
           <Route path="/map-test" element={<MapTest />} />
           <Route path="/map-editor" element={<MapEditor />} />

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&amp;display=swap');
+            .bg { fill: #ffffff; }
+            .department-zone { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; cursor: pointer; }
+            .department-zone:hover { fill: #bfdbfe; }
+            .text-base { font-family: "Noto Sans KR", sans-serif; text-anchor: middle; fill: #1e293b; font-weight: 600; stroke: none; }
+            .text-large { font-size: 24px; }
+            .icon-text { font-size: 12px; fill: #475569; }
+        </style>
+    </defs>
+    <rect width="900" height="600" class="bg"/>
+    <g id="floor-layout">
+        <g id="dept-cardiology" class="department-zone">
+            <rect x="50" y="80" width="350" height="400" />
+            <text x="225" y="290" class="text-base text-large">심장내과</text>
+        </g>
+        <g id="dept-gastro" class="department-zone">
+            <rect x="420" y="80" width="180" height="180" />
+            <text x="510" y="175" class="text-base text-large">소화기내과</text>
+        </g>
+        <g id="dept-ent" class="department-zone">
+            <rect x="620" y="80" width="230" height="180" />
+            <text x="735" y="175" class="text-base text-large">이비인후과</text>
+        </g>
+        <g id="dept-nephrology" class="department-zone">
+            <rect x="420" y="280" width="300" height="200" />
+            <text x="570" y="385" class="text-base text-large">신장내과</text>
+        </g>
+    </g>
+    <g id="facilities">
+        <g transform="translate(450, 520)">
+            <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+            <path d="M-10 -8 L0 -15 L10 -8 M-10 8 L0 15 L10 8" stroke="#475569" stroke-width="2" fill="none"/>
+        </g>
+        <text x="450" y="560" class="text-base icon-text">엘리베이터</text>
+        <g transform="translate(780, 420)">
+            <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+            <path d="M-12 -10 L-12 -6 L-6 -6 L-6 -2 L0 -2 L0 2 L6 2 L6 6 L12 6 L12 10" stroke="#475569" stroke-width="2" fill="none"/>
+        </g>
+        <text x="780" y="460" class="text-base icon-text">계단</text>
+    </g>
+</svg>
