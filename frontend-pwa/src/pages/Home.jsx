@@ -297,6 +297,18 @@ const Home = () => {
     // CalledModal 상태 체크 (다른 화면들 위에 모달로 표시)
     const isCalledModalOpen = currentState === 'CALLED';
     
+    // 개발 환경에서 디버깅을 위한 로그
+    if (import.meta.env.DEV) {
+      console.log('🏥 환자 화면 렌더링 정보:', {
+        currentState,
+        patientState,
+        userState: user?.state,
+        locationType,
+        todaysAppointments: todaysAppointments?.length || 0,
+        completedCount: todaysAppointments?.filter(apt => ['completed', 'done'].includes(apt.status)).length || 0
+      });
+    }
+    
     // 호출 상태가 아닌 다른 상태들 처리
     
     // 2순위: 검사실 NFC를 태그했고, 대기 또는 진행중인 검사가 있는 경우

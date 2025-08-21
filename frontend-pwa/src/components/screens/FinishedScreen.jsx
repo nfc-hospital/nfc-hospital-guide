@@ -3,27 +3,74 @@ import useJourneyStore from '../../store/journeyStore';
 import { useNavigate } from 'react-router-dom';
 import FormatBTemplate from '../templates/FormatBTemplate';
 import apiService from '../../api/apiService';
+import { CheckCircleIcon } from '@heroicons/react/24/outline';
 
-export default function FinishedScreen({ taggedLocation }) {
-  const { user, todaysAppointments = [], appointments = [], patientState } = useJourneyStore();
+export default function FinishedScreen({ taggedLocation, completed_tasks }) {
+  const { 
+    user, 
+    todaysAppointments = [], 
+    appointments = [], 
+    patientState,
+    isLoading 
+  } = useJourneyStore();
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [postCareInstructions, setPostCareInstructions] = useState([]);
-  const [startTime, setStartTime] = useState(null);
-
-  // 병원 도착 시간 계산 - 첫 번째 검사 시작 시간 또는 localStorage에서 가져오기
+  
+  // 디버깅
   useEffect(() => {
-    const savedStartTime = localStorage.getItem('hospitalArrivalTime');
-    if (savedStartTime) {
-      setStartTime(new Date(savedStartTime));
-    } else if (todaysAppointments.length > 0) {
-      // 첫 번째 예약의 시작 시간을 병원 도착 시간으로 추정
-      const firstAppointment = todaysAppointments
-        .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))[0];
-      setStartTime(new Date(firstAppointment.scheduled_at));
-      localStorage.setItem('hospitalArrivalTime', firstAppointment.scheduled_at);
-    }
-  }, [todaysAppointments]);
+    console.log('🔍 FinishedScreen 렌더링됨:', {
+      user,
+      todaysAppointments,
+      patientState,
+      taggedLocation,
+      completed_tasks,
+      completedCount: todaysAppointments?.filter(apt => ['completed', 'done'].includes(apt.status)).length || 0
+    });
+  }, [todaysAppointments, patientState]);
+
+  // 소요 시간 계산을 위한 시작/종료 시간 찾기
+  const calculateTotalDuration = () => {
+    if (!todaysAppointments || todaysAppointments.length === 0) return 0;
+    
+    // 완료된 검사들만 필터링
+    const completedAppts = todaysAppointments.filter(apt => 
+      ['completed', 'done'].includes(apt.status)
+    );
+    
+    if (completedAppts.length === 0) return 0;
+    
+    // 가장 이른 시작 시간 찾기 (접수 시간 또는 첫 검사 시작)
+    const startTimes = completedAppts.map(apt => {
+      // created_at이 있으면 사용 (접수 시간)
+      if (apt.created_at) return new Date(apt.created_at);
+      // 없으면 scheduled_at 사용
+      return new Date(apt.scheduled_at);
+    }).filter(date => !isNaN(date));
+    
+    if (startTimes.length === 0) return 0;
+    
+    const firstTime = new Date(Math.min(...startTimes));
+    
+    // 가장 늦은 완료 시간 찾기
+    const endTimes = completedAppts.map(apt => {
+      if (apt.completed_at) return new Date(apt.completed_at);
+      if (apt.updated_at) return new Date(apt.updated_at);
+      // 완료 시간이 없으면 예상 시간을 더해서 추정
+      const scheduled = new Date(apt.scheduled_at);
+      const duration = apt.exam?.average_duration || 30;
+      return new Date(scheduled.getTime() + duration * 60 * 1000);
+    }).filter(date => !isNaN(date));
+    
+    if (endTimes.length === 0) return 0;
+    
+    const lastTime = new Date(Math.max(...endTimes));
+    
+    // 분 단위로 계산
+    const durationInMinutes = Math.round((lastTime - firstTime) / (1000 * 60));
+    
+    return Math.max(0, durationInMinutes); // 음수 방지
+  };
 
   // 완료된 검사들의 후 주의사항 가져오기
   useEffect(() => {
@@ -121,18 +168,8 @@ export default function FinishedScreen({ taggedLocation }) {
   );
   const completedCount = completedAppointments.length;
   
-  // 소요 시간 계산 - 실제 경과 시간 또는 예상 시간 합계
-  let totalDuration = 0;
-  
-  if (startTime) {
-    // 실제 경과 시간 계산 (분 단위)
-    const now = new Date();
-    totalDuration = Math.round((now - startTime) / (1000 * 60));
-  } else {
-    // 예상 시간 합계
-    totalDuration = completedAppointments
-      .reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
-  }
+  // 소요 시간 계산 - 고정값 사용
+  const totalDuration = calculateTotalDuration();
   
   // 총 비용 계산 - 실제 비용 정보가 있으면 사용, 없으면 예상 비용
   const totalCost = completedAppointments
@@ -228,6 +265,18 @@ export default function FinishedScreen({ taggedLocation }) {
   const precautions = generatePrecautions();
   
   // 오늘의 일정 - 완료된 것들만
+  // 로딩 중이면 로딩 표시
+  if (isLoading && (!todaysAppointments || todaysAppointments.length === 0)) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-700 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-xl">데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+  
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
     id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
@@ -259,14 +308,37 @@ export default function FinishedScreen({ taggedLocation }) {
         { label: '완료', value: `${completedCount}개` }
       ]}
       todaySchedule={todaySchedule}
-      showCheckboxes={true}
-      checkItems={checkItems}
       showPaymentInfo={true}
       paymentAmount={totalCost}
       precautions={precautions}
-      patientState={user?.state || patientState || 'FINISHED'}
     >
 
+      {/* 귀가 전 체크리스트 */}
+      {checkItems.length > 0 && (
+        <section className="mb-8">
+          <div className="bg-white rounded-2xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <CheckCircleIcon className="w-7 h-7 text-emerald-600" />
+              귀가 전 확인사항
+            </h3>
+            <div className="space-y-3">
+              {checkItems.map((item, index) => (
+                <label 
+                  key={index}
+                  className="flex items-center gap-3 p-4 bg-gray-50 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors duration-200"
+                >
+                  <input 
+                    type="checkbox" 
+                    className="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <span className="text-lg text-gray-700">{item}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+      
       {/* 다음 예약 관련 액션 */}
       <section className="mb-8">
         {nextAppointment && (
