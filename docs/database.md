@@ -213,6 +213,24 @@ CREATE TABLE `exam_preparations` (
   CONSTRAINT `exam_preparations_exam_id_d47befcb_fk_exams_exam_id` FOREIGN KEY (`exam_id`) REFERENCES `exams` (`exam_id`)
 )
 
+-- nfc_hospital_db_exam_post_care_instructions.txt
+CREATE TABLE `exam_post_care_instructions` (
+  `instruction_id` int NOT NULL AUTO_INCREMENT,
+  `type` varchar(50) NOT NULL,
+  `title` varchar(200) NOT NULL,
+  `description` longtext NOT NULL,
+  `priority` varchar(10) NOT NULL,
+  `duration_hours` int DEFAULT NULL,
+  `icon` varchar(200) DEFAULT NULL,
+  `is_critical` tinyint(1) NOT NULL,
+  `exam_id` varchar(50) NOT NULL,
+  PRIMARY KEY (`instruction_id`),
+  KEY `exam_post_care_exam_id_priority_idx` (`exam_id`,`priority`),
+  KEY `exam_post_care_exam_id_type_idx` (`exam_id`,`type`),
+  KEY `exam_post_care_is_critical_idx` (`is_critical`),
+  CONSTRAINT `exam_post_care_instructions_exam_id_fk_exams_exam_id` FOREIGN KEY (`exam_id`) REFERENCES `exams` (`exam_id`)
+)
+
 -- nfc_hospital_db_exams.txt
 CREATE TABLE `exams` (
   `exam_id` varchar(50) NOT NULL,

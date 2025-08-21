@@ -4,9 +4,9 @@ import { CheckIcon as CheckIconSolid } from '@heroicons/react/24/solid';
 import apiService from '../api/apiService';
 import './ExamPreparationChecklist.css';
 
-const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
+const ExamPreparationChecklist = ({ appointments, onRescheduleRequest, onCompletionChange }) => {
   const [checkedItems, setCheckedItems] = useState({});
-  const [expandedExams, setExpandedExams] = useState([]);
+  const [expandedExams, setExpandedExams] = useState([]); // 기본적으로 모든 검사를 열어둠
   const [preparations, setPreparations] = useState({});
   const [loading, setLoading] = useState(false);
   const [allRequiredChecked, setAllRequiredChecked] = useState(false);
@@ -57,6 +57,10 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
           }
         }
         setPreparations(prepData);
+        
+        // 모든 검사를 기본적으로 열어둠
+        const appointmentIds = appointments.map(apt => apt.appointment_id).filter(id => id);
+        setExpandedExams(appointmentIds);
       } catch (error) {
         console.error('Failed to load exam preparations:', error);
       } finally {
@@ -87,7 +91,12 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
     }
     
     setAllRequiredChecked(allRequired);
-  }, [checkedItems, preparations, appointments]);
+    
+    // 상위 컴포넌트에 완료 상태 알림
+    if (onCompletionChange) {
+      onCompletionChange(allRequired);
+    }
+  }, [checkedItems, preparations, appointments, onCompletionChange]);
 
   const toggleExpanded = (appointmentId) => {
     setExpandedExams(prev => 
@@ -99,10 +108,28 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
 
   const toggleChecked = (appointmentId, prepId) => {
     const key = `${appointmentId}-${prepId}`;
-    setCheckedItems(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+    setCheckedItems(prev => {
+      const newCheckedItems = {
+        ...prev,
+        [key]: !prev[key]
+      };
+      
+      // 해당 검사의 모든 필수 준비사항이 체크되었는지 확인
+      const examPreps = preparations[appointmentId] || [];
+      const requiredPreps = examPreps.filter(prep => prep.is_required);
+      const allRequiredChecked = requiredPreps.every(prep => 
+        newCheckedItems[`${appointmentId}-${prep.prep_id || prep.title}`]
+      );
+      
+      // 모든 필수 준비사항이 체크되었으면 검사를 닫음
+      if (allRequiredChecked && requiredPreps.length > 0) {
+        setTimeout(() => {
+          setExpandedExams(prev => prev.filter(id => id !== appointmentId));
+        }, 500); // 약간의 딜레이로 애니메이션 효과
+      }
+      
+      return newCheckedItems;
+    });
   };
 
   const formatTime = (dateTime) => {
@@ -219,28 +246,14 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
         </p>
         {isToday && (
           <div className="bg-amber-50 rounded-xl p-4 mb-4 border border-amber-200">
-            <div className="flex items-center gap-2 mb-2">
-              <input
-                type="checkbox"
-                id="confirm-today-app"
-                checked={hasConfirmed}
-                onChange={(e) => setHasConfirmed(e.target.checked)}
-                className="w-4 h-4 text-blue-600"
-              />
-              <label htmlFor="confirm-today-app" className="text-sm text-amber-800">
-                검사 당일 변경은 제한될 수 있다는 점을 확인했습니다
-              </label>
-            </div>
+            <p className="text-xs text-amber-700 font-medium">
+              ⚠️ 검사 당일 변경은 제한될 수 있습니다
+            </p>
           </div>
         )}
         <button
           onClick={() => alert('병원 앱으로 이동합니다')}
-          disabled={isToday && !hasConfirmed}
-          className={`w-full py-4 rounded-xl font-semibold transition-colors ${
-            isToday && !hasConfirmed
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-green-600 text-white hover:bg-green-700'
-          }`}
+          className="w-full py-4 rounded-xl font-semibold transition-colors bg-green-600 text-white hover:bg-green-700"
         >
           병원 앱 열기
         </button>
@@ -249,13 +262,13 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl animate-[scale-in_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-4">
+        <div className="bg-white rounded-3xl max-w-md w-full h-[500px] shadow-2xl overflow-hidden flex flex-col">
+          <div className="flex justify-between items-center p-6 pb-4">
             <div className="flex gap-2">
               {[1, 2, 3].map((s) => (
                 <div
                   key={s}
-                  className={`w-8 h-2 rounded-full ${
+                  className={`w-8 h-2 rounded-full transition-colors duration-300 ${
                     s <= step ? 'bg-blue-600' : 'bg-gray-200'
                   }`}
                 />
@@ -269,17 +282,41 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
             </button>
           </div>
           
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
+          {/* 슬라이드 컨테이너 */}
+          <div className="relative overflow-hidden flex-1">
+            <div 
+              className="flex h-full"
+              style={{ 
+                transform: `translateX(-${(step - 1) * 100}%)`,
+                transition: 'transform 0.5s ease-in-out'
+              }}
+            >
+              {/* Step 1 */}
+              <div className="w-full flex-shrink-0 p-6 pt-0 flex flex-col justify-center">
+                {renderStep1()}
+              </div>
+              
+              {/* Step 2 */}
+              <div className="w-full flex-shrink-0 p-6 pt-0 flex flex-col justify-center">
+                {renderStep2()}
+              </div>
+              
+              {/* Step 3 */}
+              <div className="w-full flex-shrink-0 p-6 pt-0 flex flex-col justify-center">
+                {renderStep3()}
+              </div>
+            </div>
+          </div>
           
           {step > 1 && (
-            <button
-              onClick={() => setStep(step - 1)}
-              className="w-full mt-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              ← 이전으로
-            </button>
+            <div className="p-6 pt-0">
+              <button
+                onClick={() => setStep(step - 1)}
+                className="w-full py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                ← 이전으로
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -313,14 +350,6 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
                 status.isComplete ? 'bg-green-50/50' : 'hover:bg-gray-50'
               }`}
             >
-              {/* 검사 아이콘 */}
-              <div className={`flex flex-col items-center justify-center w-16 h-16 rounded-xl ${
-                hasFasting ? 'bg-red-100' : 'bg-blue-100'
-              }`}>
-                <span className="text-3xl">
-                  {hasFasting ? '🚫' : '🏥'}
-                </span>
-              </div>
               
               {/* 검사 정보 */}
               <div className="flex-1 text-left">
@@ -429,45 +458,9 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest }) => {
         );
       })}
       
-      {/* 모든 필수 준비사항을 체크했을 때만 표시되는 확인 버튼 */}
-      {appointments.length > 0 && allRequiredChecked && (
-        <div className="mt-6 p-6 bg-gradient-to-br from-green-50 to-emerald-50 rounded-3xl border-2 border-green-300 shadow-md animate-[fade-in_0.5s_ease-out]">
-          <div className="text-center mb-4">
-            <CheckCircleIcon className="w-16 h-16 text-green-600 mx-auto mb-3" />
-            <h3 className="text-xl font-bold text-green-800 mb-2">
-              모든 필수 준비사항을 확인하셨습니다!
-            </h3>
-            <p className="text-green-700">
-              이제 검사를 받을 준비가 되었습니다.
-            </p>
-          </div>
-          
-          <button
-            className="w-full py-4 bg-green-600 text-white text-lg font-bold rounded-2xl hover:bg-green-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.02]"
-            onClick={() => alert('준비사항 확인이 완료되었습니다.')}
-          >
-            준비 완료! 병원으로 출발하기
-          </button>
-        </div>
-      )}
-
-      {/* 하단 통합 메시지 및 액션 */}
+      {/* 예약 변경 버튼 */}
       {appointments.length > 0 && (
-        <div className="mt-6 space-y-4">
-          {/* 필수 준비사항 미완료 시 경고 */}
-          {!allRequiredChecked && (
-            <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border-2 border-amber-300 text-center">
-              <ExclamationTriangleIcon className="w-12 h-12 text-amber-600 mx-auto mb-3" />
-              <h3 className="text-xl font-bold text-amber-800 mb-2">
-                ⚠️ 필수 준비사항을 확인해주세요
-              </h3>
-              <p className="text-amber-700 font-medium">
-                준비사항을 지키지 않으면 검사가 진행되지 않을 수 있습니다
-              </p>
-            </div>
-          )}
-
-          {/* 예약 변경 버튼 */}
+        <div className="mt-6">
           <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200">
             <button
               onClick={() => setShowRescheduleModal(true)}

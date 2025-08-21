@@ -231,61 +231,6 @@ export default function FinishedScreen({ taggedLocation }) {
       precautions={precautions}
     >
 
-      {/* 빠른 길찾기 - PublicHome 스타일과 일치 */}
-      <section className="mb-8">
-        <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          빠른 길찾기
-        </h3>
-        
-        <div className="grid grid-cols-3 gap-4">
-          <button 
-            onClick={() => navigate('/public?place=pharmacy')}
-            className="group bg-white border-2 border-green-200 rounded-2xl p-4 transition-all duration-300 hover:border-green-300 hover:shadow-lg hover:bg-green-50">
-            <div className="flex flex-col items-center text-center space-y-2">
-              <div className="w-16 h-16 bg-green-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                💊
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-gray-900">약국</h4>
-                <p className="text-xs text-gray-600">본관 1층</p>
-              </div>
-            </div>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/public?place=parking')}
-            className="group bg-white border-2 border-purple-200 rounded-2xl p-4 transition-all duration-300 hover:border-purple-300 hover:shadow-lg hover:bg-purple-50">
-            <div className="flex flex-col items-center text-center space-y-2">
-              <div className="w-16 h-16 bg-purple-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                🚗
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-gray-900">주차장</h4>
-                <p className="text-xs text-gray-600">지하/야외</p>
-              </div>
-            </div>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/map')}
-            className="group bg-white border-2 border-blue-200 rounded-2xl p-4 transition-all duration-300 hover:border-blue-300 hover:shadow-lg hover:bg-blue-50">
-            <div className="flex flex-col items-center text-center space-y-2">
-              <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                🗺️
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-gray-900">지도</h4>
-                <p className="text-xs text-gray-600">전체 안내</p>
-              </div>
-            </div>
-          </button>
-        </div>
-      </section>
-
       {/* 다음 예약 관련 액션 */}
       <section className="mb-8">
         {nextAppointment && (
@@ -354,17 +299,6 @@ export default function FinishedScreen({ taggedLocation }) {
             <h3 className="text-xl font-bold mb-2">모든 검사가 완료되었습니다</h3>
             <p className="text-slate-300">안전한 귀가를 위해 주의사항을 확인하세요</p>
           </div>
-          
-          <button 
-            onClick={() => navigate('/')}
-            className="w-full group bg-white text-slate-900 rounded-xl py-4 px-6 font-bold text-lg 
-                     hover:bg-gray-100 transition-all duration-300 shadow-md hover:shadow-lg 
-                     flex items-center justify-center gap-2">
-            처음으로 돌아가기
-            <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-            </svg>
-          </button>
         </div>
       </section>
       

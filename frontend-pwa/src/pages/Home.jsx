@@ -13,7 +13,6 @@ import UnregisteredScreen from '../components/screens/UnregisteredScreen';
 import ArrivedScreen from '../components/screens/ArrivedScreen';
 import RegisteredScreen from '../components/screens/RegisteredScreen';
 import WaitingScreen from '../components/screens/WaitingScreen';
-import CalledScreen from '../components/screens/CalledScreen';
 import PaymentScreen from '../components/screens/PaymentScreen';
 import FinishedScreen from '../components/screens/FinishedScreen';
 
