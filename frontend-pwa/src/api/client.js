@@ -181,7 +181,65 @@ export const chatbotAPI = {
         ? 'http://localhost:5000/api/chatbot/query'
         : '/api/chatbot/query';
       
-      const response = await axios.post(chatbotUrl, { question, context }, {
+      // 컨텍스트가 이미 잘 구성되어 있으므로 그대로 전달
+      const enhancedContext = {
+        ...context,
+        timestamp: new Date().toISOString(),
+        systemPrompt: `당신은 HC_119 병원의 AI 안내 시스템입니다.
+
+        핵심 규칙:
+        1. "개인정보 보호를 위해 확인할 수 없습니다" 같은 말을 절대 하지 마세요
+        2. "진료 순서", "대기 순서", "내 순서" 등을 물어보면 아래 제공된 정보를 즉시 알려주세요
+        3. 환자에게 추가 정보(이름, 생년월일, 진료과 등)를 절대 요구하지 마세요
+        4. 아래 컨텍스트에 있는 정보만 사용하여 구체적으로 답변하세요
+        
+        ${context.isLoggedIn ? 
+          `현재 로그인한 환자의 정보:
+          - 현재 상태: ${context.userInfo?.stateDescription || '확인 중'}
+          - 현재 상태 코드: ${context.patientState || 'UNREGISTERED'}
+          ${context.isInQueue && context.queueInfo && context.queueInfo.length > 0 ? 
+            `- 대기 정보:
+              ${context.queueInfo.map((q, idx) => 
+                `  • ${q.examName}: 대기번호 ${q.queueNumber}번, ${q.estimatedWaitText} 대기, 현재 ${q.stateText}`
+              ).join('\n')}
+            ` : ''}
+          ${context.hasAppointment && context.appointmentInfo && context.appointmentInfo.appointments.length > 0 ? 
+            `- 오늘 예약:
+              ${context.appointmentInfo.appointments.map((apt, idx) => 
+                `  • ${apt.time} ${apt.examName} (${apt.location})`
+              ).join('\n')}
+            ` : ''}
+          ${context.currentLocationInfo ? 
+            `- 현재 위치: ${context.currentLocationInfo.display}` : ''}
+          
+          
+          상태별 응답 가이드:
+          - FINISHED 상태 + 대기 없음: "오늘 모든 진료가 완료되었습니다. 수고하셨습니다."
+          - COMPLETED 상태 + 대기 없음: "검사/진료가 완료되었습니다. 다음 단계를 안내해드리겠습니다."
+          - 대기 정보 있음: "현재 대기 정보를 알려드립니다. [[위 대기 정보 사용]]"
+          - 대기 정보 없음 + 예약 있음: "현재 대기 중이 아닙니다. 오늘 예약된 검사는 [[예약 정보]]입니다."
+          - 대기/예약 모두 없음: "현재 대기 중인 검사나 예약된 진료가 없습니다."
+          
+          절대 하지 말아야 할 답변:
+          - "개인정보 보호를 위해..."
+          - "진료 순서는 확인할 수 없습니다"
+          - "추가 정보가 필요합니다"
+          - "병원 직원에게 문의하세요"
+          - 없는 정보를 만들어내지 마세요
+          
+          중요: 컨텍스트에 정보가 없으면 "없다"고 명확히 말하세요. 거짓 정보를 만들지 마세요.` 
+          : 
+          `비로그인 사용자입니다.
+          
+          예시 응답:
+          - 질문: "진료 순서 알려주세요"
+          - 답변: "대기 순서 확인을 위해서는 로그인이 필요합니다. 로그인하시거나 본관 1층 안내데스크에서 도움을 받으실 수 있습니다."
+          
+          병원 시설 정보는 제공 가능합니다.`
+        }`
+      };
+      
+      const response = await axios.post(chatbotUrl, { question, context: enhancedContext }, {
         headers: {
           'Content-Type': 'application/json',
         },

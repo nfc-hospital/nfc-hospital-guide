@@ -1,0 +1,193 @@
+/* 검사 준비사항 체크리스트 전용 스타일 */
+
+/* 체크박스 애니메이션 */
+@keyframes check-bounce {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(0.9);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 진행률 바 애니메이션 */
+@keyframes progress-fill {
+  from {
+    width: 0;
+  }
+}
+
+/* 경고 펄스 애니메이션 */
+@keyframes warning-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* 체크 완료 애니메이션 */
+.check-complete {
+  animation: check-bounce 0.4s ease-out;
+}
+
+/* 진행률 바 부드러운 전환 */
+.progress-bar {
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 경고 아이템 강조 */
+.warning-item {
+  animation: warning-pulse 2s infinite;
+}
+
+/* 터치 피드백 향상 */
+.touch-target {
+  position: relative;
+  overflow: hidden;
+}
+
+.touch-target::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.05);
+  transform: translate(-50%, -50%);
+  transition: width 0.3s, height 0.3s;
+}
+
+.touch-target:active::after {
+  width: 100%;
+  height: 100%;
+}
+
+/* 고령자 친화적 포커스 스타일 */
+.focus-visible:focus {
+  outline: 3px solid #2563EB;
+  outline-offset: 2px;
+}
+
+/* 스크롤 가능 영역 표시 */
+.scrollable-hint {
+  position: relative;
+}
+
+.scrollable-hint::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.9));
+  pointer-events: none;
+}
+
+/* 완료 상태 전환 애니메이션 */
+.completion-transition {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 모달 백드롭 애니메이션 */
+@keyframes modal-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 모달 콘텐츠 애니메이션 */
+@keyframes modal-content-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-backdrop {
+  animation: modal-backdrop-in 0.3s ease-out;
+}
+
+.modal-content {
+  animation: modal-content-in 0.3s ease-out;
+}
+
+/* 카드 호버 효과 */
+.exam-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.exam-card:hover {
+  transform: translateY(-2px);
+}
+
+/* 텍스트 가독성 향상 */
+.enhanced-readability {
+  letter-spacing: 0.025em;
+  word-spacing: 0.1em;
+  line-height: 1.8;
+}
+
+/* 버튼 활성화 애니메이션 */
+@keyframes button-activate {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.button-press {
+  animation: button-activate 0.2s ease-out;
+}
+
+/* 성공 체크마크 그리기 애니메이션 */
+@keyframes draw-check {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.check-draw {
+  stroke-dasharray: 100;
+  animation: draw-check 0.3s ease-out forwards;
+}
+
+/* 페이드인 애니메이션 */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

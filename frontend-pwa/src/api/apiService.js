@@ -128,7 +128,12 @@ const apiService = {
 
   // 검사 준비사항 조회
   getExamPreparation: async (appointmentId) => {
-    return api.get(`/appointments/${appointmentId}/preparation`);
+    return api.get(`/appointments/${appointmentId}/preparation/`);
+  },
+
+  // 검사 후 주의사항 조회
+  getExamPostCareInstructions: async (examId) => {
+    return api.get(`/appointments/exams/${examId}/post-care-instructions/`);
   },
 
   // 진료 완료 처리
@@ -202,10 +207,13 @@ const apiService = {
 
   // 예약 관련 (appointmentAPI 래핑)
   appointments: appointmentAPI,
+  getTodaysAppointments: () => appointmentAPI.getTodaysAppointments(),
 
   // 대기열 관련 (queueAPI 래핑 + 추가 기능)
   queue: {
     ...queueAPI,
+    // 내 현재 대기열 상태 조회
+    getMyQueueStatus: () => queueAPI.getMyQueue(),
     // 특정 검사의 대기열 현황 조회
     getQueueByExam: async (examId) => {
       try {

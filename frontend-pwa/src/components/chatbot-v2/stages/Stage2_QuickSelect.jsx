@@ -12,12 +12,12 @@ const Stage2_QuickSelect = ({
   const inputRef = useRef(null);
   
   const quickQuestions = [
-    { icon: '📍', text: '검사실 위치', question: '검사실이 어디에 있나요?' },
-    { icon: '⏰', text: '대기 시간', question: '얼마나 기다려야 하나요?' },
-    { icon: '📋', text: '준비사항', question: '검사 준비사항이 뭔가요?' },
-    { icon: '💊', text: '약국 위치', question: '약은 어디서 받나요?' },
-    { icon: '🚗', text: '주차 안내', question: '주차는 어디에 하나요?' },
-    { icon: '🚻', text: '화장실', question: '화장실이 어디에 있나요?' }
+    { icon: '⏰', text: '대기 시간', question: '지금 내 대기 순서와 예상 시간이 궁금합니다' },
+    { icon: '📋', text: '검사 준비사항', question: '오늘 받을 검사의 준비사항을 알려주세요' },
+    { icon: '🏥', text: '진료 순서', question: '오늘 진료 순서를 알려주세요' },
+    { icon: '🚺', text: '화장실 위치', question: '가장 가까운 화장실이 어디에 있나요?' },
+    { icon: '☕', text: '편의시설', question: '병원 내 카페나 편의점이 있나요?' },
+    { icon: '📞', text: '병원 연락처', question: '병원 대표번호와 진료과 연락처를 알려주세요' }
   ];
 
   useEffect(() => {
@@ -62,17 +62,35 @@ const Stage2_QuickSelect = ({
   };
 
   return (
-    <div className={`
-      quick-select-stage2
-      ${elderlyMode ? 'elderly-mode' : ''}
-      ${isExpanding ? 'expanding' : 'expanded'}
-    `}
-    style={{
-      position: 'fixed',
-      bottom: `${position.y}px`,
-      right: `${position.x}px`
-    }}>
-      <div className="popup-header">
+    <>
+      {/* 배경 오버레이 */}
+      <div 
+        className="chatbot-overlay"
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.3)',
+          backdropFilter: 'blur(2px)',
+          zIndex: 9999,
+          animation: 'fadeIn 0.3s ease-out'
+        }}
+      />
+      
+      <div className={`
+        quick-select-stage2
+        ${elderlyMode ? 'elderly-mode' : ''}
+        ${isExpanding ? 'expanding' : 'expanded'}
+      `}
+      style={{
+        position: 'fixed',
+        bottom: `${position.y}px`,
+        right: `${position.x}px`
+      }}>
+        <div className="popup-header">
         <h2>무엇을 도와드릴까요?</h2>
         <button className="close-btn" onClick={onClose} aria-label="닫기">✕</button>
       </div>
@@ -123,6 +141,7 @@ const Stage2_QuickSelect = ({
         </div>
       </div>
     </div>
+    </>
   );
 };
 

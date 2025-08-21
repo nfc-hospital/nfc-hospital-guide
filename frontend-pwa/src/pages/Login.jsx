@@ -11,6 +11,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState(null);
+  const [rememberMe, setRememberMe] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -65,8 +66,8 @@ export default function Login() {
         throw new Error('전화번호와 생년월일을 정확히 입력해주세요.');
       }
 
-      // ✅ 새로운 AuthContext에 맞게 수정
-      await login(phoneNumber, birthDate);
+      // ✅ 새로운 AuthContext에 맞게 수정 - rememberMe 추가
+      await login(phoneNumber, birthDate, rememberMe);
       
       const from = location.state?.from?.pathname || '/home';
       navigate(from, { replace: true });
@@ -171,7 +172,6 @@ export default function Login() {
                     disabled={isLoading}
                   />
                 </div>
-                <p className="mt-2 text-sm text-gray-500">휴대폰 번호를 입력하세요 (예: 010-1234-5678)</p>
               </div>
 
               {/* 생년월일 입력 */}
@@ -201,7 +201,6 @@ export default function Login() {
                     disabled={isLoading}
                   />
                 </div>
-                <p className="mt-2 text-sm text-gray-500">주민번호 앞 6자리 (예: 990101)</p>
               </div>
             </div>
 
@@ -216,6 +215,24 @@ export default function Login() {
                 </div>
               </div>
             )}
+
+            {/* 자동 로그인 체크박스 */}
+            <div className="flex items-center justify-between mb-4">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                />
+                <span className="ml-3 text-base font-medium text-gray-700">
+                  자동 로그인
+                </span>
+              </label>
+              <span className="text-sm text-gray-500">
+                (최대 30일간 유지)
+              </span>
+            </div>
 
             {/* 인증하기 버튼 */}
             <button

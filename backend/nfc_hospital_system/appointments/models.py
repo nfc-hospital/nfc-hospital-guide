@@ -408,6 +408,111 @@ class ExamResult(models.Model):
         super().save(*args, **kwargs)
 
 
+class ExamPostCareInstruction(models.Model):
+    """
+    검사 후 주의사항을 관리하는 모델
+    각 검사별로 필요한 검사 후 주의사항 안내
+    """
+
+    # 주의사항 타입 선택지
+    INSTRUCTION_TYPE_CHOICES = [
+        ('general', '일반 주의사항'),
+        ('medication', '약물 복용'),
+        ('diet', '식이 주의사항'),
+        ('activity', '활동 제한'),
+        ('symptoms', '증상 관찰'),
+        ('followup', '추후 관리'),
+        ('side_effects', '부작용 관찰'),
+        ('wound_care', '상처 관리'),
+        ('hydration', '수분 섭취'),
+        ('rest', '휴식'),
+        ('other', '기타'),
+    ]
+
+    # 우선순위 선택지
+    PRIORITY_CHOICES = [
+        ('high', '중요'),
+        ('medium', '보통'),
+        ('low', '일반'),
+    ]
+
+    instruction_id = models.AutoField(
+        primary_key=True,
+        verbose_name='주의사항 ID'
+    )
+
+    exam = models.ForeignKey(
+        Exam,
+        on_delete=models.CASCADE,
+        related_name='post_care_instructions',
+        verbose_name='검사',
+        to_field='exam_id',
+        db_column="exam_id"
+    )
+
+    type = models.CharField(
+        max_length=50,
+        choices=INSTRUCTION_TYPE_CHOICES,
+        default='general',
+        verbose_name='주의사항 타입',
+        help_text='예: 약물 복용, 식이 주의사항, 활동 제한 등'
+    )
+
+    title = models.CharField(
+        max_length=200,
+        verbose_name='주의사항 제목',
+        help_text='예: 처방 약물 복용법, 검사 후 수분 섭취'
+    )
+
+    description = models.TextField(
+        verbose_name='상세 설명'
+    )
+
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='medium',
+        verbose_name='우선순위',
+        help_text='환자에게 강조해야 할 중요도'
+    )
+
+    duration_hours = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name='주의 기간 (시간)',
+        help_text='주의사항을 지켜야 하는 시간 (예: 24시간, 48시간). null이면 기간 제한 없음'
+    )
+
+    icon = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        verbose_name='아이콘',
+        help_text='주의사항을 나타내는 아이콘 (예: 💊, 🚫, ⚠️)'
+    )
+
+    is_critical = models.BooleanField(
+        default=False,
+        verbose_name='응급 주의사항',
+        help_text='응급실 방문이 필요할 수 있는 중요한 주의사항인지 여부'
+    )
+
+    class Meta:
+        db_table = 'exam_post_care_instructions'
+        verbose_name = '검사 후 주의사항'
+        verbose_name_plural = '검사 후 주의사항 목록'
+        ordering = ['exam', '-priority', 'title']
+        indexes = [
+            models.Index(fields=['exam', 'priority']),
+            models.Index(fields=['exam', 'type']),
+            models.Index(fields=['is_critical']),
+        ]
+
+    def __str__(self):
+        priority_display = self.get_priority_display()
+        return f"{self.exam.title} - {self.get_type_display()} - {self.title} ({priority_display})"
+
+
 class AppointmentHistory(models.Model):
     """
     예약 변경 이력을 관리하는 모델

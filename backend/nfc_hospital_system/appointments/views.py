@@ -362,3 +362,40 @@ class TodayScheduleView(APIView):
                 base_action = f"{base_action} 다음 검사: {time_str} {next_appointment.exam.title} ({location})"
         
         return base_action
+
+
+class AppointmentPreparationView(APIView):
+    """
+    특정 예약의 검사 준비사항 조회
+    GET /api/v1/appointments/{appointment_id}/preparation
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, appointment_id):
+        """예약에 해당하는 검사의 준비사항 반환"""
+        try:
+            # 환자 본인의 예약인지 확인
+            appointment = Appointment.objects.select_related('exam').get(
+                appointment_id=appointment_id,
+                user=request.user
+            )
+        except Appointment.DoesNotExist:
+            return Response(
+                {"error": "예약을 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 검사의 준비사항 조회
+        preparations = appointment.exam.preparations.all().order_by('-is_required', 'type', 'title')
+        serializer = ExamPreparationSerializer(preparations, many=True)
+        
+        return Response({
+            "success": True,
+            "data": {
+                "appointment_id": appointment_id,
+                "exam_id": appointment.exam.exam_id,
+                "exam_title": appointment.exam.title,
+                "scheduled_at": appointment.scheduled_at,
+                "preparations": serializer.data
+            }
+        })

@@ -23,6 +23,7 @@ import WebSocketTest from './components/WebSocketTest';
 import CSRFStatus from './components/dev/CSRFStatus';
 // Admin pages - AdminHomeScreen으로 통합
 import AdminHomeScreen from './components/screens/AdminHomeScreen';
+import TestDataManager from './pages/admin/TestDataManager';
 import ChatbotTest from './pages/ChatbotTest';
 import MapTest from './pages/MapTest';
 import MapEditor from './pages/MapEditor';
@@ -142,6 +143,11 @@ function AppContent() {
             <Route path="/dashboard/*" element={
               <PrivateRoute>
                 <AdminHomeScreen />
+              </PrivateRoute>
+            } />
+            <Route path="/test" element={
+              <PrivateRoute>
+                <TestDataManager />
               </PrivateRoute>
             } />
             
