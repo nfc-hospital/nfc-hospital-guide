@@ -685,6 +685,56 @@ NFC 태그는 EMR 시스템을 직접 변경하지 않으며, 가상 DB의 정�
 | 네이버 캘린더 연동 | POST | `/api/v1/integration/calendar/naver` | 네이버 캘린더 일정 등록 |
 | Deep Link 처리 | GET | `/api/v1/integration/deeplink/{hospitalApp}` | 병원 앱 Deep Link 자동 실행 |
 
+## 🧪 시연용 테스트 API (Test Demonstration)
+
+시연 및 데모를 위한 가상 EMR 테스트 환경 API입니다. 실제 EMR 시스템과 연동하지 않고 독립적으로 동작합니다.
+
+| 이름 | 타입 | URL | 설명 | Role |
+| --- | --- | --- | --- | --- |
+| 테스트 환자 목록 조회 | GET | `/api/v1/test/patients` | 시연용 테스트 환자 목록 및 상태 조회 | Public |
+| 환자 상태 변경 | PUT | `/api/v1/test/patient-state` | 특정 환자의 상태 수동 변경 (9단계 상태) | Public |
+| 큐 상태 변경 | PUT | `/api/v1/test/queue-state` | 큐 상태 변경 시 환자 상태 자동 연동 | Public |
+| 환자 흐름 시뮬레이션 | POST | `/api/v1/test/simulate` | 환자 상태 자동 진행 시뮬레이션 | Public |
+| 모든 환자 초기화 | POST | `/api/v1/test/reset` | 모든 테스트 환자 상태를 REGISTERED로 초기화 | Public |
+| 사용 가능한 검사 목록 | GET | `/api/v1/test/available-exams` | 환자에게 추가 가능한 검사/진료 목록 조회 | Public |
+| 환자에게 검사 추가 | POST | `/api/v1/test/add-exam` | 특정 환자에게 검사/진료 추가 (오늘/내일/어제) | Public |
+
+### 테스트 API 사용 예시
+
+#### 환자 상태 변경
+```bash
+PUT /api/v1/test/patient-state
+Content-Type: application/json
+
+{
+  "user_id": "e79a0b74-3aba-4149-9f74-0bb5791a6ee6",
+  "new_state": "WAITING"
+}
+```
+
+#### 큐 상태 변경 (환자 상태 자동 연동)
+```bash
+PUT /api/v1/test/queue-state
+Content-Type: application/json
+
+{
+  "queue_id": "queue-001",
+  "new_state": "called"
+}
+```
+
+#### 환자에게 검사 추가
+```bash
+POST /api/v1/test/add-exam
+Content-Type: application/json
+
+{
+  "user_id": "e79a0b74-3aba-4149-9f74-0bb5791a6ee6",
+  "exam_id": "exam-xray-001",
+  "scheduled_for": "today"  // "today", "tomorrow", "yesterday"
+}
+```
+
 ## 🤖 AI 예측 모델 (AI Models)
 
 | 이름 | 타입 | URL | 설명 |

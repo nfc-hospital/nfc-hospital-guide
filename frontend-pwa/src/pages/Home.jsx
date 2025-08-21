@@ -4,6 +4,7 @@ import useJourneyStore from '../store/journeyStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import AdminHomeScreen from '../components/screens/AdminHomeScreen';
 import { api } from '../api/client';
+import { getFacilityByName } from '../data/facilityManagement';
 
 // 비로그인 사용자용 컴포넌트
 import PublicGuide from '../components/PublicGuide';
@@ -43,14 +44,33 @@ const CompletedScreen = ({ taggedLocation, upcoming_tasks, completed_tasks }) =>
   const currentStep = todaySchedule.findIndex(s => s.status === 'completed');
   const actualCurrentStep = currentStep === -1 ? 0 : currentStep;
   
+  // 다음 검사실 정보 찾기
+  const completedCount = todaySchedule.filter(s => s.status === 'completed').length;
+  const nextExam = completedCount < todaysAppointments.length ? 
+    todaysAppointments[completedCount]?.exam : null;
+  
+  // facilityManagement에서 시설 정보 찾기
+  const facilityData = nextExam ? getFacilityByName(nextExam.title) : null;
+  
+  const locationInfo = nextExam ? {
+    name: nextExam.title,
+    building: nextExam.building || '본관',
+    floor: `${nextExam.floor || '2'}층`,
+    room: nextExam.room,
+    department: nextExam.department,
+    directions: '다음 검사실로 이동해주세요',
+    mapFile: facilityData?.mapFile || 'main_1f.svg',
+    svgId: facilityData?.svgId
+  } : null;
+  
   return (
     <FormatATemplate
       screenType="completed"
       currentStep={actualCurrentStep}
       totalSteps={todaySchedule.length || 7}
-      nextAction="다음 검사실로 이동하기"
+      nextAction={null} // 자동 생성되도록 null 전달
       waitingInfo={null}
-      locationInfo={null}
+      locationInfo={locationInfo}
       todaySchedule={todaySchedule}
       queueData={null}
       taggedLocation={taggedLocation}

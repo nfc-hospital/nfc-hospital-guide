@@ -48,18 +48,30 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
     estimatedTime: activeQueue.estimated_wait_time || 15
   } : null;
   
-  // 위치 정보 - 첫 번째 검사실
-  const firstExam = todaysAppointments?.[0]?.exam;
+  // 다음에 갈 검사실 정보 찾기
+  // REGISTERED 상태에서는 첫 번째 검사실로, COMPLETED 상태에서는 다음 검사실로
+  let nextExam = null;
+  
+  if (patientState === 'REGISTERED' || (patientState === 'COMPLETED' && actualCurrentStep === -1)) {
+    // 첫 번째 검사실
+    nextExam = todaysAppointments?.[0]?.exam;
+  } else if (patientState === 'COMPLETED' && actualCurrentStep >= 0) {
+    // 현재 검사가 완료되었으면 다음 검사 찾기
+    const completedCount = todaySchedule.filter(s => s.status === 'completed').length;
+    if (completedCount < todaySchedule.length) {
+      nextExam = todaysAppointments?.[completedCount]?.exam;
+    }
+  }
   
   // facilityManagement에서 시설 정보 찾기
-  const facilityData = firstExam ? getFacilityByName(firstExam.title) : null;
+  const facilityData = nextExam ? getFacilityByName(nextExam.title) : null;
   
-  const locationInfo = firstExam ? {
-    name: firstExam.title,
-    building: firstExam.building || '본관',
-    floor: `${firstExam.floor || '2'}층`,
-    room: firstExam.room,
-    department: firstExam.department,
+  const locationInfo = nextExam ? {
+    name: nextExam.title,
+    building: nextExam.building || '본관',
+    floor: `${nextExam.floor || '2'}층`,
+    room: nextExam.room,
+    department: nextExam.department,
     directions: '엘리베이터를 타고 이동 후 안내 표지판을 따라가세요',
     mapFile: facilityData?.mapFile || 'main_1f.svg', // 지도 파일 추가
     svgId: facilityData?.svgId // SVG 요소 ID 추가

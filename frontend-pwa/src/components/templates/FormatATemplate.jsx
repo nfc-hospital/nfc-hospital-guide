@@ -10,7 +10,7 @@ const getNextActionText = (patientState, currentExam, taggedLocation, nextLocati
   // 상태별 기본 행동
   const stateActions = {
     'ARRIVED': '원무과에서 접수하기',
-    'REGISTERED': '첫 번째 검사실로 이동하기',
+    'REGISTERED': '검사실로 이동하기',
     'WAITING': '대기실에서 순서 기다리기',
     'CALLED': '검사실로 입장하기',
     'ONGOING': '검사 진행 중',
@@ -19,29 +19,32 @@ const getNextActionText = (patientState, currentExam, taggedLocation, nextLocati
     'FINISHED': '귀가하기'
   };
 
-  // 현재 위치와 목적지가 있는 경우 구체적인 안내
-  if (taggedLocation && nextLocation) {
-    const currentPlace = taggedLocation.description || `${taggedLocation.building} ${taggedLocation.floor}층`;
+  // 목적지가 있는 경우 구체적인 안내
+  if (nextLocation) {
     const destination = nextLocation.name || nextLocation.room || '목적지';
     
     if (patientState === 'REGISTERED' || patientState === 'COMPLETED') {
-      return `${destination}(으)로 이동하기`;
-    }
-    if (patientState === 'WAITING') {
-      return `${destination} 대기실에서 기다리기`;
+      return `${destination}실로 이동하기`;
     }
   }
 
   // 현재 검사 정보가 있는 경우
   if (currentExam) {
+    const examTitle = currentExam.title || '';
+    
     if (patientState === 'WAITING') {
-      return `${currentExam.title} 대기 중 (${currentExam.room})`;
+      // 태그 위치가 있으면 이미 도착한 것으로 판단
+      if (taggedLocation) {
+        return `${examTitle} 대기 중`;
+      } else {
+        return `${examTitle} 대기실로 이동하기`;
+      }
     }
     if (patientState === 'CALLED') {
       return `${currentExam.room}으로 입장하기`;
     }
     if (patientState === 'ONGOING') {
-      return `${currentExam.title} 진행 중`;
+      return `${examTitle} 진행 중`;
     }
   }
 
@@ -361,8 +364,8 @@ const FormatATemplate = ({
                 <div className="flex flex-col items-end flex-shrink-0">
                   <div className="text-white/70 text-xs sm:text-sm">진행</div>
                   <div className="text-white flex items-baseline gap-0.5">
-                    <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{getVisibleSteps().currentStep + 1}</span>
-                    <span className="text-sm sm:text-base lg:text-xl text-white/70">/{getVisibleSteps().totalSteps}</span>
+                    <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{todaySchedule.filter(s => s.status === 'completed').length}</span>
+                    <span className="text-sm sm:text-base lg:text-xl text-white/70">/{todaySchedule.length}</span>
                   </div>
                 </div>
               </div>

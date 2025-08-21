@@ -137,10 +137,18 @@ export default function Login() {
 
           {/* PASS 인증 타이틀 */}
           <div className="text-center">
-            <h3 className="text-2xl font-bold text-gray-900">
+            <h3 className="text-4xl font-bold text-gray-900">
               PASS 인증
             </h3>
           </div>
+
+          {/* 안전한 인증 표시 */}
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+              <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <span>안전한 256bit 암호화 인증</span>
+            </div>
 
           {/* 휴대폰 정보 입력 폼 */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -223,14 +231,14 @@ export default function Login() {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                  className="w-6 h-6 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                 />
-                <span className="ml-3 text-base font-medium text-gray-700">
+                <span className="ml-3 text-lg font-medium text-gray-700">
                   자동 로그인
                 </span>
               </label>
-              <span className="text-sm text-gray-500">
-                (최대 30일간 유지)
+              <span className="text-sm text-gray-400">
+                최대 30일간 유지
               </span>
             </div>
 
@@ -253,14 +261,6 @@ export default function Login() {
               )}
             </button>
 
-            {/* 안전한 인증 표시 */}
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-              <svg className="h-4 w-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <span>안전한 256bit 암호화 인증</span>
-            </div>
-
             {/* 시연용 안내 */}
             <div className="bg-amber-50 rounded-2xl p-4 border border-amber-200">
               <div className="flex items-start">
@@ -269,7 +269,7 @@ export default function Login() {
                 </svg>
                 <div className="ml-3">
                   <p className="text-sm font-bold text-amber-800">
-                    ※ 실제 PASS 인증이 아닌 시연용 구현입니다
+                    실제 PASS 인증이 아닌 시연용 구현입니다
                   </p>
                 </div>
               </div>
