@@ -11,6 +11,8 @@ const TestDataManager = () => {
   const [availableExams, setAvailableExams] = useState([]);
   const [showAddExamModal, setShowAddExamModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [showAllExamsModal, setShowAllExamsModal] = useState(false);
+  const [selectedPatientForAllExams, setSelectedPatientForAllExams] = useState(null);
 
   // 환자 상태 색상 매핑
   const stateColors = {
@@ -216,29 +218,25 @@ const TestDataManager = () => {
         {/* 테이블 컨테이너 */}
         <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-gray-100">
           <div className="overflow-x-auto">
-            <table className="min-w-full table-fixed" style={{minWidth: '1320px'}}>
+            <table className="min-w-full table-fixed" style={{minWidth: '1200px'}}>
               <thead className="bg-gray-50/50">
                 <tr>
-                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{width: '180px'}}>
+                  {/* 환자 정보 그룹 */}
+                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-r border-gray-200" style={{width: '180px'}}>
                     환자 정보
                   </th>
-                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{width: '200px'}}>
-                    검사/진료
-                  </th>
-                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{width: '120px'}}>
+                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-r border-gray-200" style={{width: '100px'}}>
                     환자 상태
                   </th>
-                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{width: '300px'}}>
-                    큐 상태 관리
+                  
+                  {/* 대기열 및 현재 검사 그룹 */}
+                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider border-r border-gray-200" style={{width: '420px'}}>
+                    대기열 및 현재 검사
                   </th>
-                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{width: '140px'}}>
-                    상태 변경
-                  </th>
-                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{width: '160px'}}>
-                    시뮬레이션
-                  </th>
-                  <th className="px-6 py-5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{width: '120px'}}>
-                    검사 추가
+                  
+                  {/* 액션 그룹 */}
+                  <th className="px-6 py-5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider" style={{width: '500px'}}>
+                    관리 도구
                   </th>
                 </tr>
               </thead>
@@ -246,7 +244,7 @@ const TestDataManager = () => {
               {patients.map((patient, index) => (
                 <tr key={patient.user_id} className="hover:bg-gray-50/50 transition-colors duration-150">
                   {/* 환자 정보 */}
-                  <td className="px-6 py-5">
+                  <td className="px-6 py-5 border-r border-gray-100">
                     <div className="flex items-center space-x-3">
                       <div className="w-10 h-10 bg-gradient-to-br from-indigo-400 to-indigo-600 rounded-full flex items-center justify-center text-white font-medium text-sm shadow-sm">
                         {patient.name.charAt(0)}
@@ -260,49 +258,49 @@ const TestDataManager = () => {
                     </div>
                   </td>
                   
-                  {/* 검사/진료 */}
-                  <td className="px-6 py-5">
-                    {patient.current_exam ? (
-                      <div className="space-y-1">
-                        <div className="text-sm font-medium text-gray-900">
-                          {patient.current_exam.title}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {patient.current_exam.department}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-sm text-gray-400">검사 없음</span>
-                    )}
-                  </td>
-                  
                   {/* 환자 상태 */}
-                  <td className="px-6 py-5">
+                  <td className="px-6 py-5 border-r border-gray-100">
                     <span className={`px-3 py-1.5 inline-flex text-xs leading-5 font-medium rounded-full ${stateColors[patient.current_state]}`}>
                       {patient.current_state}
                     </span>
                   </td>
                   
-                  {/* 큐 상태 관리 */}
-                  <td className="px-6 py-5">
-                    {patient.current_queue ? (
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">
-                            대기번호 #{patient.current_queue.queue_number}
-                          </span>
-                          <span className="px-2.5 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded-md">
-                            {patient.current_queue.state}
-                          </span>
-                        </div>
-                        
-                        {patient.current_queue.queue_id && (
-                          <div className="space-y-2">
-                            <div className="text-xs text-gray-500">큐 상태 (→ 환자 상태 자동 연동)</div>
-                            <div className="grid grid-cols-4 gap-2">
+                  {/* 대기열 및 현재 검사 통합 */}
+                  <td className="px-6 py-5 border-r border-gray-100">
+                    <div className="space-y-3">
+                      {/* 현재 대기열 상태 */}
+                      {patient.current_queue ? (
+                        <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <span className="text-sm font-semibold text-indigo-900">
+                                현재 대기: {patient.current_queue.exam_title}
+                              </span>
+                              <div className="flex items-center gap-3 mt-1">
+                                <span className="text-sm font-medium text-gray-700">
+                                  대기번호 #{patient.current_queue.queue_number}
+                                </span>
+                                <span className="px-2.5 py-1 text-xs font-medium bg-white text-indigo-700 rounded-md border border-indigo-300">
+                                  {patient.current_queue.state}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => {
+                                setSelectedPatientForAllExams(patient);
+                                setShowAllExamsModal(true);
+                              }}
+                              className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                            >
+                              전체 검사 ({patient.appointments?.length || 0}개)
+                            </button>
+                          </div>
+                          
+                          {patient.current_queue.queue_id && (
+                            <div className="flex gap-2 mt-2">
                               <button
                                 onClick={() => updateQueueState(patient.current_queue.queue_id, 'waiting')}
-                                className={`px-2 py-1.5 text-xs rounded-md transition-all duration-200 font-medium ${
+                                className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
                                   patient.current_queue.state === 'waiting' 
                                     ? 'bg-amber-500 text-white' 
                                     : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
@@ -312,7 +310,7 @@ const TestDataManager = () => {
                               </button>
                               <button
                                 onClick={() => updateQueueState(patient.current_queue.queue_id, 'called')}
-                                className={`px-2 py-1.5 text-xs rounded-md transition-all duration-200 font-medium ${
+                                className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
                                   patient.current_queue.state === 'called' 
                                     ? 'bg-green-500 text-white' 
                                     : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
@@ -322,7 +320,7 @@ const TestDataManager = () => {
                               </button>
                               <button
                                 onClick={() => updateQueueState(patient.current_queue.queue_id, 'ongoing')}
-                                className={`px-2 py-1.5 text-xs rounded-md transition-all duration-200 font-medium ${
+                                className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
                                   patient.current_queue.state === 'ongoing' 
                                     ? 'bg-blue-500 text-white' 
                                     : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
@@ -332,7 +330,7 @@ const TestDataManager = () => {
                               </button>
                               <button
                                 onClick={() => updateQueueState(patient.current_queue.queue_id, 'completed')}
-                                className={`px-2 py-1.5 text-xs rounded-md transition-all duration-200 font-medium ${
+                                className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
                                   patient.current_queue.state === 'completed' 
                                     ? 'bg-gray-500 text-white' 
                                     : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
@@ -341,68 +339,99 @@ const TestDataManager = () => {
                                 완료
                               </button>
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center">
-                        <span className="text-sm text-gray-400">큐 없음</span>
-                      </div>
-                    )}
-                  </td>
-                  
-                  {/* 상태 변경 */}
-                  <td className="px-6 py-5">
-                    <div className="flex flex-col gap-2">
-                      {patient.scenario?.previous_state && (
-                        <button
-                          onClick={() => updatePatientState(patient.user_id, patient.scenario.previous_state)}
-                          disabled={simulating.has(patient.user_id)}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
-                            simulating.has(patient.user_id)
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                          }`}
-                        >
-                          ← 이전
-                        </button>
-                      )}
-                      
-                      {patient.scenario?.next_state && (
-                        <button
-                          onClick={() => updatePatientState(patient.user_id, patient.scenario.next_state)}
-                          disabled={simulating.has(patient.user_id)}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
-                            simulating.has(patient.user_id)
-                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                              : 'bg-indigo-500 text-white hover:bg-indigo-600'
-                          }`}
-                        >
-                          다음 →
-                        </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-400">현재 대기열 없음</span>
+                          <button
+                            onClick={() => {
+                              setSelectedPatientForAllExams(patient);
+                              setShowAllExamsModal(true);
+                            }}
+                            className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                          >
+                            전체 검사 ({patient.appointments?.length || 0}개)
+                          </button>
+                        </div>
                       )}
                     </div>
                   </td>
                   
-                  {/* 시뮬레이션 */}
+                  {/* 관리 도구 모음 */}
                   <td className="px-6 py-5">
-                    <div className="flex flex-col space-y-2">
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      {/* 상태 변경 버튼 그룹 */}
+                      <div className="flex items-center gap-1">
+                        {patient.scenario?.previous_state && (
+                          <button
+                            onClick={() => updatePatientState(patient.user_id, patient.scenario.previous_state)}
+                            disabled={simulating.has(patient.user_id)}
+                            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-200 whitespace-nowrap ${
+                              simulating.has(patient.user_id)
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            ← 이전
+                          </button>
+                        )}
+                        
+                        {patient.scenario?.next_state && (
+                          <button
+                            onClick={() => updatePatientState(patient.user_id, patient.scenario.next_state)}
+                            disabled={simulating.has(patient.user_id)}
+                            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-200 whitespace-nowrap ${
+                              simulating.has(patient.user_id)
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-indigo-500 text-white hover:bg-indigo-600'
+                            }`}
+                          >
+                            다음 →
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* 자동 시뮬레이션 */}
                       <button
                         onClick={() => simulatePatient(patient.user_id)}
                         disabled={simulating.has(patient.user_id) || patient.current_state === 'FINISHED'}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 whitespace-nowrap ${
                           simulating.has(patient.user_id) || patient.current_state === 'FINISHED'
                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                             : 'bg-blue-500 text-white hover:bg-blue-600'
                         }`}
                       >
-                        {simulating.has(patient.user_id) ? '진행중...' : '자동진행'}
+                        {simulating.has(patient.user_id) ? (
+                          <span className="flex items-center gap-1">
+                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            진행중
+                          </span>
+                        ) : '자동진행'}
                       </button>
                       
+                      {/* 검사 추가 버튼 */}
+                      <button
+                        onClick={() => {
+                          setSelectedPatient(patient);
+                          setShowAddExamModal(true);
+                        }}
+                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-green-500 text-white hover:bg-green-600 transition-all duration-200 flex items-center gap-1 whitespace-nowrap"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        검사 추가
+                      </button>
+                      
+                      {/* 상태 선택 드롭다운 */}
                       <select
                         value={patient.current_state}
                         onChange={(e) => updatePatientState(patient.user_id, e.target.value)}
-                        className="text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 w-full bg-white"
+                        className="text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white min-w-[100px]"
                         disabled={simulating.has(patient.user_id)}
                       >
                         {stateFlow.map(state => (
@@ -410,22 +439,6 @@ const TestDataManager = () => {
                         ))}
                       </select>
                     </div>
-                  </td>
-                  
-                  {/* 검사 추가 */}
-                  <td className="px-6 py-5">
-                    <button
-                      onClick={() => {
-                        setSelectedPatient(patient);
-                        setShowAddExamModal(true);
-                      }}
-                      className="px-4 py-2 text-xs font-medium rounded-md bg-green-500 text-white hover:bg-green-600 transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                      </svg>
-                      검사 추가
-                    </button>
                   </td>
                 </tr>
               ))}
@@ -442,6 +455,106 @@ const TestDataManager = () => {
           </div>
         )}
       </div>
+
+      {/* 전체 검사 목록 모달 */}
+      {showAllExamsModal && selectedPatientForAllExams && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden">
+            {/* 모달 헤더 */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-4">
+              <div className="flex justify-between items-center">
+                <div className="text-white">
+                  <h3 className="text-xl font-bold">전체 검사 목록</h3>
+                  <p className="text-indigo-100 text-sm">{selectedPatientForAllExams.name}님의 모든 예약된 검사</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAllExamsModal(false);
+                    setSelectedPatientForAllExams(null);
+                  }}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* 모달 바디 */}
+            <div className="p-6 overflow-y-auto max-h-[calc(85vh-140px)]">
+              {selectedPatientForAllExams.appointments && selectedPatientForAllExams.appointments.length > 0 ? (
+                <div className="space-y-3">
+                  {selectedPatientForAllExams.appointments.map((appt) => (
+                    <div key={appt.appointment_id} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors border border-gray-200">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h4 className="font-semibold text-gray-900 text-lg">{appt.exam.title}</h4>
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                              appt.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              appt.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {appt.status === 'completed' ? '완료' : '예약'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-gray-500">진료과:</span>
+                              <span className="ml-2 text-gray-900 font-medium">{appt.exam.department}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">위치:</span>
+                              <span className="ml-2 text-gray-900 font-medium">{appt.exam.building} {appt.exam.room}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-gray-500">예약 시간:</span>
+                              <span className="ml-2 text-gray-900 font-medium">
+                                {new Date(appt.scheduled_at).toLocaleString('ko-KR', { 
+                                  year: 'numeric',
+                                  month: 'long', 
+                                  day: 'numeric', 
+                                  hour: '2-digit', 
+                                  minute: '2-digit',
+                                  weekday: 'short'
+                                })}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">📋</div>
+                  <p className="text-gray-500 text-lg">예약된 검사가 없습니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* 모달 푸터 */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">
+                  총 {selectedPatientForAllExams.appointments?.length || 0}개의 검사
+                </span>
+                <button
+                  onClick={() => {
+                    setShowAllExamsModal(false);
+                    setSelectedPatientForAllExams(null);
+                  }}
+                  className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 검사 추가 모달 */}
       {showAddExamModal && selectedPatient && (

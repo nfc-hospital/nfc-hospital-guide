@@ -5,10 +5,25 @@ import FormatBTemplate from '../templates/FormatBTemplate';
 import apiService from '../../api/apiService';
 
 export default function FinishedScreen({ taggedLocation }) {
-  const { user, todaysAppointments = [], appointments = [] } = useJourneyStore();
+  const { user, todaysAppointments = [], appointments = [], patientState } = useJourneyStore();
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [postCareInstructions, setPostCareInstructions] = useState([]);
+  const [startTime, setStartTime] = useState(null);
+
+  // 병원 도착 시간 계산 - 첫 번째 검사 시작 시간 또는 localStorage에서 가져오기
+  useEffect(() => {
+    const savedStartTime = localStorage.getItem('hospitalArrivalTime');
+    if (savedStartTime) {
+      setStartTime(new Date(savedStartTime));
+    } else if (todaysAppointments.length > 0) {
+      // 첫 번째 예약의 시작 시간을 병원 도착 시간으로 추정
+      const firstAppointment = todaysAppointments
+        .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))[0];
+      setStartTime(new Date(firstAppointment.scheduled_at));
+      localStorage.setItem('hospitalArrivalTime', firstAppointment.scheduled_at);
+    }
+  }, [todaysAppointments]);
 
   // 완료된 검사들의 후 주의사항 가져오기
   useEffect(() => {
@@ -105,11 +120,28 @@ export default function FinishedScreen({ taggedLocation }) {
     ['completed', 'done'].includes(apt.status)
   );
   const completedCount = completedAppointments.length;
-  const totalDuration = completedAppointments
-    .reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
-  const totalCost = 80000; // 예시 비용
-
-  // completionStats 제거 - FormatBTemplate에서 처리
+  
+  // 소요 시간 계산 - 실제 경과 시간 또는 예상 시간 합계
+  let totalDuration = 0;
+  
+  if (startTime) {
+    // 실제 경과 시간 계산 (분 단위)
+    const now = new Date();
+    totalDuration = Math.round((now - startTime) / (1000 * 60));
+  } else {
+    // 예상 시간 합계
+    totalDuration = completedAppointments
+      .reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
+  }
+  
+  // 총 비용 계산 - 실제 비용 정보가 있으면 사용, 없으면 예상 비용
+  const totalCost = completedAppointments
+    .reduce((sum, apt) => {
+      const cost = apt.cost || apt.exam?.cost || '25000';
+      const numericCost = typeof cost === 'string' ? 
+        parseInt(cost.replace(/[^0-9]/g, '')) : cost;
+      return sum + numericCost;
+    }, 0);
 
   // 처방 여부 확인
   const hasPrescription = completedAppointments.some(apt => 
@@ -199,7 +231,7 @@ export default function FinishedScreen({ taggedLocation }) {
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
     id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
+    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor ? apt.exam.floor + '층' : ''} ${apt.exam?.room || ''}`.trim(),
     status: apt.status,
     description: apt.exam?.description,
     purpose: apt.exam?.description || '건강 상태 확인 및 진단',
@@ -220,7 +252,10 @@ export default function FinishedScreen({ taggedLocation }) {
       status="완료"
       nextSchedule={nextSchedule}
       summaryCards={[
-        { label: '소요시간', value: `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분` },
+        { label: '소요시간', value: totalDuration >= 60 ? 
+          `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분` : 
+          `${totalDuration}분` 
+        },
         { label: '완료', value: `${completedCount}개` }
       ]}
       todaySchedule={todaySchedule}
@@ -229,6 +264,7 @@ export default function FinishedScreen({ taggedLocation }) {
       showPaymentInfo={true}
       paymentAmount={totalCost}
       precautions={precautions}
+      patientState={user?.state || patientState || 'FINISHED'}
     >
 
       {/* 다음 예약 관련 액션 */}

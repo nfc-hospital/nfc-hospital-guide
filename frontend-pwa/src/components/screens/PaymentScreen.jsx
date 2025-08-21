@@ -14,7 +14,7 @@ export default function PaymentScreen({ taggedLocation }) {
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
     id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
+    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor ? apt.exam.floor + '층' : ''} ${apt.exam?.room || ''}`.trim(),
     status: apt.status,
     description: apt.exam?.description,
     purpose: apt.exam?.description || '건강 상태 확인 및 진단',

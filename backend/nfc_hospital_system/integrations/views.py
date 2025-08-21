@@ -179,6 +179,30 @@ def test_patient_list(request):
                         'department': ps.current_exam.department
                     }
                 
+                # 환자의 모든 예약된 검사 조회
+                from appointments.models import Appointment
+                appointments_data = []
+                try:
+                    appointments = Appointment.objects.filter(
+                        user=ps.user
+                    ).select_related('exam').order_by('scheduled_at')
+                    
+                    for appt in appointments:
+                        appointments_data.append({
+                            'appointment_id': str(appt.appointment_id),
+                            'exam': {
+                                'exam_id': str(appt.exam.exam_id),
+                                'title': appt.exam.title,
+                                'department': appt.exam.department,
+                                'room': appt.exam.room,
+                                'building': appt.exam.building
+                            },
+                            'scheduled_at': appt.scheduled_at.isoformat(),
+                            'status': appt.status
+                        })
+                except:
+                    pass  # Appointment 없어도 계속 진행
+                
                 # 환자의 Queue 상태 조회
                 from p_queue.models import Queue
                 current_queue = None
@@ -208,6 +232,7 @@ def test_patient_list(request):
                     'current_state': ps.current_state,
                     'current_location': ps.current_location,
                     'current_exam': current_exam_data,  # 직렬화 가능한 딕셔너리로 변환
+                    'appointments': appointments_data,  # 모든 예약된 검사들
                     'current_queue': queue_data,  # Queue 정보 추가
                     'updated_at': ps.updated_at.isoformat(),
                     'scenario': scenario  # 시나리오 정보 추가

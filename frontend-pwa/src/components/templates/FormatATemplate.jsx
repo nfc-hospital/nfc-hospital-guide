@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
@@ -568,43 +568,47 @@ const FormatATemplate = ({
                           <h4 className="font-semibold text-gray-900">{schedule.examName}</h4>
                           <p className="text-sm text-gray-600">
                             {schedule.location}
-                            {isCurrentStep && queueData && (
+                            {isCurrentStep && waitingInfo && (
                               <span className="ml-2 text-amber-600">
-                                • 내 앞에 {queueData.peopleAhead}명
+                                • 내 앞에 {waitingInfo.peopleAhead}명
                               </span>
                             )}
                           </p>
                         </div>
                         
-                        {/* 펼침/접힘 화살표 */}
-                        {isExpanded ? (
-                          <ChevronUpIcon className="w-5 h-5 text-gray-400" />
-                        ) : (
-                          <ChevronDownIcon className="w-5 h-5 text-gray-400" />
-                        )}
+                        {/* 펼침/접힘 화살표 - 회전 애니메이션 */}
+                        <ChevronDownIcon 
+                          className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`} 
+                        />
                       </button>
                       
-                      {/* 상세 정보 */}
-                      {isExpanded && (
-                        <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
-                          <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-blue-50/90 transition-colors duration-300">
+                      {/* 상세 정보 - 부드러운 애니메이션 */}
+                      <div 
+                        className={`overflow-hidden transition-all duration-500 ease-in-out ${
+                          isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                        }`}
+                      >
+                        <div className="px-4 pb-4 pt-3 space-y-3 border-t border-gray-100">
+                          <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-blue-50/90 transition-colors duration-300 transform transition-transform hover:scale-[1.02]">
                             <h5 className="text-sm font-medium text-blue-900 mb-1">검사 목적</h5>
                             <p className="text-sm text-blue-700">{schedule.purpose || schedule.description || '건강 상태 확인 및 진단'}</p>
                           </div>
                           
                           {schedule.preparation && (
-                            <div className="bg-amber-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-amber-50/90 transition-colors duration-300">
+                            <div className="bg-amber-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-amber-50/90 transition-colors duration-300 transform transition-transform hover:scale-[1.02]">
                               <h5 className="text-sm font-medium text-amber-900 mb-1">준비사항</h5>
                               <p className="text-sm text-amber-700">{schedule.preparation}</p>
                             </div>
                           )}
                           
-                          <div className="bg-gray-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-gray-50/90 transition-colors duration-300">
+                          <div className="bg-gray-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-gray-50/90 transition-colors duration-300 transform transition-transform hover:scale-[1.02]">
                             <h5 className="text-sm font-medium text-gray-900 mb-1">소요시간</h5>
                             <p className="text-sm text-gray-700">약 {schedule.duration}분</p>
                           </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   );
                 })}
