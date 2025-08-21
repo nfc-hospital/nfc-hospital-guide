@@ -345,19 +345,50 @@ class AdminNFCTagViewSet(ModelViewSet):
         if search:
             queryset = queryset.filter(
                 models.Q(code__icontains=search) |
-                models.Q(location__icontains=search) |
+                models.Q(tag_uid__icontains=search) |
+                models.Q(building__icontains=search) |
+                models.Q(room__icontains=search) |
                 models.Q(description__icontains=search)
             )
             logger.info(f"Search filter applied: {search}")
         
-        # location 필터
+        # location 필터 (building으로 필터링)
         location = self.request.query_params.get('location', None)
         if location:
-            queryset = queryset.filter(location__icontains=location)
-            logger.info(f"Location filter applied: {location}")
+            # location 파라미터로 building 필드를 필터링
+            queryset = queryset.filter(building=location)
+            logger.info(f"Location filter applied (building={location})")
+        
+        # building 필터 (직접적인 building 파라미터도 지원)
+        building = self.request.query_params.get('building', None)
+        if building:
+            queryset = queryset.filter(building=building)
+            logger.info(f"Building filter applied: {building}")
+        
+        # ordering 파라미터 처리
+        ordering = self.request.query_params.get('ordering', None)
+        if ordering:
+            # last_scanned_at 정렬의 경우 null 값을 맨 아래로 처리
+            if 'last_scanned_at' in ordering:
+                from django.db.models import F
+                # null 값을 맨 아래로 보내기 위해 nulls_last 사용
+                if ordering.startswith('-'):
+                    # 최신순: null이 아닌 값은 내림차순, null은 맨 아래
+                    queryset = queryset.order_by(F('last_scanned_at').desc(nulls_last=True))
+                else:
+                    # 오래된순: null이 아닌 값은 오름차순, null은 맨 아래  
+                    queryset = queryset.order_by(F('last_scanned_at').asc(nulls_last=True))
+                logger.info(f"Last scanned ordering applied with nulls last: {ordering}")
+            else:
+                # 다른 필드는 기본 ordering 사용
+                queryset = queryset.order_by(ordering)
+                logger.info(f"Ordering applied: {ordering}")
+        else:
+            # 기본 정렬: 최신 생성순
+            queryset = queryset.order_by('-created_at')
         
         logger.info(f"Final queryset count: {queryset.count()}")
-        return queryset.order_by('-created_at')
+        return queryset
     
     def check_admin_permission(self):
         """관리자 권한 확인"""
