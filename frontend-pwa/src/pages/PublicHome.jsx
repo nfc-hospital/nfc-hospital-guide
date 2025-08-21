@@ -9,7 +9,7 @@ import {
   MapPinIcon,
   MapIcon,
   BuildingOfficeIcon,
-  BeakerIcon,
+  ClipboardDocumentCheckIcon,
   ArrowRightIcon,
 } from '@heroicons/react/24/outline';
 import { 
@@ -222,28 +222,17 @@ export default function PublicHome() {
         </header>
 
         <main className="max-w-7xl mx-auto px-4 py-4 sm:py-8">
-          <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8 mb-6">
-            <div className="text-center mb-6">
-              <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center">
-                <span className="text-4xl">{selectedFacility.icon}</span>
-              </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{selectedFacility.name}</h1>
-              <p className="text-lg text-gray-600 mb-4">{selectedFacility.description}</p>
-              <div className="flex justify-center gap-6 text-sm text-gray-500">
-                <div className="flex items-center gap-1">
-                  <span>🏢</span>
-                  <span>{selectedFacility.building}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span>📍</span>
-                  <span>{selectedFacility.floor}</span>
-                </div>
-                {selectedFacility.room && (
-                  <div className="flex items-center gap-1">
-                    <span>🚪</span>
-                    <span>{selectedFacility.room}</span>
-                  </div>
-                )}
+          <div className="rounded-2xl shadow-xl p-5 sm:p-6 mb-6" style={{backgroundColor: '#1d4ed8'}}>
+            <div className="text-center">
+              <h1 className="text-3xl font-bold text-white mb-1">{selectedFacility.name}</h1>
+              <p className="text-lg text-blue-100 mb-2">{selectedFacility.description}</p>
+              
+              {/* 위치 정보 텍스트와 구분선 */}
+              <div className="border-t border-white/30 pt-4 mt-4">
+                <p className="text-xl text-white flex items-center justify-center gap-2">
+                  <MapPinIcon className="w-6 h-6 text-white" />
+                  {selectedFacility.building} {selectedFacility.floor} {selectedFacility.room || ''}
+                </p>
               </div>
             </div>
           </div>
@@ -345,6 +334,9 @@ export default function PublicHome() {
           </div>
         </section>
 
+        {/* 구분선 */}
+        <div className="border-t border-gray-200 my-8"></div>
+
         {/* 진료과 섹션 - 실제 존재하는 부서들로 수정 */}
         <section className="mb-8">
           <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -352,54 +344,57 @@ export default function PublicHome() {
             주요 진료과
           </h3>
           
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {commonDepartments.map((dept) => (
               <button
                 key={dept.id}
                 onClick={() => handleFacilitySelect(dept)}
-                className="group bg-white border-2 border-gray-200 rounded-2xl p-4 sm:p-5 transition-all duration-300 hover:border-blue-300 hover:shadow-lg hover:bg-blue-50"
+                className="group bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 transition-all duration-300 hover:border-gray-300 hover:shadow-lg transform hover:-translate-y-1 active:scale-95 shadow-md"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="text-2xl mb-2">{dept.icon}</div>
-                    <h4 className="text-base sm:text-lg font-bold text-gray-900 text-left">{dept.name}</h4>
-                    <p className="text-xs sm:text-sm text-gray-600 text-left">{dept.description}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xs text-gray-500 text-left">{dept.building} {dept.floor}</p>
+                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900 text-left">{dept.name}</h4>
+                    <p className="text-base text-gray-700 text-left">{dept.description}</p>
+                    <div className="flex items-center gap-3 mt-3">
+                      <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm font-medium">{dept.building} {dept.floor}</span>
                       {dept.waitingPatients && (
-                        <p className="text-xs font-medium text-blue-600">{dept.waitingPatients} 대기</p>
+                        <span className="bg-blue-600 text-white px-3 py-1 rounded-lg text-sm font-bold w-[90px] text-center inline-block">{dept.waitingPatients} 대기</span>
                       )}
                     </div>
                   </div>
-                  <ChevronRightIcon className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-all flex-shrink-0 mt-1" />
+                  <ChevronRightIcon className="w-6 h-6 text-gray-400 group-hover:text-gray-600 transition-all flex-shrink-0" />
                 </div>
               </button>
             ))}
           </div>
         </section>
 
+        {/* 구분선 */}
+        <div className="border-t border-gray-200 my-8"></div>
+
         {/* 검사·진단 섹션 - 새로 추가 */}
         <section className="mb-8">
           <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-            <BeakerIcon className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
+            <ClipboardDocumentCheckIcon className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
             검사 · 진단
           </h3>
           
-          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {diagnosticFacilities.map((diagnostic) => (
               <button
                 key={diagnostic.id}
                 onClick={() => handleFacilitySelect(diagnostic)}
-                className="group bg-white border-2 border-gray-200 rounded-2xl p-4 sm:p-5 transition-all duration-300 hover:border-green-300 hover:shadow-lg hover:bg-green-50"
+                className="group bg-white border border-gray-200 rounded-2xl p-6 sm:p-8 transition-all duration-300 hover:border-gray-300 hover:shadow-lg transform hover:-translate-y-1 active:scale-95 shadow-md"
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-center justify-between">
                   <div className="flex-1">
-                    <div className="text-2xl mb-2">{diagnostic.icon}</div>
-                    <h4 className="text-base sm:text-lg font-bold text-gray-900 text-left">{diagnostic.name}</h4>
-                    <p className="text-xs sm:text-sm text-gray-600 text-left">{diagnostic.description}</p>
-                    <p className="text-xs text-gray-500 text-left mt-1">{diagnostic.building} {diagnostic.floor}</p>
+                    <h4 className="text-xl sm:text-2xl font-bold text-gray-900 text-left">{diagnostic.name}</h4>
+                    <p className="text-base text-gray-700 text-left">{diagnostic.description}</p>
+                    <div className="mt-3 text-left">
+                      <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm font-medium">{diagnostic.building} {diagnostic.floor}</span>
+                    </div>
                   </div>
-                  <ChevronRightIcon className="w-4 h-4 text-gray-400 group-hover:text-green-600 transition-all flex-shrink-0 mt-1" />
+                  <ChevronRightIcon className="w-6 h-6 text-gray-400 group-hover:text-gray-600 transition-all flex-shrink-0" />
                 </div>
               </button>
             ))}

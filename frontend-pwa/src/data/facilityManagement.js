@@ -11,7 +11,7 @@ export const MAJOR_FACILITIES = [
     icon: '🚨',
     description: '24시간 진료',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '응급의료센터',
     mapFile: 'main_1f.svg', // public/images/maps/ 하위 파일
     svgId: 'dept-emergency', // SVG 내부에서 강조할 element ID
@@ -30,7 +30,7 @@ export const MAJOR_FACILITIES = [
     icon: '💊',
     description: '처방전',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '원내약국',
     mapFile: 'main_1f.svg',
     svgId: 'store-pharmacy',
@@ -49,7 +49,7 @@ export const MAJOR_FACILITIES = [
     icon: '💳',
     description: '접수·수납',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '원무과',
     mapFile: 'main_1f.svg',
     svgId: 'room-storage', // 원무과 위치
@@ -68,7 +68,7 @@ export const MAJOR_FACILITIES = [
     icon: '💁‍♀️',
     description: '도움·안내',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '안내데스크',
     mapFile: 'main_1f.svg',
     svgId: 'room-storage', // 안내데스크도 원무과 근처
@@ -91,7 +91,7 @@ export const CONVENIENCE_FACILITIES = [
     icon: '🏪',
     description: '생필품 구매',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '편의점',
     mapFile: 'main_1f.svg',
     svgId: 'store-convenience',
@@ -110,7 +110,7 @@ export const CONVENIENCE_FACILITIES = [
     icon: '☕',
     description: '휴식 공간',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '카페',
     mapFile: 'main_1f.svg',
     svgId: 'store-cafe',
@@ -129,7 +129,7 @@ export const CONVENIENCE_FACILITIES = [
     icon: '🏦',
     description: '금융 서비스',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '은행',
     mapFile: 'main_1f.svg',
     svgId: 'store-bank',
@@ -150,9 +150,9 @@ export const MAJOR_DEPARTMENTS = [
     id: 'internal-medicine',
     name: '내과',
     icon: '🏥',
-    description: '일반 진료',
+    description: '감기·소화기 질환',
     building: '본관',
-    floor: '2F',
+    floor: '2층',
     room: '내과 진료실',
     mapFile: 'main_2f.svg', // 2층 지도 사용 - 실제 내과가 있음
     svgId: 'clinic-internal-1', // 실제 존재하는 ID
@@ -164,9 +164,9 @@ export const MAJOR_DEPARTMENTS = [
     id: 'orthopedics',
     name: '정형외과',
     icon: '🦴',
-    description: '근골격계',
+    description: '관절·척추 질환',
     building: '별관',
-    floor: '1F',
+    floor: '1층',
     room: '정형외과',
     mapFile: 'annex_1f.svg', // 별관 1층 - 실제 정형외과가 있음
     svgId: 'dept-orthopedics', // 실제 존재하는 ID
@@ -178,9 +178,9 @@ export const MAJOR_DEPARTMENTS = [
     id: 'rehabilitation',
     name: '재활의학과',
     icon: '🏃‍♂️',
-    description: '재활 치료',
+    description: '물리·운동 치료',
     building: '별관',
-    floor: '1F',
+    floor: '1층',
     room: '재활의학과',
     mapFile: 'annex_1f.svg', // 별관 1층 - 실제 재활의학과가 있음
     svgId: 'dept-rehab', // 실제 존재하는 ID
@@ -192,9 +192,9 @@ export const MAJOR_DEPARTMENTS = [
     id: 'radiology',
     name: '영상의학과',
     icon: '📷',
-    description: 'CT, MRI 촬영',
+    description: 'CT·MRI 촬영',
     building: '암센터',
-    floor: '2F',
+    floor: '2층',
     room: '영상의학과',
     mapFile: 'cancer_2f.svg', // 암센터 2층 - 실제 영상의학과가 있음
     svgId: 'reception-radiology', // 실제 존재하는 ID
@@ -206,9 +206,9 @@ export const MAJOR_DEPARTMENTS = [
     id: 'ent',
     name: '이비인후과',
     icon: '👂',
-    description: '귀·코·목 진료',
+    description: '귀·코·목 질환',
     building: '본관',
-    floor: '2F',
+    floor: '2층',
     room: '이비인후과',
     mapFile: 'overview_main_2f.svg', // overview_main_2f.svg 파일 사용
     svgId: 'dept-ent', // 수정된 SVG ID
@@ -224,9 +224,9 @@ export const DIAGNOSTIC_FACILITIES = [
     id: 'laboratory',
     name: '진단검사의학과',
     icon: '🧪',
-    description: '혈액 검사',
+    description: '피·소변 검사',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '진단검사의학과',
     mapFile: 'main_1f.svg',
     svgId: 'dept-laboratory', // 실제 존재하는 ID
@@ -237,9 +237,9 @@ export const DIAGNOSTIC_FACILITIES = [
     id: 'blood-collection',
     name: '채혈실',
     icon: '🩸',
-    description: '채혈 검사',
+    description: '피 검사',
     building: '본관',
-    floor: '1F',
+    floor: '1층',
     room: '채혈실',
     mapFile: 'main_1f.svg',
     svgId: 'room-blood-collection', // 실제 존재하는 ID
@@ -250,9 +250,9 @@ export const DIAGNOSTIC_FACILITIES = [
     id: 'ct-room',
     name: 'CT실',
     icon: '🔍',
-    description: 'CT 촬영',
+    description: '정밀 엑스레이 검사',
     building: '암센터',
-    floor: '2F',
+    floor: '2층',
     room: 'CT실',
     mapFile: 'cancer_2f.svg', // 암센터 2층에 실제 CT실이 있음
     svgId: 'room-ct', // 실제 존재하는 ID
@@ -263,9 +263,9 @@ export const DIAGNOSTIC_FACILITIES = [
     id: 'mri-room',
     name: 'MRI실',
     icon: '🧲',
-    description: 'MRI 촬영',
+    description: '정밀 신체 검사',
     building: '암센터',
-    floor: '2F',
+    floor: '2층',
     room: 'MRI실',
     mapFile: 'cancer_2f.svg', // 암센터 2층에 실제 MRI실이 있음
     svgId: 'room-mri', // 실제 존재하는 ID
@@ -278,7 +278,7 @@ export const DIAGNOSTIC_FACILITIES = [
     icon: '📷',
     description: '엑스레이 촬영',
     building: '암센터',
-    floor: '2F',
+    floor: '2층',
     room: 'X-ray실',
     mapFile: 'cancer_2f.svg', // 암센터 2층에 실제 X-ray실이 있음
     svgId: 'room-xray', // 실제 존재하는 ID
@@ -291,7 +291,7 @@ export const DIAGNOSTIC_FACILITIES = [
     icon: '📡',
     description: '초음파 검사',
     building: '암센터',
-    floor: '2F',
+    floor: '2층',
     room: '초음파실',
     mapFile: 'cancer_2f.svg', // 암센터 2층에 실제 초음파실이 있음
     svgId: 'room-ultrasound', // 실제 존재하는 ID

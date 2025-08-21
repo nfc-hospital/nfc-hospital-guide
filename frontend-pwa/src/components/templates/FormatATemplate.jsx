@@ -66,7 +66,7 @@ const FormatATemplate = ({
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('location');
   const [expandedItems, setExpandedItems] = useState([]);
-  const [showDemoMap, setShowDemoMap] = useState(false);
+  const [showDemoMap, setShowDemoMap] = useState(true);
   const [isDemoExpanded, setIsDemoExpanded] = useState(true);
   
   // journeyStore에서 현재 위치 정보 가져오기

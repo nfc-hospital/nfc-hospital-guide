@@ -4,6 +4,7 @@ import FormatATemplate from '../templates/FormatATemplate';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { getFacilityByName } from '../../data/facilityManagement';
+import { ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
 
 export default function WaitingScreen({ taggedLocation, current_task, upcoming_tasks }) {
   const { user, currentQueues = [], todaysAppointments = [], patientState } = useJourneyStore();
@@ -101,9 +102,11 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
       <div className="space-y-4">
         {isOngoing && (
           <div className="bg-green-50 rounded-2xl p-6 text-center">
-            <div className="text-4xl mb-3">🏥</div>
+            <div className="flex justify-center mb-3">
+              <ClipboardDocumentCheckIcon className="w-16 h-16 text-green-600" />
+            </div>
             <p className="text-lg text-green-800 font-medium">
-              현재 검사가 진행 중입니다
+              현재 {currentExam?.title || '검사'}가 진행 중입니다
             </p>
             <p className="text-sm text-green-600 mt-2">
               검사가 끝날 때까지 잠시만 기다려주세요
