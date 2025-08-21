@@ -135,7 +135,7 @@ const FormatBTemplate = ({
                         className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 transform ${
                           isChecked 
                             ? 'bg-blue-600 border-blue-600 scale-110 shadow-lg' 
-                            : 'border-gray-300 hover:border-blue-500 hover:scale-105'
+                            : 'bg-white border-gray-300 hover:border-blue-500 hover:scale-105'
                         }`}
                       >
                         {isChecked && (
@@ -388,43 +388,43 @@ const FormatBTemplate = ({
 
   return (
     <div className="w-full">
-      {/* 상단 영역 - 배경색 동적 변경 - 높이 축소 */}
-      <div className={`relative bg-gradient-to-br ${getBackgroundColor()} overflow-hidden`}>
+      {/* 상단 영역 - 배경색 동적 변경 - 컴팩트하게 */}
+      <div className={`relative bg-gradient-to-br ${getBackgroundColor()}`}>
         {/* 장식 요소 제거 - 더 깔끔하게 */}
         
-        <div className="relative px-6 sm:px-8 lg:px-10 py-6 pb-8">
+        <div className="relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 pb-12 sm:pb-16">
           {/* 상태 표시 - 심플하게 */}
-          <div className="mb-6">
-            <div className="inline-flex items-center gap-3">
+          <div className="mb-3 sm:mb-4">
+            <div className="inline-flex items-center gap-2 sm:gap-3">
               <div className={`w-3 h-3 ${getStatusDotColor()} rounded-full`} />
-              <span className="text-white text-xl font-semibold">{status}</span>
+              <span className="text-white text-lg sm:text-xl font-semibold">{status}</span>
             </div>
           </div>
 
           {/* 다음 일정 안내 - 컴팩트하게 */}
           {nextSchedule && (
-            <div className="bg-white/15 backdrop-blur-sm rounded-2xl p-4 mb-5 border border-white/20">
+            <div className="bg-white/15 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 border border-white/20">
               <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-1">
+                <div className="flex items-center justify-center gap-2 mb-0.5">
                   <CalendarIcon className="w-4 h-4 text-white/80" />
                   <p className="text-white/90 text-sm font-medium">다음 일정</p>
                 </div>
-                <p className="text-white text-xl font-semibold">{nextSchedule}</p>
+                <p className="text-white text-lg sm:text-xl font-semibold">{nextSchedule}</p>
               </div>
             </div>
           )}
 
           {/* 요약 카드 - 높이 축소 */}
           {summaryCards && (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               {summaryCards.map((card, index) => (
                 <div 
                   key={index}
-                  className="bg-white/20 backdrop-blur-sm rounded-xl px-4 py-3 border border-white/25"
+                  className="bg-white/20 backdrop-blur-sm rounded-2xl sm:rounded-3xl px-4 py-2 sm:py-2.5 border border-white/25"
                 >
                   <div className="text-center">
-                    <p className="text-white/80 text-xs mb-1">{card.label}</p>
-                    <p className="text-white text-lg font-semibold">{card.value}</p>
+                    <p className="text-white/80 text-xs sm:text-sm">{card.label}</p>
+                    <p className="text-white text-lg sm:text-xl font-semibold">{card.value}</p>
                   </div>
                 </div>
               ))}
@@ -434,7 +434,7 @@ const FormatBTemplate = ({
       </div>
 
       {/* 하단 영역 - 흰색 배경 */}
-      <div className="bg-white px-4 sm:px-6 lg:px-8 py-4 -mt-6 rounded-t-3xl relative shadow-xl">
+      <div className="bg-white px-4 sm:px-6 lg:px-8 py-4 -mt-8 rounded-t-[2.5rem] relative shadow-xl">
         {/* 탭 네비게이션 - 심플한 밑줄 스타일 */}
         <div className="mb-6">
           <div className="flex gap-0 border-b border-gray-200">
@@ -477,43 +477,25 @@ const FormatBTemplate = ({
           </div>
         )}
         
-        {/* NFC 안내 - 최하단 - 더 세련되고 부드럽게 */}
-        <div className="mt-auto pt-6 pb-4">
-          <div className="relative overflow-hidden bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-2xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
-            {/* 장식 요소 */}
-            <div className="absolute -right-8 -top-8 w-24 h-24 bg-blue-200/20 rounded-full blur-2xl" />
-            <div className="absolute -left-8 -bottom-8 w-20 h-20 bg-purple-200/20 rounded-full blur-2xl" />
-            
-            <div className="relative flex items-center gap-4">
-              {/* NFC 아이콘 - 애니메이션 추가 */}
-              <div className="relative">
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
-                  <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
-                          d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-                {/* 전파 효과 */}
-                <div className="absolute inset-0 -m-2">
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 border-2 border-blue-400/40 rounded-full animate-ping" />
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 border-2 border-blue-400/20 rounded-full animate-ping" style={{animationDelay: '0.5s'}} />
-                </div>
+        {/* NFC 안내 - 최하단 - 세련되게 */}
+        <div className="mt-auto pt-6 pb-8">
+          <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl p-4 border border-amber-200 shadow-sm hover:shadow-md transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-2xl flex items-center justify-center shadow-md">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} 
+                        d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  <circle cx="12" cy="12" r="3" strokeWidth={2} className="animate-pulse" />
+                </svg>
               </div>
-              
               <div className="flex-1">
-                <p className="text-base font-bold text-gray-800 mb-0.5">
-                  NFC 태그로 길찾기
+                <p className="text-sm font-bold text-gray-900">
+                  벽의 <span className="text-blue-600">파란 NFC 스티커</span>에 핸드폰을 대 주세요
                 </p>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  병원 곳곳의 <span className="font-medium text-blue-600">파란색 NFC 스티커</span>에 휴대폰을 대면
-                  현재 위치에서 목적지까지 안내해드립니다
+                <p className="text-xs text-gray-600 mt-0.5">
+                  현재 위치에서 목적지까지 안내해 드립니다
                 </p>
               </div>
-              
-              {/* 화살표 아이콘 */}
-              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
             </div>
           </div>
         </div>

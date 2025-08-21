@@ -4,16 +4,41 @@ import { useNavigate } from 'react-router-dom';
 import FormatBTemplate from '../templates/FormatBTemplate';
 
 export default function FinishedScreen({ taggedLocation }) {
-  const { user, todaysAppointments = [] } = useJourneyStore();
+  const { user, todaysAppointments = [], nextAppointment } = useJourneyStore();
   const navigate = useNavigate();
 
-  // 다음 일정 정보
-  const upcomingAppointments = todaysAppointments.filter(apt => 
-    ['scheduled', 'pending'].includes(apt.status)
-  );
-  const nextSchedule = upcomingAppointments.length > 0 
-    ? `${new Date(upcomingAppointments[0].scheduled_at).toLocaleDateString('ko-KR')} ${new Date(upcomingAppointments[0].scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
-    : '예정된 일정 없음';
+  // 다음 일정 정보 - journeyStore의 nextAppointment 활용
+  const getNextScheduleText = () => {
+    if (nextAppointment) {
+      const date = new Date(nextAppointment.scheduled_at);
+      const today = new Date();
+      const isToday = date.toDateString() === today.toDateString();
+      
+      if (isToday) {
+        return `오늘 ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - ${nextAppointment.exam?.title || '다음 검사'}`;
+      } else {
+        return `${date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
+      }
+    }
+    
+    // 오늘 예약 중 아직 진행하지 않은 것이 있는지 확인
+    const pendingToday = todaysAppointments.filter(apt => 
+      ['scheduled', 'pending'].includes(apt.status)
+    );
+    
+    if (pendingToday.length > 0) {
+      const nextApt = pendingToday[0];
+      const time = new Date(nextApt.scheduled_at).toLocaleTimeString('ko-KR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      return `오늘 ${time} - ${nextApt.exam?.title || '다음 검사'}`;
+    }
+    
+    return '예정된 검사가 없습니다';
+  };
+  
+  const nextSchedule = getNextScheduleText();
 
   // 완료 통계
   const completedAppointments = todaysAppointments.filter(apt => 
@@ -30,42 +55,86 @@ export default function FinishedScreen({ taggedLocation }) {
     { icon: '💳', value: `${totalCost.toLocaleString()}원`, label: '총 진료비', bgColor: 'bg-purple-100 text-purple-800' }
   ];
 
-  // 주의사항
-  const precautions = [
-    {
-      icon: '💊',
-      title: '처방 약물 복용법',
-      priority: 'high',
-      bgColor: 'bg-red-50 text-red-800',
-      items: [
-        '처방받은 약물을 정해진 시간에 정확히 복용하세요',
-        '임의로 복용량을 늘리거나 줄이지 마세요',
-        '부작용이 나타나면 즉시 병원에 연락하세요'
-      ]
-    },
-    {
-      icon: '📸',
-      title: 'X-ray 관련 주의사항',
-      priority: 'medium',
-      bgColor: 'bg-orange-50 text-orange-800',
-      items: [
-        '임신 가능성이 있는 경우 의료진에게 알려주세요',
-        '방사선 노출량은 안전 기준 이내입니다',
-        '다음 X-ray 검사까지 최소 1주일 간격을 두세요'
-      ]
-    },
-    {
-      icon: '🩸',
-      title: '채혈검사 관련 안내',
-      priority: 'low',
-      bgColor: 'bg-blue-50 text-blue-800',
-      items: [
-        '검사 후 2-3일 후 결과를 확인하세요',
-        '채혈 부위는 24시간 동안 물이 닿지 않게 하세요',
-        '결과 이상 시 추가 검사가 필요할 수 있습니다'
-      ]
+  // 완료된 검사에 따른 동적 주의사항 생성
+  const generatePrecautions = () => {
+    const precautionsList = [];
+    
+    // 처방이 있는 경우
+    const hasPrescription = completedAppointments.some(apt => 
+      apt.exam?.department === '내과' || apt.exam?.department === '정형외과'
+    );
+    
+    if (hasPrescription) {
+      precautionsList.push({
+        icon: '💊',
+        title: '처방 약물 복용법',
+        priority: 'high',
+        bgColor: 'bg-red-50 text-red-800',
+        items: [
+          '처방받은 약물을 정해진 시간에 정확히 복용하세요',
+          '임의로 복용량을 늘리거나 줄이지 마세요',
+          '부작용이 나타나면 즉시 병원에 연락하세요'
+        ]
+      });
     }
-  ];
+    
+    // X-ray 검사를 한 경우
+    const hasXray = completedAppointments.some(apt => 
+      apt.exam?.title?.includes('X-ray') || apt.exam?.title?.includes('방사선')
+    );
+    
+    if (hasXray) {
+      precautionsList.push({
+        icon: '📸',
+        title: 'X-ray 검사 후 주의사항',
+        priority: 'medium',
+        bgColor: 'bg-orange-50 text-orange-800',
+        items: [
+          '방사선 노출량은 안전 기준 이내입니다',
+          '다음 X-ray 검사까지 최소 1주일 간격을 두세요',
+          '임신 가능성이 있다면 의료진에게 알려주세요'
+        ]
+      });
+    }
+    
+    // 채혈검사를 한 경우
+    const hasBloodTest = completedAppointments.some(apt => 
+      apt.exam?.title?.includes('채혈') || apt.exam?.title?.includes('혈액')
+    );
+    
+    if (hasBloodTest) {
+      precautionsList.push({
+        icon: '🩸',
+        title: '채혈검사 관련 안내',
+        priority: 'low',
+        bgColor: 'bg-blue-50 text-blue-800',
+        items: [
+          '검사 결과는 2-3일 후 확인 가능합니다',
+          '채혈 부위는 24시간 동안 물이 닿지 않게 하세요',
+          '어지러움이나 출혈이 계속되면 병원에 연락하세요'
+        ]
+      });
+    }
+    
+    // 일반적인 주의사항
+    if (precautionsList.length === 0) {
+      precautionsList.push({
+        icon: '📋',
+        title: '검사 후 일반 주의사항',
+        priority: 'low',
+        bgColor: 'bg-gray-50 text-gray-800',
+        items: [
+          '충분한 휴식을 취하세요',
+          '이상 증상이 나타나면 병원에 연락하세요',
+          '다음 진료 예약을 확인하세요'
+        ]
+      });
+    }
+    
+    return precautionsList;
+  };
+  
+  const precautions = generatePrecautions();
 
   // 오늘의 일정 (완료된 것들)
   const todaySchedule = todaysAppointments?.map((apt, index) => ({

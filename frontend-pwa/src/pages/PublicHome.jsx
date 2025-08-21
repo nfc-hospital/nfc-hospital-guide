@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import VoiceInput from '../components/VoiceInput';
 import DepartmentDirections from '../components/DepartmentDirections';
 import MapNavigator from '../components/MapNavigator'; // 경로 표시를 위해 MapNavigator 사용
+import AppHeader from '../components/common/AppHeader';
+import { useAuth } from '../context/AuthContext';
 import { 
   MapPinIcon,
   MapIcon,
@@ -14,6 +16,7 @@ import {
   ChevronRightIcon,
   UserCircleIcon 
 } from '@heroicons/react/24/solid';
+import { motion } from 'framer-motion';
 // 시설 관리 데이터 import
 import { 
   DEFAULT_DISPLAY_FACILITIES, 
@@ -24,6 +27,7 @@ import {
 
 export default function PublicHome() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState(null);
@@ -266,31 +270,15 @@ export default function PublicHome() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
-      {/* 상단 헤더 - 모바일 최적화 */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-lg border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex justify-between items-center h-16 sm:h-20">
-            <div className="flex items-center space-x-2 sm:space-x-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-white text-lg sm:text-xl font-bold">H</span>
-              </div>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900">HC_119</h1>
-                <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">NFC + AI 기반 병원 내 검사·진료 안내 시스템</p>
-              </div>
-            </div>
-            
-            <button
-              onClick={() => navigate('/login')}
-              className="group relative bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-base transition-all duration-300 hover:shadow-xl flex items-center gap-2"
-            >
-              <UserCircleIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span>로그인</span>
-            </button>
-          </div>
-        </div>
-      </header>
+    <motion.div 
+      className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      {/* 상단 헤더 - AppHeader 컴포넌트 사용 */}
+      <AppHeader />
 
       {/* 메인 컨텐츠 */}
       <main className="max-w-7xl mx-auto px-4 py-4 sm:py-8">
@@ -418,15 +406,16 @@ export default function PublicHome() {
           </div>
         </section>
 
-        {/* 로그인 유도 카드 - 모바일 최적화 */}
-        <section className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl sm:rounded-3xl p-6 sm:p-10 text-white shadow-xl">
-          <div className="max-w-4xl mx-auto">
-            <h3 className="text-xl sm:text-3xl font-bold mb-3 sm:mb-4">
-              환자 맞춤 서비스
-            </h3>
-            <p className="text-sm sm:text-lg text-slate-300 mb-6">
-              로그인하시면 더 편리한 병원 이용이 가능합니다
-            </p>
+        {/* 로그인 유도 카드 - 모바일 최적화 (비로그인 사용자에게만 표시) */}
+        {!isAuthenticated && (
+          <section className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl sm:rounded-3xl p-6 sm:p-10 text-white shadow-xl">
+            <div className="max-w-4xl mx-auto">
+              <h3 className="text-xl sm:text-3xl font-bold mb-3 sm:mb-4">
+                환자 맞춤 서비스
+              </h3>
+              <p className="text-sm sm:text-lg text-slate-300 mb-6">
+                로그인하시면 더 편리한 병원 이용이 가능합니다
+              </p>
             
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="flex items-center gap-2 bg-white/10 backdrop-blur rounded-xl p-3">
@@ -471,7 +460,8 @@ export default function PublicHome() {
             </button>
           </div>
         </section>
+        )}
       </main>
-    </div>
+    </motion.div>
   );
 }

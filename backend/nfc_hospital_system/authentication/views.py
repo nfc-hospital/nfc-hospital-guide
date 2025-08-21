@@ -32,11 +32,17 @@ def simple_login(request):
     자동 로그인 옵션을 선택하면 refresh 토큰을 httpOnly 쿠키에 저장
     """
     try:
-        phone_last4 = request.data.get('phoneLast4')
+        phone_number = request.data.get('phoneNumber')  # 전체 전화번호
         birth_date = request.data.get('birthDate')
         
-        if not phone_last4 or not birth_date:
-            return APIResponse.error("전화번호 뒷자리와 생년월일이 필요합니다", code="AUTH_003")
+        if not phone_number or not birth_date:
+            return APIResponse.error("전화번호와 생년월일이 필요합니다", code="AUTH_003")
+        
+        # 전화번호 형식 검증 (010-xxxx-xxxx)
+        import re
+        phone_pattern = re.compile(r'^[0-9]{3}-[0-9]{4}-[0-9]{4}$')
+        if not phone_pattern.match(phone_number):
+            return APIResponse.error("올바른 전화번호 형식이 아닙니다 (예: 010-1234-5678)", code="AUTH_003")
         
         # birthDate 형식 변환: YYMMDD -> YYYY-MM-DD
         if len(birth_date) == 6:  # YYMMDD 형식인 경우
@@ -53,15 +59,17 @@ def simple_login(request):
         try:
             # 먼저 기존 사용자 찾기
             user = User.objects.filter(
-                phone_number__endswith=phone_last4,
+                phone_number=phone_number,
                 birth_date=birth_date_formatted
             ).first()
             
             if not user:
                 # 없으면 새로 생성
+                # phone_last4 추출 (로그용)
+                phone_last4 = phone_number.split('-')[-1]
                 user = User.objects.create(
                     name=f'환자{phone_last4}',
-                    phone_number=f'010****{phone_last4}',
+                    phone_number=phone_number,
                     birth_date=birth_date_formatted,
                     email=f'patient{phone_last4}_{birth_date}@temp.com',  # 이메일 필드 추가
                 )
@@ -125,7 +133,7 @@ def simple_login(request):
             "user": {
                 "id": str(user.pk),  # UUID를 문자열로 변환
                 "name": user.name,
-                "phone": phone_last4,  # 디버깅용
+                "phone": phone_number.split('-')[-1] if '-' in phone_number else phone_number[-4:],  # 뒷자리 4자리만 반환
             },
             "tokens": tokens
         }

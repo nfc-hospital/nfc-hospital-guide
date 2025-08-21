@@ -44,8 +44,10 @@ export function AuthProvider({ children }) {
         }
       }
       
-      if (phoneNumber.length !== 4 || birthDate.length !== 6) {
-        throw new Error('전화번호 뒷자리 4자리와 생년월일 6자리를 정확히 입력해주세요.');
+      // 전화번호 형식 검증
+      const phoneRegex = /^[0-9]{3}-[0-9]{4}-[0-9]{4}$/;
+      if (!phoneRegex.test(phoneNumber) || birthDate.length !== 6) {
+        throw new Error('전화번호와 생년월일을 정확히 입력해주세요.');
       }
 
       // 🔧 YYMMDD → YYYY-MM-DD 변환
@@ -61,12 +63,10 @@ export function AuthProvider({ children }) {
         return `${yyyy}-${mm}-${dd}`;
       };
 
-      const formattedBirthDate = convertBirthDate(birthDate);
-      console.log(`📅 날짜 변환: ${birthDate} → ${formattedBirthDate}`);
-
+      // birthDate는 YYMMDD 형식 그대로 전송 (백엔드에서 변환)
       const requestData = {
-        phoneLast4: phoneNumber,
-        birthDate: formattedBirthDate
+        phoneNumber: phoneNumber,  // 전체 전화번호
+        birthDate: birthDate       // YYMMDD 형식
       };
 
       console.log('🚀 API 요청 데이터:', requestData);
@@ -111,6 +111,17 @@ export function AuthProvider({ children }) {
       
     } catch (error) {
       console.error('❌ 간편 로그인 오류:', error);
+      console.error('❌ 에러 응답 데이터:', error.response?.data);
+      
+      // API 에러 메시지 처리
+      if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      } else if (error.response?.data?.message) {
+        throw new Error(error.response.data.message);
+      } else if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+      
       throw new Error(error.message || '로그인에 실패했습니다.');
     }
   };
