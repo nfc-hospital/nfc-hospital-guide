@@ -99,7 +99,7 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
     >
       {/* 추가 콘텐츠 영역 - 상태별 안내 */}
       <div className="space-y-4">
-        {isOngoing ? (
+        {isOngoing && (
           <div className="bg-green-50 rounded-2xl p-6 text-center">
             <div className="text-4xl mb-3">🏥</div>
             <p className="text-lg text-green-800 font-medium">
@@ -109,17 +109,6 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
               검사가 끝날 때까지 잠시만 기다려주세요
             </p>
           </div>
-        ) : (
-          <button className="w-full bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 
-                           rounded-2xl p-4 hover:shadow-lg transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div className="text-left">
-                <h4 className="text-lg font-semibold text-yellow-900">내 차례에 알림 받기</h4>
-                <p className="text-sm text-yellow-700 mt-1">호출 시 스마트폰으로 알려드립니다</p>
-              </div>
-              <span className="text-2xl">🔔</span>
-            </div>
-          </button>
         )}
       </div>
     </FormatATemplate>

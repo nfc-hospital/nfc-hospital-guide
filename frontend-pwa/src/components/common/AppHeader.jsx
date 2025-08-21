@@ -22,29 +22,32 @@ export default function AppHeader({ hideLogin = false }) {
     <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-lg border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex justify-between items-center h-16 sm:h-20">
-          <div className="flex items-center space-x-2 sm:space-x-3">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg">
-              <span className="text-white text-lg sm:text-xl font-bold">H</span>
+          <button 
+            onClick={() => navigate('/')}
+            className="flex items-center space-x-2 sm:space-x-3 transition-transform hover:scale-105"
+          >
+            <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+              <span className="text-white text-base sm:text-lg md:text-xl font-bold">H</span>
             </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">HC_119</h1>
-              <p className="text-xs sm:text-sm text-gray-500 hidden sm:block">NFC + AI 기반 병원 내 검사·진료 안내 시스템</p>
+            <div className="text-left">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">HC_119</h1>
+              <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 hidden sm:block">NFC + AI 기반 병원 내 검사·진료 안내 시스템</p>
             </div>
-          </div>
+          </button>
           
           {!hideLogin && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               {isAuthenticated && user && (
-                <span className="text-sm sm:text-base text-gray-700 font-medium">
+                <span className="text-xs sm:text-sm md:text-base text-gray-700 font-medium truncate max-w-[80px] sm:max-w-[120px] md:max-w-none">
                   {user.name}님
                 </span>
               )}
               <button
                 onClick={handleAuthAction}
-                className="group relative bg-gradient-to-r from-blue-600 to-blue-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-semibold text-sm sm:text-base transition-all duration-300 hover:shadow-xl flex items-center gap-2"
+                className="group relative bg-gradient-to-r from-blue-600 to-blue-700 text-white px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-2xl sm:rounded-3xl md:rounded-full font-semibold text-xs sm:text-sm md:text-base transition-all duration-300 hover:shadow-xl flex items-center gap-1 sm:gap-2"
               >
-                <UserCircleIcon className="w-5 h-5 sm:w-6 sm:h-6" />
-                <span>{isAuthenticated ? '로그아웃' : '로그인'}</span>
+                <UserCircleIcon className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+                <span className="hidden min-[360px]:inline">{isAuthenticated ? '로그아웃' : '로그인'}</span>
               </button>
             </div>
           )}

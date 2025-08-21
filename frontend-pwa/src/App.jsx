@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { initializeCSRFToken } from './api/client';
@@ -8,6 +8,8 @@ import { initializeDefaultRoutes } from './data/defaultRoutes';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import LoadingSpinner from './components/common/LoadingSpinner';
 import Layout from './components/common/Layout';
+import PageTransition from './components/common/PageTransition';
+import { AnimatePresence } from 'framer-motion';
 import Home from './pages/Home';
 import PublicHome from './pages/PublicHome';
 import Login from './pages/Login';

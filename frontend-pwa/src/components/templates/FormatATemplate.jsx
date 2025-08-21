@@ -258,10 +258,10 @@ const FormatATemplate = ({
       const isCompleted = step.position === 'prev';
       
       return (
-        <div key={index} className="flex flex-col items-center relative flex-1">
+        <div key={index} className="flex flex-col items-center relative" style={{ flex: '1 1 0%' }}>
           {/* 연결선 - 그라데이션으로 부드럽게 */}
           {index > 0 && (
-            <div className="absolute top-5 sm:top-6 h-0.5" style={{
+            <div className="absolute top-3 sm:top-4 h-0.5" style={{
               left: '-50%',
               right: '50%',
               background: isCompleted || isCurrent
@@ -272,11 +272,9 @@ const FormatATemplate = ({
           
           {/* 단계 원 - 컴팩트한 디자인 */}
           <div className="relative">
-            {/* 현재 단계 강조 효과 - 제거 */}
-            
             {/* 메인 원 */}
             <div className={`
-              relative w-7 h-7 sm:w-8 sm:h-8 rounded-full 
+              relative w-5 h-5 sm:w-6 sm:h-6 rounded-full 
               flex items-center justify-center transition-all duration-500 
               ${isCompleted 
                 ? 'bg-white shadow-md' 
@@ -286,18 +284,18 @@ const FormatATemplate = ({
               }
             `}>
               {isCompleted ? (
-                <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600" />
+                <CheckIcon className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600" />
               ) : isCurrent ? (
-                <div className="w-2 h-2 bg-white rounded-full" />
+                <div className="w-1.5 h-1.5 bg-white rounded-full" />
               ) : (
-                <div className="w-1.5 h-1.5 bg-white/50 rounded-full" />
+                <div className="w-1 h-1 bg-white/50 rounded-full" />
               )}
             </div>
           </div>
           
           {/* 단계 라벨 - 작게 */}
-          <div className="mt-2">
-            <div className={`text-xs font-medium transition-all duration-300 whitespace-nowrap overflow-hidden text-ellipsis max-w-[70px] ${
+          <div className="mt-1">
+            <div className={`text-[11px] sm:text-xs font-medium transition-all duration-300 whitespace-nowrap text-center ${
               isCurrent ? 'text-white' : isCompleted ? 'text-white/90' : 'text-white/60'
             }`}>
               {step.label}
@@ -345,59 +343,59 @@ const FormatATemplate = ({
 
   return (
     <div className="w-full">
-      {/* 상단 영역 - 파란색 배경 - 높이 축소 */}
-      <div className="relative bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700 overflow-hidden">
+      {/* 상단 영역 - 파란색 배경 - 컴팩트하게 */}
+      <div className="relative bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700">
           {/* 살짝의 장식 요소 */}
           <div className="absolute inset-0 overflow-hidden">
             <div className="absolute -top-24 -right-24 w-48 h-48 bg-white/5 rounded-full blur-3xl" />
             <div className="absolute bottom-0 -left-12 w-36 h-36 bg-blue-400/10 rounded-full blur-2xl" />
           </div>
           
-          <div className="relative px-6 sm:px-8 lg:px-10 py-6 pb-8">
+          <div className="relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 pb-12 sm:pb-16">
             {/* 진행 상태바 */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-2 sm:gap-3">
+            <div className="mb-3 sm:mb-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center flex-1">
                   {renderProgressSteps()}
                 </div>
-                <div className="flex flex-col items-end">
-                  <div className="text-white/70 text-xs sm:text-sm mb-0.5">진행 상황</div>
+                <div className="flex flex-col items-end flex-shrink-0">
+                  <div className="text-white/70 text-xs sm:text-sm">진행</div>
                   <div className="text-white flex items-baseline gap-0.5">
-                    <span className="text-3xl sm:text-4xl lg:text-5xl font-bold">{getVisibleSteps().currentStep + 1}</span>
-                    <span className="text-xl sm:text-2xl lg:text-3xl text-white/70">/{getVisibleSteps().totalSteps}</span>
+                    <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{getVisibleSteps().currentStep + 1}</span>
+                    <span className="text-sm sm:text-base lg:text-xl text-white/70">/{getVisibleSteps().totalSteps}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* 다음 행동 안내 - 맥박 애니메이션 포함 */}
-            <div className="bg-white/20 backdrop-blur-lg rounded-2xl p-4 mb-5 border border-white/30 hover:bg-white/25 transition-all duration-300">
-              <div className="flex items-center gap-3">
+            <div className="bg-white/20 backdrop-blur-lg rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 border border-white/30 hover:bg-white/25 transition-all duration-300">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <div className="relative">
-                  <div className="w-3 h-3 bg-amber-400 rounded-full animate-pulse" />
-                  <div className="absolute inset-0 w-3 h-3 bg-amber-400 rounded-full animate-ping" />
+                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-amber-400 rounded-full animate-pulse" />
+                  <div className="absolute inset-0 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-amber-400 rounded-full animate-ping" />
                 </div>
-                <span className="text-amber-400 text-base sm:text-lg font-medium">다음</span>
-                <span className="text-white text-xl sm:text-2xl font-bold flex-1">{displayNextAction}</span>
+                <span className="text-amber-400 text-sm sm:text-base font-medium">다음</span>
+                <span className="text-white text-base sm:text-lg lg:text-xl font-bold flex-1">{displayNextAction}</span>
               </div>
             </div>
 
             {/* 대기 정보 카드 - 반투명 유리 효과 */}
             {waitingInfo && (
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                <div className="bg-white/20 backdrop-blur-lg rounded-2xl px-4 py-3 sm:py-4 border border-white/30 hover:bg-white/25 transition-all duration-300">
+                <div className="bg-white/20 backdrop-blur-lg rounded-2xl sm:rounded-3xl px-4 py-2 sm:py-2.5 border border-white/30 hover:bg-white/25 transition-all duration-300">
                   <div className="text-center">
-                    <p className="text-white/80 text-xs mb-1">내 앞에</p>
-                    <p className="text-white text-2xl sm:text-3xl font-bold">
-                      {waitingInfo.peopleAhead}<span className="text-lg sm:text-xl font-normal ml-1">명</span>
+                    <p className="text-white/80 text-xs sm:text-sm whitespace-nowrap">내 앞에</p>
+                    <p className="text-white text-lg sm:text-xl font-bold">
+                      {waitingInfo.peopleAhead}<span className="text-sm sm:text-base font-normal ml-0.5">명</span>
                     </p>
                   </div>
                 </div>
-                <div className="bg-white/20 backdrop-blur-lg rounded-2xl px-4 py-3 sm:py-4 border border-white/30 hover:bg-white/25 transition-all duration-300">
+                <div className="bg-white/20 backdrop-blur-lg rounded-2xl sm:rounded-3xl px-4 py-2 sm:py-2.5 border border-white/30 hover:bg-white/25 transition-all duration-300">
                   <div className="text-center">
-                    <p className="text-white/80 text-xs mb-1">예상 대기</p>
-                    <p className="text-white text-2xl sm:text-3xl font-bold">
-                      {waitingInfo.estimatedTime}<span className="text-lg sm:text-xl font-normal ml-1">분</span>
+                    <p className="text-white/80 text-xs sm:text-sm whitespace-nowrap">예상 대기</p>
+                    <p className="text-white text-lg sm:text-xl font-bold">
+                      {waitingInfo.estimatedTime}<span className="text-sm sm:text-base font-normal ml-0.5">분</span>
                     </p>
                   </div>
                 </div>
@@ -407,7 +405,7 @@ const FormatATemplate = ({
         </div>
 
         {/* 하단 영역 - 흰색 배경 */}
-        <div className="bg-white px-4 sm:px-6 lg:px-8 py-4 -mt-6 rounded-t-3xl relative shadow-xl">
+        <div className="bg-white px-4 sm:px-6 lg:px-8 py-4 -mt-8 rounded-t-[2.5rem] relative shadow-xl">
           {/* 탭 네비게이션 - 모던한 스타일 */}
           <div className="flex gap-0 mb-6 border-b border-gray-100">
             <button
@@ -618,17 +616,23 @@ const FormatATemplate = ({
             </div>
           )}
           
-          {/* NFC 안내 - 최하단에 회색톤으로 */}
-          <div className="mt-auto pt-4 pb-2">
-            <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+          {/* NFC 안내 - 최하단 - 세련되게 */}
+          <div className="mt-auto pt-6 pb-8">
+            <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl p-4 border border-amber-200 shadow-sm hover:shadow-md transition-all duration-300">
               <div className="flex items-center gap-3">
-                <div className="text-xl">📲</div>
+                <div className="w-12 h-12 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-2xl flex items-center justify-center shadow-md">
+                  <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} 
+                          d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    <circle cx="12" cy="12" r="3" strokeWidth={2} className="animate-pulse" />
+                  </svg>
+                </div>
                 <div className="flex-1">
-                  <p className="text-xs font-medium text-gray-700">
-                    병원 곳곳의 NFC 스티커에 휴대폰을 대 보세요
+                  <p className="text-sm font-bold text-gray-900">
+                    벽의 <span className="text-blue-600">파란 NFC 스티커</span>에 핸드폰을 대 주세요
                   </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    현재 위치에서 가야 할 곳까지 길을 안내해드립니다
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    현재 위치에서 목적지까지 안내해 드립니다
                   </p>
                 </div>
               </div>
