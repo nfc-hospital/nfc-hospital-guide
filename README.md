@@ -20,22 +20,54 @@
 
 ## 시스템 아키텍처
 
+### 마이크로서비스 구조
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   환자용 PWA    │     │  관리자 대시보드  │     │   AI 챗봇 서버  │
-└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
-         │                       │                        │
-         └───────────────────────┴────────────────────────┘
-                                 │
-                        ┌────────┴────────┐
-                        │   Django API    │
-                        │   (DRF + WS)    │
-                        └────────┬────────┘
-                                 │
-                 ┌───────────────┼───────────────┐
-         ┌───────┴───────┐   ┌───┴───┐   ┌──────┴──────┐
-         │    MySQL      │   │ Redis │   │  EMR 연동   │
-         └───────────────┘   └───────┘   └─────────────┘
++------------------------------------------------------------------+
+|                         Frontend Layer                           |
++--------------------+-------------------+-----------------------+
+|   환자용 PWA       |   관리자 대시보드   |    AI 챗봇 UI        |
+|  React + Vite      |   React + Vite    |   React Component   |
+|  Port: 5174        |   Port: 5173      |   Embedded          |
++--------+-----------+---------+---------+----------+------------+
+         |                     |                    |
+         +---------------------+--------------------+
+                               |
+                     +---------+---------+
+                     |   API Gateway     |
+                     |   Nginx Reverse   |
+                     +---------+---------+
+                               |
++------------------------------------------------------------------+
+|                         Backend Services                         |
++-----------------------+-----------------+------------------------+
+|   Django REST API     | WebSocket Server|   Flask AI Service   |
+|   - Authentication    | Django Channels |   - NLP Engine       |
+|   - Queue Management  | - Real-time     |   - FAQ Matcher      |
+|   - NFC Processing    | - Notifications |   Port: 5000         |
+|   Port: 8000          | Port: 8000/ws   |                      |
++-----------+-----------+--------+--------+---------+-------------+
+            |                    |                  |
++---------------+--------+---------------+------------------+
+|  MySQL Database       |  Redis Cache      |  EMR Integration |
+|  - User Data          |  - Session Store  |  - Virtual DB API|
+|  - Queue State        |  - WebSocket Pub  |  - Read-Only Sync|
+|  - NFC Mappings       |  - Rate Limiting  |  - Patient State |
++-----------------------+-------------------+------------------+
+```
+
+### 데이터 플로우
+```
+Patient Phone --[NFC Scan]--> PWA --[HTTPS/WSS]--> Django API
+                                                         |
+Admin PC ------[Dashboard]--> Admin --[REST API]--> Queue Update
+                                                         |
+                                                         v
+                                                    WebSocket
+                                                    Broadcast
+                                                         |
+                                                         v
+                                                  All Connected
+                                                     Clients
 ```
 
 ## 기술 스택
