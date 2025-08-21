@@ -2,6 +2,8 @@ import { api, authAPI, appointmentAPI, queueAPI, chatbotAPI, nfcAPI } from './cl
 
 // API 서비스 - 환자 상태별 동적 UI를 위한 중앙화된 API 호출
 const apiService = {
+  // api 객체 직접 노출 (관리자 화면에서 사용)
+  api: api,
   // 환자 현재 상태 조회 (핵심 API)
   getPatientCurrentState: async () => {
     try {
@@ -259,10 +261,19 @@ const apiService = {
     refreshPatientData: (emrId) => api.post(`/virtual-db/refresh/${emrId}`),
   },
 
-  // 분석 API (환자용 일부)
+  // 분석 API
   analytics: {
     getMyPatientFlow: () => api.get('/analytics/patient-flow/me'),
     getMyWaitingHistory: () => api.get('/analytics/waiting-time/me'),
+    // 관리자용 분석 API
+    getPatientFlow: () => api.get('/analytics/patient-flow'),
+    getWaitingTime: () => api.get('/analytics/waiting-time'),
+    getCongestionHeatmap: () => api.get('/analytics/congestion-heatmap'),
+    getChatbotQueries: () => api.get('/analytics/chatbot-queries'),
+    getNfcUsage: () => api.get('/analytics/nfc-usage'),
+    getBottlenecks: () => api.get('/analytics/bottlenecks'),
+    createCustomReport: (data) => api.post('/analytics/custom-report', data),
+    exportData: (params) => api.get('/analytics/export', { params }),
   },
 
   // 관리자 대시보드 API
@@ -275,6 +286,12 @@ const apiService = {
     
     // 실시간 대기열 요약
     getQueueSummary: () => api.get('/queue/dashboard/realtime-data'),
+    
+    // 검사/진료 콘텐츠 관리
+    getExams: () => api.get('/dashboard/content/exams'),
+    createExam: (data) => api.post('/dashboard/content/exams', data),
+    updateExam: (examId, data) => api.put(`/dashboard/content/exams/${examId}`, data),
+    deleteExam: (examId) => api.delete(`/dashboard/content/exams/${examId}`),
     
     // 종합 대시보드 데이터 (여러 API를 한번에 호출)
     getSummary: async () => {

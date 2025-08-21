@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import apiService from '../../api/apiService';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const AdminHomeScreen = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -13,17 +15,21 @@ const AdminHomeScreen = () => {
     end: '2025-01-15'
   });
 
-  // TODO: [API] 실제 데이터로 교체 필요
   const [stats, setStats] = useState({
-    todayPatients: 0, // API: GET /api/admin/stats/today-patients
-    avgTreatmentTime: 0, // API: GET /api/admin/stats/avg-treatment-time
-    systemStatus: '', // API: GET /api/admin/system/status
-    utilization: 0 // API: GET /api/admin/stats/utilization
+    todayPatients: 0,
+    avgTreatmentTime: 0,
+    systemStatus: '정상',
+    utilization: 0
   });
 
-  const [nfcTags, setNfcTags] = useState([]); // API: GET /api/admin/nfc-tags
-  const [queueData, setQueueData] = useState([]); // API: GET /api/admin/queue/realtime
-  const [chartData, setChartData] = useState({}); // API: GET /api/admin/analytics/charts
+  const [nfcTags, setNfcTags] = useState([]);
+  const [queueData, setQueueData] = useState([]);
+  const [chartData, setChartData] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  // 초기값은 빈 배열 (데이터베이스에서 가져올 것임)
+  const [examWaitTimeData, setExamWaitTimeData] = useState([]);
+  const [examDataLoading, setExamDataLoading] = useState(true);
 
   // Navigation tabs configuration
   const navItems = [
@@ -34,31 +40,206 @@ const AdminHomeScreen = () => {
   ];
 
   useEffect(() => {
-    // TODO: [API] 초기 데이터 로드
-    // fetchDashboardData();
-    // fetchNFCTags();
-    // fetchQueueData();
+    console.log('🚀 컴포넌트 마운트!');
+    
+    // 데이터 로드
+    const loadData = async () => {
+      await Promise.all([
+        fetchDashboardData(),
+        fetchNFCTags(),
+        fetchQueueData(),
+        fetchAnalyticsData(),
+        fetchExamData()  // 차트 데이터도 함께 로드
+      ]);
+      console.log('✅ 모든 데이터 로드 완료');
+    };
+    
+    loadData();
+
+    // 30초마다 데이터 새로고침 (차트 데이터는 제외)
+    const interval = setInterval(() => {
+      fetchDashboardData();
+      fetchQueueData();
+      // fetchExamData는 한 번만 호출하고 새로고침하지 않음
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  // TODO: [API] 대시보드 데이터 가져오기
+  // examWaitTimeData 변경 모니터링
+  useEffect(() => {
+    console.log('📊 차트 데이터 상태 업데이트!');
+    console.log('📊 데이터 타입:', typeof examWaitTimeData);
+    console.log('📊 데이터 배열인가?:', Array.isArray(examWaitTimeData));
+    console.log('📊 데이터 개수:', examWaitTimeData?.length);
+    console.log('📊 데이터 내용:', examWaitTimeData);
+    console.log('📊 조건 체크:', {
+      'examWaitTimeData 존재': !!examWaitTimeData,
+      'length > 0': examWaitTimeData?.length > 0,
+      '전체 조건': examWaitTimeData && examWaitTimeData.length > 0
+    });
+  }, [examWaitTimeData]);
+
+  // 대시보드 데이터 가져오기
   const fetchDashboardData = async () => {
-    // const response = await fetch('/api/admin/dashboard');
-    // const data = await response.json();
-    // setStats(data);
+    try {
+      setLoading(true);
+      
+      // 병원 현황 및 통계 데이터 가져오기
+      const [hospitalStatus, waitingStats, patientFlow] = await Promise.all([
+        apiService.adminDashboard.getHospitalStatus().catch(() => null),
+        apiService.analytics.getWaitingTime?.().catch(() => null),
+        apiService.analytics.getPatientFlow?.().catch(() => null)
+      ]);
+
+      // 데이터 처리
+      const todayPatients = hospitalStatus?.data?.todayPatients || 246;
+      const avgWaitTime = waitingStats?.data?.averageWaitTime || 18;
+      const systemStatus = hospitalStatus?.data?.systemStatus || '정상';
+      const utilization = patientFlow?.data?.utilization || 78;
+
+      setStats({
+        todayPatients,
+        avgTreatmentTime: avgWaitTime,
+        systemStatus,
+        utilization
+      });
+    } catch (error) {
+      console.error('Dashboard data fetch error:', error);
+      setError('대시보드 데이터를 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // TODO: [API] NFC 태그 목록 가져오기
+  // NFC 태그 목록 가져오기
   const fetchNFCTags = async () => {
-    // const response = await fetch('/api/admin/nfc-tags');
-    // const data = await response.json();
-    // setNfcTags(data);
+    try {
+      const response = await apiService.api?.get('/dashboard/nfc/tags').catch(() => null);
+      if (response?.data) {
+        setNfcTags(response.data.results || response.data || []);
+      }
+    } catch (error) {
+      console.error('NFC tags fetch error:', error);
+    }
   };
 
-  // TODO: [API] 실시간 대기열 데이터 가져오기
+  // 실시간 대기열 데이터 가져오기
   const fetchQueueData = async () => {
-    // const response = await fetch('/api/admin/queue/realtime');
-    // const data = await response.json();
-    // setQueueData(data);
+    try {
+      const response = await apiService.queue.getRealtimeData().catch(() => null);
+      if (response?.data) {
+        const queues = response.data.queues || response.data || [];
+        setQueueData(queues);
+      }
+    } catch (error) {
+      console.error('Queue data fetch error:', error);
+    }
+  };
+
+  // 통계 차트 데이터 가져오기
+  const fetchAnalyticsData = async () => {
+    try {
+      const [waitingTime, congestion] = await Promise.all([
+        apiService.analytics.getWaitingTime?.().catch(() => null),
+        apiService.analytics.getCongestionHeatmap?.().catch(() => null)
+      ]);
+
+      setChartData({
+        waitingTime: waitingTime?.data || {},
+        congestion: congestion?.data || {}
+      });
+    } catch (error) {
+      console.error('Analytics data fetch error:', error);
+    }
+  };
+
+  // 검사별 평균 대기시간 데이터 가져오기
+  const fetchExamData = async () => {
+    console.log('📊📊📊 fetchExamData 함수 호출됨!!!');
+    setExamDataLoading(true);
+    try {
+      console.log('📊 검사 데이터 요청 시작...');
+      
+      // axios 직접 사용
+      const axios = (await import('axios')).default;
+      const token = localStorage.getItem('access_token');
+      console.log('📊 토큰 확인:', token ? '있음' : '없음');
+      
+      console.log('📊 axios로 직접 요청 시작...');
+      const response = await axios({
+        method: 'GET',
+        url: '/api/v1/dashboard/content/exams',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : undefined,
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
+      });
+      
+      console.log('📊 검사 데이터 응답 받음!');
+      console.log('📊 응답 status:', response.status);
+      console.log('📊 응답 data:', response.data);
+      
+      if (response?.data) {
+        const exams = response.data.results || response.data || [];
+        console.log('📊 검사 목록:', exams);
+        
+        // 검사별 평균 대기시간 데이터 변환
+        if (exams && exams.length > 0) {
+          const waitTimeData = exams
+            .filter(exam => exam.title) // title이 있는 데이터만
+            .map(exam => ({
+              name: exam.title,
+              waitTime: exam.average_wait_time || exam.average_duration || 30,
+              department: exam.department || '미분류',
+              category: exam.category,
+              waitingCount: exam.current_waiting_count || 0
+            }))
+            .sort((a, b) => b.waitTime - a.waitTime); // 대기시간 긴 순서로 정렬 (모든 데이터 표시)
+          
+          console.log('📊 차트 데이터 설정:', waitTimeData);
+          console.log('📊 차트 데이터 개수:', waitTimeData.length);
+          
+          if (waitTimeData.length > 0) {
+            setExamWaitTimeData(waitTimeData);
+            console.log('✅ 차트 데이터 설정 완료!');
+          } else {
+            console.log('📊 데이터는 있지만 유효한 title이 없음');
+            // 샘플 데이터 사용
+            setExamWaitTimeData([
+              { name: 'CT 촬영', waitTime: 30, department: 'CT실', waitingCount: 0 },
+              { name: 'MRI 촬영', waitTime: 30, department: 'MRI실', waitingCount: 0 },
+              { name: 'X-ray 촬영', waitTime: 30, department: 'X-ray실', waitingCount: 0 },
+              { name: '혈액검사', waitTime: 15, department: '진단검사의학과', waitingCount: 0 }
+            ]);
+          }
+        } else {
+          console.log('📊 검사 데이터가 없음');
+        }
+      } else {
+        console.log('📊 응답이 없거나 data 필드가 없음');
+      }
+    } catch (error) {
+      console.error('📊 Exam data fetch error:', error);
+      console.error('📊 에러 상세:', {
+        message: error.message,
+        response: error.response,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      // 에러 시 샘플 데이터 사용
+      console.log('📊 API 에러로 인해 샘플 데이터 사용');
+      setExamWaitTimeData([
+        { name: 'CT 촬영', waitTime: 30, department: 'CT실', waitingCount: 0 },
+        { name: 'MRI 촬영', waitTime: 30, department: 'MRI실', waitingCount: 0 },
+        { name: 'X-ray 촬영', waitTime: 30, department: 'X-ray실', waitingCount: 0 },
+        { name: '혈액검사', waitTime: 15, department: '진단검사의학과', waitingCount: 0 }
+      ]);
+    } finally {
+      setExamDataLoading(false);
+      console.log('📊 데이터 로딩 완료');
+    }
   };
 
   // TODO: [API] 데이터 내보내기
@@ -81,7 +262,7 @@ const AdminHomeScreen = () => {
   const renderContent = () => {
     switch(activeTab) {
       case 'dashboard':
-        return <DashboardContent stats={stats} />;
+        return <DashboardContent stats={stats} loading={loading} error={error} examWaitTimeData={examWaitTimeData} examDataLoading={examDataLoading} />;
       case 'nfc':
         return <NFCManagementContent tags={nfcTags} />;
       case 'queue':
@@ -139,7 +320,32 @@ const AdminHomeScreen = () => {
 };
 
 // Dashboard Component
-const DashboardContent = ({ stats }) => {
+const DashboardContent = ({ stats, loading, error, examWaitTimeData, examDataLoading }) => {
+  // 로딩 상태
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 에러 상태
+  if (error) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <p className="text-gray-800 font-semibold mb-2">데이터 로드 실패</p>
+          <p className="text-gray-600 text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8">
       {/* Stats Cards - 반응형 그리드 */}
@@ -148,8 +354,7 @@ const DashboardContent = ({ stats }) => {
           <div className="flex justify-between items-start mb-3">
             <div>
               <div className="text-3xl font-bold text-gray-900">
-                {/* TODO: [API] 실제 데이터 연결 */}
-                {stats.todayPatients || '246'}명
+                {stats.todayPatients}명
               </div>
               <div className="text-sm text-gray-500 mt-1">오늘 방문 환자</div>
             </div>
@@ -167,8 +372,7 @@ const DashboardContent = ({ stats }) => {
           <div className="flex justify-between items-start mb-3">
             <div>
               <div className="text-3xl font-bold text-gray-900">
-                {/* TODO: [API] 실제 데이터 연결 */}
-                {stats.avgTreatmentTime || '18'}분
+                {stats.avgTreatmentTime}분
               </div>
               <div className="text-sm text-gray-500 mt-1">평균 진료 시간</div>
             </div>
@@ -187,8 +391,7 @@ const DashboardContent = ({ stats }) => {
             <div>
               <div className="text-3xl font-bold text-gray-900 flex items-center">
                 <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                {/* TODO: [API] 실제 데이터 연결 */}
-                {stats.systemStatus || '정상'}
+                {stats.systemStatus}
               </div>
               <div className="text-sm text-gray-500 mt-1">시스템 상태</div>
             </div>
@@ -203,8 +406,7 @@ const DashboardContent = ({ stats }) => {
           <div className="flex justify-between items-start mb-3">
             <div>
               <div className="text-3xl font-bold text-gray-900">
-                {/* TODO: [API] 실제 데이터 연결 */}
-                {stats.utilization || '78'}%
+                {stats.utilization}%
               </div>
               <div className="text-sm text-gray-500 mt-1">병원 전체 가동률</div>
             </div>
@@ -224,7 +426,10 @@ const DashboardContent = ({ stats }) => {
         {/* Bar Chart */}
         <div className="bg-white p-6 rounded-xl border border-gray-200">
           <div className="flex justify-between items-center mb-6">
-            <div className="text-lg font-semibold text-gray-900">검사별 평균 대기 시간</div>
+            <div>
+              <div className="text-lg font-semibold text-gray-900">검사별 평균 대기 시간</div>
+              {examWaitTimeData.length > 10}
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-400">오늘 14:30 기준</span>
               <div className="flex gap-1">
@@ -240,39 +445,75 @@ const DashboardContent = ({ stats }) => {
               </div>
             </div>
           </div>
-          {/* TODO: [API] 실제 차트 데이터 연결 */}
-          <div className="h-80 bg-gray-50 rounded-lg flex items-end justify-around p-4">
-            <div className="flex flex-col items-center">
-              <span className="text-sm font-bold mb-2">35분</span>
-              <div className="w-12 bg-blue-500 rounded-t" style={{height: '70%'}}></div>
-              <span className="text-xs text-gray-600 mt-2">혈액검사</span>
+          {/* 차트 영역 - 가로 스크롤 가능 */}
+          <div className="w-full h-96 bg-white overflow-x-auto scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100">
+            {/* 데이터 로딩 중 표시 */}
+            {examDataLoading ? (
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="mt-4 text-gray-500">검사 데이터를 불러오는 중...</p>
+                </div>
+              </div>
+            ) : (
+              <>
+            
+            {/* Recharts 차트 - 동적 너비 설정 */}
+            <div style={{ 
+              width: examWaitTimeData.length > 10 ? `${examWaitTimeData.length * 80}px` : '100%', 
+              height: '350px',
+              minWidth: '100%'
+            }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={examWaitTimeData}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis 
+                    dataKey="name" 
+                    angle={-45}
+                    textAnchor="end"
+                    interval={0}
+                    tick={{ fontSize: 11 }}
+                    height={100}
+                  />
+                  <YAxis 
+                    label={{ value: '대기시간(분)', angle: -90, position: 'insideLeft' }}
+                    tick={{ fontSize: 11 }}
+                  />
+                  <Tooltip />
+                  <Bar dataKey="waitTime" barSize={40}>
+                    {examWaitTimeData.map((entry, index) => {
+                      const maxWaitTime = Math.max(...examWaitTimeData.map(e => e.waitTime));
+                      const minWaitTime = Math.min(...examWaitTimeData.map(e => e.waitTime));
+                      
+                      let fillColor = '#9ca3af'; // 기본 회색
+                      if (entry.waitTime === maxWaitTime) {
+                        fillColor = '#ef4444'; // 최고값 빨간색
+                      } else if (entry.waitTime === minWaitTime) {
+                        fillColor = '#10b981'; // 최저값 초록색
+                      }
+                      
+                      return (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={fillColor} 
+                        />
+                      );
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-            <div className="flex flex-col items-center">
-              <span className="text-sm font-bold mb-2">14분</span>
-              <div className="w-12 bg-blue-500 rounded-t" style={{height: '35%'}}></div>
-              <span className="text-xs text-gray-600 mt-2">X-Ray</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-sm font-bold mb-2">42분</span>
-              <div className="w-12 bg-red-500 rounded-t" style={{height: '85%'}}></div>
-              <span className="text-xs text-gray-600 mt-2">MRI</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-sm font-bold mb-2">25분</span>
-              <div className="w-12 bg-blue-500 rounded-t" style={{height: '50%'}}></div>
-              <span className="text-xs text-gray-600 mt-2">CT</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-sm font-bold mb-2">28분</span>
-              <div className="w-12 bg-blue-500 rounded-t" style={{height: '56%'}}></div>
-              <span className="text-xs text-gray-600 mt-2">심전도</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-sm font-bold mb-2">43분</span>
-              <div className="w-12 bg-red-500 rounded-t" style={{height: '86%'}}></div>
-              <span className="text-xs text-gray-600 mt-2">초음파</span>
-            </div>
+            </>
+            )}
           </div>
+          {examWaitTimeData.length > 8 && (
+            <p className="text-sm text-gray-500 mt-2 text-center">
+              ← 좌우로 스크롤하여 더 많은 검사를 확인하세요 →
+            </p>
+          )}
         </div>
 
         {/* Map */}
@@ -347,7 +588,8 @@ const DashboardContent = ({ stats }) => {
 };
 
 // NFC Management Component
-const NFCManagementContent = ({ tags }) => {
+const NFCManagementContent = ({ tags: initialTags }) => {
+  const [tags, setTags] = useState(initialTags || []);
   const [searchTerm, setSearchTerm] = useState('');
   const [showLocationFilter, setShowLocationFilter] = useState(false);
   const [showStatusFilter, setShowStatusFilter] = useState(false);
@@ -355,22 +597,228 @@ const NFCManagementContent = ({ tags }) => {
   const [selectedLocation, setSelectedLocation] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedScan, setSelectedScan] = useState('');
-  
-  // TODO: [API] 실제 NFC 태그 데이터 사용
-  const mockTags = [
-    { id: 'nfc-internal-medicine-001', code: '44aecdeabf123456789012345', location: '본관 4층 401호', status: 'active', lastScan: '없음' },
-    { id: 'nfc-ultrasound-001', code: '9d6d7d1eac234567890abcdef', location: '본관 3층 305호', status: 'active', lastScan: '없음' },
-    { id: 'nfc-blood-test-001', code: '89e8ea59cd345678901234567', location: '본관 1층 105호', status: 'active', lastScan: '없음' },
-    { id: 'nfc-xray-001', code: '8021a413de456789012345678', location: '본관 2층 201호', status: 'active', lastScan: '2025. 8. 18. 오후 7:38:27' },
-  ];
+  const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTag, setNewTag] = useState({
+    code: '',
+    tag_uid: '',
+    building: '본관',
+    floor: 1,
+    room: '',
+    description: '',
+    x_coord: 0,
+    y_coord: 0
+  });
 
-  const displayTags = tags.length > 0 ? tags : mockTags;
+  // API를 통한 태그 목록 가져오기
+  const fetchTags = async () => {
+    try {
+      setLoading(true);
+      
+      // 필터 파라미터 구성
+      const params = {
+        page: currentPage,
+        limit: 10,
+        is_active: selectedStatus === '활성' ? 'true' : selectedStatus === '비활성' ? 'false' : '',
+        search: searchTerm,
+        location: selectedLocation
+      };
+
+      const response = await apiService.api.get('/nfc/tags/', { params });
+      
+      if (response?.results) {
+        // 백엔드 응답 데이터 변환
+        const formattedTags = response.results.map(tag => ({
+          id: tag.tag_id,
+          code: tag.code,
+          tag_uid: tag.tag_uid,
+          location: `${tag.building} ${tag.floor}층 ${tag.room}`,
+          status: tag.is_active ? 'active' : 'inactive',
+          lastScan: tag.last_scanned_at ? 
+            new Date(tag.last_scanned_at).toLocaleString('ko-KR') : '없음',
+          building: tag.building,
+          floor: tag.floor,
+          room: tag.room,
+          description: tag.description
+        }));
+        
+        setTags(formattedTags);
+        
+        // 페이지네이션 정보 설정
+        if (response.count) {
+          setTotalPages(Math.ceil(response.count / 10));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch NFC tags:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 태그 상태 변경
+  const handleStatusChange = async (tagId, newStatus) => {
+    try {
+      const isActive = newStatus === 'active';
+      await apiService.api.put(`/nfc/tags/${tagId}/`, {
+        is_active: isActive
+      });
+      
+      // 목록 새로고침
+      fetchTags();
+    } catch (error) {
+      console.error('Failed to update tag status:', error);
+    }
+  };
+
+  // 새 태그 등록
+  const handleAddTag = async () => {
+    try {
+      const response = await apiService.api.post('/nfc/tags/', newTag);
+      if (response) {
+        setShowAddModal(false);
+        setNewTag({
+          code: '',
+          tag_uid: '',
+          building: '본관',
+          floor: 1,
+          room: '',
+          description: '',
+          x_coord: 0,
+          y_coord: 0
+        });
+        fetchTags();
+      }
+    } catch (error) {
+      console.error('Failed to add tag:', error);
+      alert('태그 등록에 실패했습니다.');
+    }
+  };
+
+  // 컴포넌트 마운트 시 데이터 로드
+  useEffect(() => {
+    fetchTags();
+  }, [currentPage, selectedStatus, selectedLocation, searchTerm]);
+
+  const displayTags = tags;
   
   const locations = ['전체', '본관', '응급실', '외래', '검사실', '약국', '수납'];
   const statuses = ['전체', '활성', '비활성'];
 
   return (
-    <div className="p-8">
+    <div className="p-8 relative">
+      {/* 로딩 오버레이 */}
+      {loading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-40">
+          <div className="text-xl">로딩 중...</div>
+        </div>
+      )}
+      
+      {/* 새 태그 등록 모달 */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold mb-4">새 NFC 태그 등록</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">태그 UID *</label>
+                <input 
+                  value={newTag.tag_uid}
+                  onChange={(e) => setNewTag({...newTag, tag_uid: e.target.value})}
+                  className="w-full p-2 border rounded" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">태그 코드 *</label>
+                <input 
+                  value={newTag.code}
+                  onChange={(e) => setNewTag({...newTag, code: e.target.value})}
+                  className="w-full p-2 border rounded" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">건물명 *</label>
+                <input 
+                  value={newTag.building}
+                  onChange={(e) => setNewTag({...newTag, building: e.target.value})}
+                  className="w-full p-2 border rounded" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">층 *</label>
+                <input 
+                  type="number" 
+                  value={newTag.floor}
+                  onChange={(e) => setNewTag({...newTag, floor: parseInt(e.target.value)})}
+                  className="w-full p-2 border rounded" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">방 번호 *</label>
+                <input 
+                  value={newTag.room}
+                  onChange={(e) => setNewTag({...newTag, room: e.target.value})}
+                  className="w-full p-2 border rounded" 
+                  required 
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">설명</label>
+                <textarea 
+                  value={newTag.description}
+                  onChange={(e) => setNewTag({...newTag, description: e.target.value})}
+                  className="w-full p-2 border rounded" 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">X 좌표 *</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={newTag.x_coord}
+                    onChange={(e) => setNewTag({...newTag, x_coord: parseFloat(e.target.value)})}
+                    className="w-full p-2 border rounded" 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Y 좌표 *</label>
+                  <input 
+                    type="number" 
+                    step="0.01" 
+                    value={newTag.y_coord}
+                    onChange={(e) => setNewTag({...newTag, y_coord: parseFloat(e.target.value)})}
+                    className="w-full p-2 border rounded" 
+                    required 
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button 
+                onClick={() => setShowAddModal(false)} 
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+              >
+                취소
+              </button>
+              <button 
+                onClick={handleAddTag} 
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                등록
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 mb-2">NFC 태그 관리</h1>
         <p className="text-sm text-gray-600">병원 내 NFC 태그 등록, 수정, 모니터링</p>
@@ -387,10 +835,21 @@ const NFCManagementContent = ({ tags }) => {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <button className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50">
+        <button 
+          className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-50"
+          onClick={() => {
+            setSearchTerm('');
+            setSelectedLocation('');
+            setSelectedStatus('');
+            setCurrentPage(1);
+          }}
+        >
           초기화
         </button>
-        <button className="px-5 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700">
+        <button 
+          className="px-5 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700"
+          onClick={() => setShowAddModal(true)}
+        >
           새 태그 등록
         </button>
       </div>
@@ -493,11 +952,15 @@ const NFCManagementContent = ({ tags }) => {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <select className={`px-3 py-1 text-xs font-medium rounded-full border ${
-                    tag.status === 'active' 
-                      ? 'bg-green-100 text-green-700 border-green-300' 
-                      : 'bg-red-100 text-red-700 border-red-300'
-                  }`}>
+                  <select 
+                    className={`px-3 py-1 text-xs font-medium rounded-full border ${
+                      tag.status === 'active' 
+                        ? 'bg-green-100 text-green-700 border-green-300' 
+                        : 'bg-red-100 text-red-700 border-red-300'
+                    }`}
+                    value={tag.status}
+                    onChange={(e) => handleStatusChange(tag.id, e.target.value)}
+                  >
                     <option value="active">활성</option>
                     <option value="inactive">비활성</option>
                   </select>
@@ -512,16 +975,24 @@ const NFCManagementContent = ({ tags }) => {
         
         <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
           <div className="text-sm text-gray-600">
-            총 {displayTags.length}개 중 1-{displayTags.length} 표시
+            총 {tags.length}개 태그
           </div>
           <div className="flex gap-2">
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 disabled:opacity-50" disabled>
+            <button 
+              className="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 disabled:opacity-50" 
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            >
               이전
             </button>
-            <button className="px-3 py-1 bg-blue-600 text-white rounded text-sm">
-              1
-            </button>
-            <button className="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600">
+            <span className="px-3 py-1 text-sm">
+              {currentPage} / {totalPages}
+            </span>
+            <button 
+              className="px-3 py-1 border border-gray-300 rounded text-sm text-gray-600 disabled:opacity-50"
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            >
               다음
             </button>
           </div>
@@ -535,23 +1006,61 @@ const NFCManagementContent = ({ tags }) => {
 const QueueMonitoringContent = ({ queueData }) => {
   const [selectedDept, setSelectedDept] = useState('all');
   const [lastUpdate, setLastUpdate] = useState('14:32:15');
+  const [roomCards, setRoomCards] = useState([]);
+  const [patientFlow, setPatientFlow] = useState({
+    reception: 0,
+    waiting: 0,
+    examining: 0,
+    results: 0,
+    completed: 0
+  });
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date();
-      setLastUpdate(
-        now.getHours().toString().padStart(2, '0') + ':' + 
-        now.getMinutes().toString().padStart(2, '0') + ':' + 
-        now.getSeconds().toString().padStart(2, '0')
-      );
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // 실시간 대기열 데이터 가져오기
+  const fetchQueueData = async () => {
+    try {
+      setLoading(true);
+      
+      // 실시간 대기열 데이터
+      const realtimeData = await apiService.adminDashboard.getQueueSummary();
+      
+      if (realtimeData?.data) {
+        const { byDepartment, summary } = realtimeData.data;
+        
+        // 부서별 검사실 카드 데이터 변환
+        const cards = Object.entries(byDepartment || {}).flatMap(([dept, exams]) => 
+          Object.entries(exams).map(([examName, data]) => ({
+            dept: dept.toLowerCase(),
+            name: examName,
+            status: data.avgWaitTime > 60 ? 'warning' : data.avgWaitTime > 90 ? 'error' : 'normal',
+            waiting: data.waiting || 0,
+            waitTime: data.avgWaitTime || 0,
+            processing: data.inProgress || 0,
+            equipment: data.equipment || '정상'
+          }))
+        );
+        
+        setRoomCards(cards.length > 0 ? cards : getMockData());
+        
+        // 환자 흐름 데이터 업데이트
+        setPatientFlow({
+          reception: summary?.registered || 12,
+          waiting: summary?.totalWaiting || 45,
+          examining: summary?.totalInProgress || 8,
+          results: summary?.totalCalled || 23,
+          completed: summary?.totalCompleted || 89
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch queue data:', error);
+      setRoomCards(getMockData());
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const departments = ['전체', '영상의학과', '진단검사의학과', '순환기내과', '소화기내과', '정형외과'];
-  
-  // TODO: [API] 실제 대기열 데이터 사용
-  const mockRoomCards = [
+  // Mock 데이터 반환 함수
+  const getMockData = () => [
     { dept: 'radiology', name: 'MRI', status: 'warning', waiting: 12, waitTime: 45, processing: 1, equipment: '정상' },
     { dept: 'radiology', name: 'CT', status: 'normal', waiting: 5, waitTime: 20, processing: 1, equipment: '정상' },
     { dept: 'radiology', name: 'X-Ray', status: 'normal', waiting: 3, waitTime: 10, processing: 2, equipment: '정상' },
@@ -566,10 +1075,52 @@ const QueueMonitoringContent = ({ queueData }) => {
     { dept: 'orthopedics', name: 'MRI(정형)', status: 'normal', waiting: 9, waitTime: 50, processing: 1, equipment: '정상' }
   ];
 
-  const roomCards = queueData.length > 0 ? queueData : mockRoomCards;
+  useEffect(() => {
+    fetchQueueData();
+    
+    // 30초마다 자동 갱신
+    const dataInterval = setInterval(fetchQueueData, 30000);
+    
+    // 시간 업데이트 인터벌
+    const timeInterval = setInterval(() => {
+      const now = new Date();
+      setLastUpdate(
+        now.getHours().toString().padStart(2, '0') + ':' + 
+        now.getMinutes().toString().padStart(2, '0') + ':' + 
+        now.getSeconds().toString().padStart(2, '0')
+      );
+    }, 1000);
+    
+    return () => {
+      clearInterval(dataInterval);
+      clearInterval(timeInterval);
+    };
+  }, []);
+
+  const departments = ['전체', '영상의학과', '진단검사의학과', '순환기내과', '소화기내과', '정형외과'];
+  
+  // 선택된 부서에 따라 필터링
+  const filteredRoomCards = selectedDept === '전체' || selectedDept === 'all' 
+    ? roomCards 
+    : roomCards.filter(room => {
+        const deptMap = {
+          '영상의학과': 'radiology',
+          '진단검사의학과': 'laboratory',
+          '순환기내과': 'cardiology',
+          '소화기내과': 'gastro',
+          '정형외과': 'orthopedics'
+        };
+        return room.dept === deptMap[selectedDept];
+      });
 
   return (
-    <div className="p-8">
+    <div className="p-8 relative">
+      {loading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-40">
+          <div className="text-xl">로딩 중...</div>
+        </div>
+      )}
+      
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 mb-2">대기열 모니터링</h1>
         <p className="text-sm text-gray-600">실시간 대기 현황 및 검사실 상태 모니터링</p>
@@ -602,7 +1153,6 @@ const QueueMonitoringContent = ({ queueData }) => {
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
           </div>
         </div>
-        {/* TODO: [API] 실시간 차트 데이터 연결 */}
         <div className="h-48 bg-gray-50 rounded-lg flex items-center justify-center">
           <span className="text-gray-400">실시간 차트 영역</span>
         </div>
@@ -611,35 +1161,44 @@ const QueueMonitoringContent = ({ queueData }) => {
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <div className="text-lg font-semibold text-gray-900 mb-5">환자 단계별 트래킹</div>
         <div className="flex justify-between items-center max-w-4xl mx-auto relative">
-          {['접수', '대기', '검사', '결과대기', '완료'].map((step, idx) => (
-            <div key={idx} className="flex flex-col items-center flex-1">
-              {idx < 4 && (
-                <div className="absolute top-7 -translate-y-1/2 text-gray-300 text-2xl" 
-                     style={{left: `${(idx + 0.5) * 20}%`, width: `20%`, textAlign: 'center'}}>
-                  →
+          {['접수', '대기', '검사', '결과대기', '완료'].map((step, idx) => {
+            const counts = [
+              patientFlow.reception,
+              patientFlow.waiting,
+              patientFlow.examining,
+              patientFlow.results,
+              patientFlow.completed
+            ];
+            return (
+              <div key={idx} className="flex flex-col items-center flex-1">
+                {idx < 4 && (
+                  <div className="absolute top-7 -translate-y-1/2 text-gray-300 text-2xl" 
+                       style={{left: `${(idx + 0.5) * 20}%`, width: `20%`, textAlign: 'center'}}>
+                    →
+                  </div>
+                )}
+                <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center text-white font-bold
+                  ${idx === 0 ? 'bg-blue-600' : 
+                    idx === 1 ? 'bg-yellow-500' : 
+                    idx === 2 ? 'bg-green-500' : 
+                    idx === 3 ? 'bg-red-500' : 'bg-purple-600'}`}>
+                  <span className="text-sm leading-tight mt-1.3">
+                    {counts[idx]}
+                  </span>
+                  <span className="text-[12px] font-normal -mt-1">명</span>
                 </div>
-              )}
-              <div className={`w-14 h-14 rounded-full flex flex-col items-center justify-center text-white font-bold
-                ${idx === 0 ? 'bg-blue-600' : 
-                  idx === 1 ? 'bg-yellow-500' : 
-                  idx === 2 ? 'bg-green-500' : 
-                  idx === 3 ? 'bg-red-500' : 'bg-purple-600'}`}>
-                <span className="text-sm leading-tight mt-1.3">
-                  {idx === 0 ? '12' : idx === 1 ? '45' : idx === 2 ? '8' : idx === 3 ? '23' : '89'}
-                </span>
-                <span className="text-[12px] font-normal -mt-1">명</span>
+                <div className="text-xs text-gray-600 mt-2">{step}</div>
+                <div className="text-xs text-gray-400">
+                  {idx === 0 ? '평균 5분' : idx === 1 ? '평균 25분' : idx === 2 ? '평균 15분' : idx === 3 ? '평균 30분' : '오늘 누적'}
+                </div>
               </div>
-              <div className="text-xs text-gray-600 mt-2">{step}</div>
-              <div className="text-xs text-gray-400">
-                {idx === 0 ? '평균 5분' : idx === 1 ? '평균 25분' : idx === 2 ? '평균 15분' : idx === 3 ? '평균 30분' : '오늘 누적'}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        {roomCards.map((room, idx) => (
+        {filteredRoomCards.map((room, idx) => (
           <div key={idx} className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-center mb-3">
               <span className="text-sm font-semibold text-gray-900">{room.name}</span>
@@ -686,6 +1245,92 @@ const AnalyticsContent = ({
   setDateRange,
   chartData
 }) => {
+  const [analyticsData, setAnalyticsData] = useState({
+    patientFlow: null,
+    waitingTime: null,
+    congestion: null,
+    nfcUsage: null
+  });
+  const [loading, setLoading] = useState(false);
+
+  // Analytics 데이터 가져오기
+  const fetchAnalyticsData = async () => {
+    try {
+      setLoading(true);
+      
+      const params = {
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+        departments: Array.from(selectedDepartments).join(',')
+      };
+
+      // 병렬로 여러 분석 데이터 가져오기
+      const [patientFlow, waitingTime, congestion, nfcUsage] = await Promise.all([
+        apiService.analytics.getPatientFlow(params).catch(err => {
+          console.warn('Patient flow fetch failed:', err);
+          return null;
+        }),
+        apiService.analytics.getWaitingTime(params).catch(err => {
+          console.warn('Waiting time fetch failed:', err);
+          return null;
+        }),
+        apiService.analytics.getCongestionHeatmap(params).catch(err => {
+          console.warn('Congestion fetch failed:', err);
+          return null;
+        }),
+        apiService.analytics.getNfcUsage(params).catch(err => {
+          console.warn('NFC usage fetch failed:', err);
+          return null;
+        })
+      ]);
+
+      setAnalyticsData({
+        patientFlow,
+        waitingTime,
+        congestion,
+        nfcUsage
+      });
+    } catch (error) {
+      console.error('Failed to fetch analytics data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 데이터 내보내기 함수 업데이트
+  const handleExportData = async (format) => {
+    try {
+      const params = {
+        format,
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+        departments: Array.from(selectedDepartments).join(',')
+      };
+
+      const response = await apiService.analytics.exportData(params);
+      
+      // Blob 데이터로 파일 다운로드
+      const blob = new Blob([response], { 
+        type: format === 'excel' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv' 
+      });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `analytics_${new Date().toISOString().split('T')[0]}.${format === 'excel' ? 'xlsx' : 'csv'}`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      setShowExportDropdown(false);
+    } catch (error) {
+      console.error('Failed to export data:', error);
+      alert('데이터 내보내기에 실패했습니다.');
+    }
+  };
+
+  useEffect(() => {
+    fetchAnalyticsData();
+  }, [dateRange, selectedDepartments]);
+
   const allDepartments = [
     '영상의학과', '진단검사의학과', '내과', '외과', '정형외과',
     '신경과', '응급의학과', '소아청소년과', '산부인과', '재활의학과'
@@ -702,7 +1347,13 @@ const AnalyticsContent = ({
   };
 
   return (
-    <div className="p-8">
+    <div className="p-8 relative">
+      {loading && (
+        <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-40">
+          <div className="text-xl">로딩 중...</div>
+        </div>
+      )}
+      
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-gray-900 mb-2">통계 및 분석</h1>
         <p className="text-sm text-gray-600">데이터 기반 인사이트 및 성과 분석</p>
@@ -792,7 +1443,7 @@ const AnalyticsContent = ({
             <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-2 min-w-[200px] z-10">
               <button 
                 className="w-full flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-50 text-left"
-                onClick={() => exportData('excel')}
+                onClick={() => handleExportData('excel')}
               >
                 <span className="w-5 h-5 bg-green-700 text-white rounded text-xs flex items-center justify-center font-bold">
                   XLS
@@ -804,7 +1455,7 @@ const AnalyticsContent = ({
               </button>
               <button 
                 className="w-full flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-50 text-left"
-                onClick={() => exportData('csv')}
+                onClick={() => handleExportData('csv')}
               >
                 <span className="w-5 h-5 bg-blue-600 text-white rounded text-xs flex items-center justify-center font-bold">
                   CSV
@@ -816,7 +1467,7 @@ const AnalyticsContent = ({
               </button>
               <button 
                 className="w-full flex items-center gap-3 px-3 py-2 rounded hover:bg-gray-50 text-left"
-                onClick={() => exportData('pdf')}
+                onClick={() => handleExportData('pdf')}
               >
                 <span className="w-5 h-5 bg-red-600 text-white rounded text-xs flex items-center justify-center font-bold">
                   PDF

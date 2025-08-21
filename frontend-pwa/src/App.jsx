@@ -19,11 +19,8 @@ import NotFound from './pages/NotFound';
 import PrivateRoute from './components/common/PrivateRoute';
 import WebSocketTest from './components/WebSocketTest';
 import CSRFStatus from './components/dev/CSRFStatus';
-// Admin pages
-import AdminDashboard from './pages/admin/AdminDashboard';
-import NFCTagManagement from './pages/admin/NFCTagManagement';
-import QueueMonitoring from './pages/admin/QueueMonitoring';
-import AnalyticsDashboard from './pages/admin/AnalyticsDashboard';
+// Admin pages - AdminHomeScreen으로 통합
+import AdminHomeScreen from './components/screens/AdminHomeScreen';
 import ChatbotTest from './pages/ChatbotTest';
 import MapTest from './pages/MapTest';
 import MapEditor from './pages/MapEditor';
@@ -134,25 +131,15 @@ function AppContent() {
               </PrivateRoute>
             } />
             
-            {/* Admin Dashboard routes */}
+            {/* Admin Dashboard - 통합된 AdminHomeScreen 사용 */}
             <Route path="/dashboard" element={
               <PrivateRoute>
-                <AdminDashboard />
+                <AdminHomeScreen />
               </PrivateRoute>
             } />
-            <Route path="/dashboard/nfc-tags" element={
+            <Route path="/dashboard/*" element={
               <PrivateRoute>
-                <NFCTagManagement />
-              </PrivateRoute>
-            } />
-            <Route path="/dashboard/queue" element={
-              <PrivateRoute>
-                <QueueMonitoring />
-              </PrivateRoute>
-            } />
-            <Route path="/dashboard/analytics" element={
-              <PrivateRoute>
-                <AnalyticsDashboard />
+                <AdminHomeScreen />
               </PrivateRoute>
             } />
             

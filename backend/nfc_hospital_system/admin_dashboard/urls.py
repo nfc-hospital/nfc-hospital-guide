@@ -10,6 +10,7 @@ from .views import (
     HospitalStatusMonitoringView,
     SystemAlertsMonitoringView
 )
+from .exam_views import ExamContentViewSet
 from nfc.views import (
     tag_status_monitoring, admin_tag_list, AdminNFCTagViewSet,
     bulk_tag_operation, tag_usage_statistics, tag_assignment_history,
@@ -18,6 +19,7 @@ from nfc.views import (
 
 # Router 설정
 router = DefaultRouter()
+router.register(r'content/exams', ExamContentViewSet, basename='exam-content')
 router.register(r'nfc/tags', AdminNFCTagViewSet, basename='admin-nfc-tags')
 router.register(r'notifications', NotificationViewSet, basename='notifications')
 router.register(r'devices', DeviceTokenViewSet, basename='notification-devices')
