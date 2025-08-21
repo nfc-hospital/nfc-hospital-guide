@@ -269,13 +269,7 @@ export default function Login() {
                 </svg>
                 <div className="ml-3">
                   <p className="text-sm font-bold text-amber-800">
-                    시연용 테스트 모드
-                  </p>
-                  <p className="text-sm text-amber-700 mt-1">
-                    전화번호: 010-1234-5678 • 생년월일: 990101
-                  </p>
-                  <p className="text-xs text-amber-600 mt-2">
-                    ※ 실제 PASS 인증이 아닌 데모용 구현입니다
+                    ※ 실제 PASS 인증이 아닌 시연용 구현입니다
                   </p>
                 </div>
               </div>
