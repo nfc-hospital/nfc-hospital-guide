@@ -12,7 +12,10 @@ const FormatBTemplate = ({
   preparationItems,
   completionStats,
   precautions,
-  children
+  children,
+  customPreparationContent, // 준비사항 탭에 추가할 커스텀 콘텐츠
+  showPaymentInfo = false, // 수납 정보 표시 여부
+  paymentAmount = 0 // 수납 금액
 }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(screenType === 'unregistered' ? 'preparation' : 'completion');
@@ -151,13 +154,6 @@ const FormatBTemplate = ({
                       }`}>
                         {item.text}
                       </span>
-                      
-                      {/* 완료 아이콘 - 부드러운 애니메이션 */}
-                      <div className={`transition-all duration-300 ${
-                        isChecked ? 'opacity-100 scale-100' : 'opacity-0 scale-0'
-                      }`}>
-                        <CheckCircleIcon className="w-6 h-6 text-green-500" />
-                      </div>
                     </div>
                   );
                 })}
@@ -166,59 +162,66 @@ const FormatBTemplate = ({
           </div>
         );
       })}
+      
+      {/* 커스텀 준비사항 콘텐츠 추가 */}
+      {customPreparationContent && customPreparationContent}
     </div>
   );
 
   // 완료내역 탭 렌더링 - 더 세련되게
   const renderCompletionTab = () => (
-    <div className="space-y-6">
-      {/* 통계 카드들 - 더 현대적으로 */}
-      <div className="grid grid-cols-3 gap-4">
-        {completionStats?.map((stat, index) => (
-          <div 
-            key={index}
-            className={`group relative overflow-hidden rounded-2xl p-5 text-center transition-all duration-300 hover:scale-105 hover:shadow-lg ${stat.bgColor} shadow-md`}
-          >
-            {/* 장식 요소 */}
-            <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/10 rounded-full blur-xl group-hover:scale-150 transition-transform duration-500" />
-            
-            <div className="relative">
-              <div className="text-3xl mb-3 filter drop-shadow-sm">{stat.icon}</div>
-              <div className="font-bold text-xl mb-1">{stat.value}</div>
-              <div className="text-sm font-medium opacity-80">{stat.label}</div>
-            </div>
+    <div className="space-y-4">
+      {/* 수납 완료 정보 - screenType이 completed이고 showPaymentInfo가 true일 때만 */}
+      {screenType === 'completed' && showPaymentInfo && (
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-3xl p-6 text-center border border-green-200">
+          <div className="mb-2">
+            <svg className="w-12 h-12 mx-auto text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
-        ))}
+          <div className="text-3xl font-bold text-green-800 mb-2">
+            {paymentAmount.toLocaleString()}원
+          </div>
+          <div className="text-base text-green-700 font-medium">
+            수납 완료
+          </div>
+        </div>
+      )}
+      
+      {/* 처방전 안내 */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100 hover:shadow-md transition-all duration-300">
+        <div className="absolute -right-8 -top-8 w-24 h-24 bg-blue-200/20 rounded-full blur-2xl" />
+        <div className="relative flex items-start gap-4">
+          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl shadow-sm">
+            💊
+          </div>
+          <div className="flex-1">
+            <h5 className="font-bold text-blue-900 mb-1.5 text-lg">처방전 안내</h5>
+            <p className="text-base text-blue-800 leading-relaxed">1층 원무과에서 처방전을 받아 약국에서 약을 받으세요.</p>
+          </div>
+        </div>
       </div>
       
-      {/* 추가 안내사항 - 더 돋보이게 */}
-      <div className="space-y-4">
-        <div className="relative overflow-hidden bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100 hover:shadow-md transition-all duration-300">
-          <div className="absolute -right-8 -top-8 w-24 h-24 bg-blue-200/20 rounded-full blur-2xl" />
-          <div className="relative flex items-start gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl shadow-sm">
-              💊
+      {/* 통계 카드들 - 더 현대적으로 */}
+      {completionStats && completionStats.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          {completionStats.map((stat, index) => (
+            <div 
+              key={index}
+              className={`group relative overflow-hidden rounded-2xl p-5 text-center transition-all duration-300 hover:scale-105 hover:shadow-lg ${stat.bgColor} shadow-md`}
+            >
+              {/* 장식 요소 */}
+              <div className="absolute -right-4 -top-4 w-16 h-16 bg-white/10 rounded-full blur-xl group-hover:scale-150 transition-transform duration-500" />
+              
+              <div className="relative">
+                <div className="mb-3 filter drop-shadow-sm flex justify-center">{stat.icon}</div>
+                <div className="font-bold text-xl mb-1">{stat.value}</div>
+                <div className="text-sm font-medium opacity-80">{stat.label}</div>
+              </div>
             </div>
-            <div className="flex-1">
-              <h5 className="font-bold text-blue-900 mb-1.5 text-lg">처방전 안내</h5>
-              <p className="text-base text-blue-800 leading-relaxed">1층 원무과에서 처방전을 받아 약국에서 약을 받으세요.</p>
-            </div>
-          </div>
+          ))}
         </div>
-        
-        <div className="relative overflow-hidden bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-5 border border-purple-100 hover:shadow-md transition-all duration-300">
-          <div className="absolute -right-8 -bottom-8 w-24 h-24 bg-purple-200/20 rounded-full blur-2xl" />
-          <div className="relative flex items-start gap-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-2xl shadow-sm">
-              💳
-            </div>
-            <div className="flex-1">
-              <h5 className="font-bold text-purple-900 mb-1.5 text-lg">수납 완료</h5>
-              <p className="text-base text-purple-800 leading-relaxed">모든 진료비 수납이 완료되었습니다.</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 
@@ -463,7 +466,7 @@ const FormatBTemplate = ({
         </div>
 
         {/* 탭 내용 */}
-        <div className="min-h-[400px] lg:min-h-[500px]">
+        <div>
           {activeTab === 'preparation' && renderPreparationTab()}
           {activeTab === 'completion' && renderCompletionTab()}
           {activeTab === 'precautions' && renderPrecautionsTab()}

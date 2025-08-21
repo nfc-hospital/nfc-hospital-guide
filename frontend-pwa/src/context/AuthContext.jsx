@@ -14,19 +14,45 @@ export function AuthProvider({ children }) {
 
   // 로컬 스토리지에서 사용자 정보 및 토큰 불러오기
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const storedToken = localStorage.getItem('access_token');
+    const checkAutoLogin = () => {
+      const storedUser = localStorage.getItem('user');
+      const storedToken = localStorage.getItem('access_token');
+      const rememberMe = localStorage.getItem('rememberMe');
+      const rememberMeExpiration = localStorage.getItem('rememberMeExpiration');
+      
+      // 자동 로그인이 설정되어 있고 만료되지 않은 경우
+      if (rememberMe === 'true' && rememberMeExpiration) {
+        const expirationDate = new Date(rememberMeExpiration);
+        const currentDate = new Date();
+        
+        if (currentDate < expirationDate && storedUser && storedToken) {
+          console.log('🔐 자동 로그인 활성화');
+          setUser(JSON.parse(storedUser));
+        } else {
+          // 만료된 경우 자동 로그인 정보 삭제
+          console.log('⏰ 자동 로그인 만료');
+          localStorage.removeItem('rememberMe');
+          localStorage.removeItem('rememberMeExpiration');
+          localStorage.removeItem('user');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+        }
+      } else if (storedUser && storedToken) {
+        // 자동 로그인은 아니지만 세션이 유지되는 경우
+        setUser(JSON.parse(storedUser));
+      }
+      
+      setLoading(false);
+    };
     
-    if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
-    }
-    setLoading(false);
+    checkAutoLogin();
   }, []);
 
   // 간편 로그인 (실제 API 호출)
-  const login = async (phoneNumber, birthDate) => {
+  const login = async (phoneNumber, birthDate, rememberMe = false) => {
     try {
       console.log('🔐 실제 간편 로그인 API 호출...');
+      console.log('🔐 자동 로그인 설정:', rememberMe);
       
       // 먼저 CSRF 토큰 확인
       let csrfToken = getCSRFToken();
@@ -89,6 +115,18 @@ export function AuthProvider({ children }) {
         localStorage.setItem('access_token', accessToken);
         localStorage.setItem('refresh_token', refreshToken);
         localStorage.setItem('user', JSON.stringify(userData));
+        
+        // 자동 로그인 설정 저장
+        if (rememberMe) {
+          localStorage.setItem('rememberMe', 'true');
+          // 30일 후 만료 시간 설정
+          const expirationDate = new Date();
+          expirationDate.setDate(expirationDate.getDate() + 30);
+          localStorage.setItem('rememberMeExpiration', expirationDate.toISOString());
+        } else {
+          localStorage.removeItem('rememberMe');
+          localStorage.removeItem('rememberMeExpiration');
+        }
         
         setUser(userData);
         console.log('✅ JWT 토큰 및 사용자 정보 저장 완료');
@@ -205,6 +243,10 @@ export function AuthProvider({ children }) {
       localStorage.removeItem('user');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
+      
+      // 자동 로그인 정보도 삭제
+      localStorage.removeItem('rememberMe');
+      localStorage.removeItem('rememberMeExpiration');
       
       // journeyStore 데이터 초기화
       useJourneyStore.getState().clearJourneyData();

@@ -1,41 +1,101 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import useJourneyStore from '../../store/journeyStore';
 import { useNavigate } from 'react-router-dom';
 import FormatBTemplate from '../templates/FormatBTemplate';
+import apiService from '../../api/apiService';
 
 export default function FinishedScreen({ taggedLocation }) {
-  const { user, todaysAppointments = [], nextAppointment } = useJourneyStore();
+  const { user, todaysAppointments = [], appointments = [] } = useJourneyStore();
   const navigate = useNavigate();
+  const [showModal, setShowModal] = useState(false);
+  const [postCareInstructions, setPostCareInstructions] = useState([]);
 
-  // 다음 일정 정보 - journeyStore의 nextAppointment 활용
-  const getNextScheduleText = () => {
-    if (nextAppointment) {
-      const date = new Date(nextAppointment.scheduled_at);
-      const today = new Date();
-      const isToday = date.toDateString() === today.toDateString();
+  // 완료된 검사들의 후 주의사항 가져오기
+  useEffect(() => {
+    const fetchPostCareInstructions = async () => {
+      const completedAppointments = todaysAppointments.filter(apt => 
+        ['completed', 'done'].includes(apt.status)
+      );
       
-      if (isToday) {
-        return `오늘 ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - ${nextAppointment.exam?.title || '다음 검사'}`;
-      } else {
-        return `${date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
+      if (completedAppointments.length === 0) return;
+
+      try {
+        const instructions = [];
+        
+        // 각 완료된 검사의 후 주의사항을 병렬로 가져오기
+        const promises = completedAppointments.map(async (apt) => {
+          try {
+            const response = await apiService.getExamPostCareInstructions(apt.exam?.exam_id || apt.exam_id);
+            return response.data || response;
+          } catch (error) {
+            console.warn(`검사 ${apt.exam?.title || apt.exam_id} 후 주의사항 조회 실패:`, error);
+            return null;
+          }
+        });
+
+        const results = await Promise.all(promises);
+        
+        // 결과를 우선순위별로 정렬하여 합치기
+        results.forEach(instructionList => {
+          if (instructionList && Array.isArray(instructionList)) {
+            instructions.push(...instructionList);
+          }
+        });
+
+        // 우선순위별 정렬 (high > medium > low)
+        const sortedInstructions = instructions.sort((a, b) => {
+          const priorityOrder = { high: 3, medium: 2, low: 1 };
+          return priorityOrder[b.priority] - priorityOrder[a.priority];
+        });
+
+        setPostCareInstructions(sortedInstructions);
+      } catch (error) {
+        console.error('검사 후 주의사항 조회 중 오류:', error);
       }
-    }
+    };
+
+    fetchPostCareInstructions();
+  }, [todaysAppointments]);
+
+  // 다음 일정 찾기 - 오늘 남은 일정 또는 미래 예약
+  const findNextAppointment = () => {
+    const now = new Date();
     
-    // 오늘 예약 중 아직 진행하지 않은 것이 있는지 확인
+    // 오늘 예약 중 아직 진행하지 않은 것
     const pendingToday = todaysAppointments.filter(apt => 
-      ['scheduled', 'pending'].includes(apt.status)
-    );
+      ['scheduled', 'pending', 'waiting'].includes(apt.status)
+    ).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
     
     if (pendingToday.length > 0) {
-      const nextApt = pendingToday[0];
-      const time = new Date(nextApt.scheduled_at).toLocaleTimeString('ko-KR', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
-      return `오늘 ${time} - ${nextApt.exam?.title || '다음 검사'}`;
+      return pendingToday[0];
     }
     
-    return '예정된 검사가 없습니다';
+    // 모든 예약에서 미래 예약 찾기
+    const futureAppointments = appointments.filter(apt => {
+      const aptDate = new Date(apt.scheduled_at);
+      return aptDate > now && ['scheduled', 'pending'].includes(apt.status);
+    }).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+    
+    return futureAppointments.length > 0 ? futureAppointments[0] : null;
+  };
+  
+  const nextAppointment = findNextAppointment();
+  
+  // 다음 일정 텍스트 생성
+  const getNextScheduleText = () => {
+    if (!nextAppointment) {
+      return '예정된 일정이 없습니다';
+    }
+    
+    const date = new Date(nextAppointment.scheduled_at);
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+    
+    if (isToday) {
+      return `오늘 ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - ${nextAppointment.exam?.title || '다음 검사'}`;
+    } else {
+      return `${date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - ${nextAppointment.exam?.title || '다음 검사'}`;
+    }
   };
   
   const nextSchedule = getNextScheduleText();
@@ -49,76 +109,48 @@ export default function FinishedScreen({ taggedLocation }) {
     .reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
   const totalCost = 80000; // 예시 비용
 
-  const completionStats = [
-    { icon: '⏱️', value: `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분`, label: '총 소요시간', bgColor: 'bg-blue-100 text-blue-800' },
-    { icon: '✅', value: `${completedCount}개`, label: '완료 항목', bgColor: 'bg-green-100 text-green-800' },
-    { icon: '💳', value: `${totalCost.toLocaleString()}원`, label: '총 진료비', bgColor: 'bg-purple-100 text-purple-800' }
-  ];
+  // completionStats 제거 - FormatBTemplate에서 처리
 
-  // 완료된 검사에 따른 동적 주의사항 생성
+  // 처방 여부 확인
+  const hasPrescription = completedAppointments.some(apt => 
+    apt.exam?.department === '내과' || 
+    apt.exam?.department === '정형외과' ||
+    apt.exam?.has_prescription
+  );
+  
+  // 체크리스트 항목 동적 생성
+  const checkItems = [];
+  
+  if (hasPrescription) {
+    checkItems.push('처방전을 받으셨나요?');
+  }
+  
+  if (nextAppointment) {
+    checkItems.push('다음 예약을 확인하셨나요?');
+  }
+  
+  // 검사 결과 확인이 필요한 검사가 있는지 확인
+  const hasResultsToCheck = completedAppointments.some(apt => 
+    apt.exam?.title?.includes('혈액') || 
+    apt.exam?.title?.includes('CT') || 
+    apt.exam?.title?.includes('MRI') ||
+    apt.exam?.requires_results_pickup
+  );
+  
+  if (hasResultsToCheck) {
+    checkItems.push('검사 결과 수령 방법을 확인하셨나요?');
+  }
+  
+  // 기본 체크항목
+  if (checkItems.length === 0) {
+    checkItems.push('안전하게 귀가하세요');
+  }
+
+  // 실제 API 데이터를 기반으로 주의사항 생성
   const generatePrecautions = () => {
-    const precautionsList = [];
-    
-    // 처방이 있는 경우
-    const hasPrescription = completedAppointments.some(apt => 
-      apt.exam?.department === '내과' || apt.exam?.department === '정형외과'
-    );
-    
-    if (hasPrescription) {
-      precautionsList.push({
-        icon: '💊',
-        title: '처방 약물 복용법',
-        priority: 'high',
-        bgColor: 'bg-red-50 text-red-800',
-        items: [
-          '처방받은 약물을 정해진 시간에 정확히 복용하세요',
-          '임의로 복용량을 늘리거나 줄이지 마세요',
-          '부작용이 나타나면 즉시 병원에 연락하세요'
-        ]
-      });
-    }
-    
-    // X-ray 검사를 한 경우
-    const hasXray = completedAppointments.some(apt => 
-      apt.exam?.title?.includes('X-ray') || apt.exam?.title?.includes('방사선')
-    );
-    
-    if (hasXray) {
-      precautionsList.push({
-        icon: '📸',
-        title: 'X-ray 검사 후 주의사항',
-        priority: 'medium',
-        bgColor: 'bg-orange-50 text-orange-800',
-        items: [
-          '방사선 노출량은 안전 기준 이내입니다',
-          '다음 X-ray 검사까지 최소 1주일 간격을 두세요',
-          '임신 가능성이 있다면 의료진에게 알려주세요'
-        ]
-      });
-    }
-    
-    // 채혈검사를 한 경우
-    const hasBloodTest = completedAppointments.some(apt => 
-      apt.exam?.title?.includes('채혈') || apt.exam?.title?.includes('혈액')
-    );
-    
-    if (hasBloodTest) {
-      precautionsList.push({
-        icon: '🩸',
-        title: '채혈검사 관련 안내',
-        priority: 'low',
-        bgColor: 'bg-blue-50 text-blue-800',
-        items: [
-          '검사 결과는 2-3일 후 확인 가능합니다',
-          '채혈 부위는 24시간 동안 물이 닿지 않게 하세요',
-          '어지러움이나 출혈이 계속되면 병원에 연락하세요'
-        ]
-      });
-    }
-    
-    // 일반적인 주의사항
-    if (precautionsList.length === 0) {
-      precautionsList.push({
+    if (postCareInstructions.length === 0) {
+      // API 데이터가 없는 경우 기본 주의사항 반환
+      return [{
         icon: '📋',
         title: '검사 후 일반 주의사항',
         priority: 'low',
@@ -128,15 +160,42 @@ export default function FinishedScreen({ taggedLocation }) {
           '이상 증상이 나타나면 병원에 연락하세요',
           '다음 진료 예약을 확인하세요'
         ]
-      });
+      }];
     }
+
+    // API 데이터를 기반으로 주의사항 그룹화
+    const groupedInstructions = {};
     
-    return precautionsList;
+    postCareInstructions.forEach(instruction => {
+      const key = `${instruction.type}_${instruction.priority}`;
+      if (!groupedInstructions[key]) {
+        groupedInstructions[key] = {
+          icon: instruction.icon || '📋',
+          title: instruction.title,
+          priority: instruction.priority,
+          bgColor: instruction.priority === 'high' 
+            ? 'bg-red-50 text-red-800' 
+            : instruction.priority === 'medium'
+            ? 'bg-orange-50 text-orange-800'
+            : 'bg-blue-50 text-blue-800',
+          items: []
+        };
+      }
+      groupedInstructions[key].items.push(instruction.description);
+    });
+
+    // 우선순위별로 정렬하여 반환
+    const sortedPrecautions = Object.values(groupedInstructions).sort((a, b) => {
+      const priorityOrder = { high: 3, medium: 2, low: 1 };
+      return priorityOrder[b.priority] - priorityOrder[a.priority];
+    });
+
+    return sortedPrecautions;
   };
   
   const precautions = generatePrecautions();
-
-  // 오늘의 일정 (완료된 것들)
+  
+  // 오늘의 일정 - 완료된 것들만
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
     id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
@@ -149,9 +208,10 @@ export default function FinishedScreen({ taggedLocation }) {
     scheduled_at: apt.scheduled_at,
     department: apt.exam?.department,
     completedAt: apt.status === 'completed' || apt.status === 'done' 
-      ? new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      ? new Date(apt.updated_at || apt.completed_at || new Date()).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
       : null,
-    cost: apt.status === 'completed' || apt.status === 'done' ? '25,000' : null
+    cost: apt.status === 'completed' || apt.status === 'done' ? 
+      (apt.cost || apt.exam?.cost || '25,000') : null
   })) || [];
 
   return (
@@ -160,163 +220,238 @@ export default function FinishedScreen({ taggedLocation }) {
       status="완료"
       nextSchedule={nextSchedule}
       summaryCards={[
-        { label: '총 소요시간', value: `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분` },
-        { label: '완료 항목', value: `${completedCount}개` }
+        { label: '소요시간', value: `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분` },
+        { label: '완료', value: `${completedCount}개` }
       ]}
       todaySchedule={todaySchedule}
-      completionStats={completionStats}
+      showCheckboxes={true}
+      checkItems={checkItems}
+      showPaymentInfo={true}
+      paymentAmount={totalCost}
       precautions={precautions}
     >
-      {/* 완료 축하 메시지 - 더 크고 화려하게 */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 rounded-3xl p-8 text-center mb-8 shadow-lg border border-green-200">
-        {/* 장식 요소 */}
-        <div className="absolute -top-10 -right-10 w-32 h-32 bg-green-200/30 rounded-full blur-3xl" />
-        <div className="absolute -bottom-10 -left-10 w-40 h-40 bg-emerald-200/30 rounded-full blur-3xl" />
-        
-        <div className="relative">
-          {/* 축하 아이콘 - 애니메이션 추가 */}
-          <div className="relative w-24 h-24 mx-auto mb-6">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-300 to-emerald-300 rounded-full blur-lg opacity-50 animate-pulse" />
-            <div className="relative w-full h-full bg-white rounded-full flex items-center justify-center shadow-xl">
-              <span className="text-6xl animate-bounce">🎉</span>
-            </div>
-          </div>
-          
-          <h2 className="text-2xl sm:text-3xl font-bold text-green-900 mb-3">
-            모든 검사가 성공적으로 완료되었습니다
-          </h2>
-          <p className="text-lg sm:text-xl text-green-800 leading-relaxed">
-            <span className="font-semibold text-green-900">{user?.name}</span>님, 수고하셨습니다.<br />
-            안전히 귀가하세요.
-          </p>
-        </div>
-      </div>
 
-      {/* 귀가 안내 - 더 크고 직관적으로 */}
-      <div className="space-y-5">
-        <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-            <span className="text-sm font-bold text-blue-600">!</span>
-          </div>
-          귀가 전 들르실 곳
+      {/* 빠른 길찾기 - PublicHome 스타일과 일치 */}
+      <section className="mb-8">
+        <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          빠른 길찾기
         </h3>
         
-        {/* 원무과 버튼 */}
-        <button 
-          onClick={() => navigate('/map?destination=원무과')}
-          className="w-full bg-white rounded-3xl shadow-lg border border-gray-200 p-6 
-                   hover:shadow-xl transition-all duration-300 text-left group
-                   hover:border-blue-300 hover:scale-[1.02] relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-50 to-transparent opacity-0 
-                        group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="relative flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center shadow-sm">
-                <span className="text-3xl">💳</span>
-              </div>
-              <div>
-                <h4 className="text-lg font-bold text-gray-900 mb-1">원무과</h4>
-                <p className="text-base text-gray-600">
-                  <span className="font-medium">본관 1층</span> - 수납이 필요한 경우
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-blue-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">길찾기</span>
-              <svg className="w-6 h-6 text-gray-400 group-hover:text-blue-600 transition-colors" 
-                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </div>
-        </button>
-        
-        {/* 약국 버튼 */}
-        <button 
-          onClick={() => navigate('/map?destination=약국')}
-          className="w-full bg-white rounded-3xl shadow-lg border border-gray-200 p-6 
-                   hover:shadow-xl transition-all duration-300 text-left group
-                   hover:border-green-300 hover:scale-[1.02] relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-green-50 to-transparent opacity-0 
-                        group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="relative flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-green-100 rounded-2xl flex items-center justify-center shadow-sm">
-                <span className="text-3xl">💊</span>
-              </div>
-              <div>
-                <h4 className="text-lg font-bold text-gray-900 mb-1">약국</h4>
-                <p className="text-base text-gray-600">
-                  <span className="font-medium">본관 1층</span> - 처방전이 있는 경우
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-green-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">길찾기</span>
-              <svg className="w-6 h-6 text-gray-400 group-hover:text-green-600 transition-colors" 
-                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </div>
-        </button>
-        
-        {/* 주차장 버튼 */}
-        <button 
-          onClick={() => navigate('/map?destination=주차장')}
-          className="w-full bg-white rounded-3xl shadow-lg border border-gray-200 p-6 
-                   hover:shadow-xl transition-all duration-300 text-left group
-                   hover:border-purple-300 hover:scale-[1.02] relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-50 to-transparent opacity-0 
-                        group-hover:opacity-100 transition-opacity duration-300" />
-          <div className="relative flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-purple-100 rounded-2xl flex items-center justify-center shadow-sm">
-                <span className="text-3xl">🚗</span>
-              </div>
-              <div>
-                <h4 className="text-lg font-bold text-gray-900 mb-1">주차장</h4>
-                <p className="text-base text-gray-600">
-                  <span className="font-medium">지하 1-3층</span> / 야외 주차장
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-purple-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">길찾기</span>
-              <svg className="w-6 h-6 text-gray-400 group-hover:text-purple-600 transition-colors" 
-                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </div>
-          </div>
-        </button>
-      </div>
-
-      {/* 추가 액션 버튼들 - 더 눈에 띄게 */}
-      <div className="mt-8 space-y-4">
-        {/* 만족도 조사 버튼 */}
-        <div className="relative">
-          <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-2xl blur opacity-20 animate-pulse" />
+        <div className="grid grid-cols-3 gap-4">
           <button 
-            onClick={() => navigate('/feedback')}
-            className="relative w-full bg-gradient-to-r from-amber-50 to-orange-50 text-orange-700 rounded-2xl py-5 px-6 text-lg 
-                     font-bold hover:from-amber-100 hover:to-orange-100 transition-all duration-300
-                     shadow-md hover:shadow-lg border border-orange-200
-                     flex items-center justify-center gap-3">
-            <span className="text-2xl">⭐</span>
-            <span>오늘 진료는 어떠셨나요?</span>
+            onClick={() => navigate('/public?place=pharmacy')}
+            className="group bg-white border-2 border-green-200 rounded-2xl p-4 transition-all duration-300 hover:border-green-300 hover:shadow-lg hover:bg-green-50">
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-16 h-16 bg-green-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                💊
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-gray-900">약국</h4>
+                <p className="text-xs text-gray-600">본관 1층</p>
+              </div>
+            </div>
+          </button>
+          
+          <button 
+            onClick={() => navigate('/public?place=parking')}
+            className="group bg-white border-2 border-purple-200 rounded-2xl p-4 transition-all duration-300 hover:border-purple-300 hover:shadow-lg hover:bg-purple-50">
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-16 h-16 bg-purple-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                🚗
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-gray-900">주차장</h4>
+                <p className="text-xs text-gray-600">지하/야외</p>
+              </div>
+            </div>
+          </button>
+          
+          <button 
+            onClick={() => navigate('/map')}
+            className="group bg-white border-2 border-blue-200 rounded-2xl p-4 transition-all duration-300 hover:border-blue-300 hover:shadow-lg hover:bg-blue-50">
+            <div className="flex flex-col items-center text-center space-y-2">
+              <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
+                🗺️
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-gray-900">지도</h4>
+                <p className="text-xs text-gray-600">전체 안내</p>
+              </div>
+            </div>
           </button>
         </div>
+      </section>
+
+      {/* 다음 예약 관련 액션 */}
+      <section className="mb-8">
+        {nextAppointment && (
+          <div className="mb-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a1 1 0 011-1h6a1 1 0 011 1v4h3a1 1 0 110 2h-1v9a3 3 0 01-3 3H9a3 3 0 01-3-3V9H5a1 1 0 110-2h3z" />
+              </svg>
+              다음 예약 준비
+            </h3>
+            
+            <div className="grid grid-cols-1 gap-4">
+              <button 
+                onClick={() => {
+                  // 카카오톡 공유 API 호출
+                  if (window.Kakao) {
+                    window.Kakao.Link.sendDefault({
+                      objectType: 'text',
+                      text: `[병원 예약 알림]\n다음 예약: ${nextSchedule}\n\n이 메시지는 나에게 보내는 메모입니다.`,
+                      link: {
+                        mobileWebUrl: window.location.href,
+                        webUrl: window.location.href
+                      }
+                    });
+                  }
+                }}
+                className="group bg-gradient-to-br from-yellow-400 to-amber-500 text-gray-900 rounded-2xl p-4 
+                         font-bold hover:from-yellow-500 hover:to-amber-600 transition-all duration-300
+                         shadow-lg hover:shadow-xl flex items-center justify-center gap-3">
+                <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 3C6.48 3 2 6.12 2 10c0 2.23 1.5 4.22 3.84 5.5-.15.5-.37 1.22-.57 1.84-.24.74.43 1.35 1.1.94.56-.34 1.41-.87 2.13-1.34C9.56 17.28 10.75 17.5 12 17.5c5.52 0 10-3.12 10-7.5S17.52 3 12 3z"/>
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <h4 className="text-lg font-bold">카카오톡 메모</h4>
+                  <p className="text-sm opacity-80">나에게 예약 알림 보내기</p>
+                </div>
+              </button>
+              
+              <button 
+                onClick={() => setShowModal(true)}
+                className="group bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl p-4 
+                         font-bold hover:from-blue-600 hover:to-indigo-700 transition-all duration-300
+                         shadow-lg hover:shadow-xl flex items-center justify-center gap-3">
+                <div className="w-12 h-12 bg-white/20 backdrop-blur rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                  🔔
+                </div>
+                <div className="text-left">
+                  <h4 className="text-lg font-bold">알림 설정</h4>
+                  <p className="text-sm opacity-80">다음 예약까지 자동 알림</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
         
-        {/* 처음 화면으로 버튼 */}
-        <button 
-          onClick={() => navigate('/')}
-          className="w-full bg-gray-100 text-gray-700 rounded-2xl py-4 px-6 text-lg 
-                   font-semibold hover:bg-gray-200 transition-all duration-300
-                   shadow-sm hover:shadow-md">
-          처음 화면으로
-        </button>
-      </div>
+        {/* 완료 액션 */}
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white">
+          <div className="text-center mb-4">
+            <div className="w-16 h-16 mx-auto mb-3 bg-emerald-500 rounded-2xl flex items-center justify-center">
+              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold mb-2">모든 검사가 완료되었습니다</h3>
+            <p className="text-slate-300">안전한 귀가를 위해 주의사항을 확인하세요</p>
+          </div>
+          
+          <button 
+            onClick={() => navigate('/')}
+            className="w-full group bg-white text-slate-900 rounded-xl py-4 px-6 font-bold text-lg 
+                     hover:bg-gray-100 transition-all duration-300 shadow-md hover:shadow-lg 
+                     flex items-center justify-center gap-2">
+            처음으로 돌아가기
+            <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
+          </button>
+        </div>
+      </section>
+      
+      {/* 알림 설정 모달 - 더 세련되게 */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl animate-scaleIn overflow-hidden">
+            {/* 헤더 */}
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-6 text-white text-center">
+              <div className="w-16 h-16 mx-auto mb-3 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                🔔
+              </div>
+              <h3 className="text-2xl font-bold">다음 예약 알림</h3>
+              <p className="text-blue-100 mt-1">편리한 병원 이용을 위한 스마트 알림</p>
+            </div>
+            
+            {/* 내용 */}
+            <div className="p-6 space-y-5">
+              <div className="space-y-4">
+                <h4 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  알림 혜택
+                </h4>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold text-sm">1</span>
+                    </div>
+                    <span className="text-gray-700">검사 전날 준비사항 알림</span>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold text-sm">2</span>
+                    </div>
+                    <span className="text-gray-700">당일 아침 일정 알림</span>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-white font-bold text-sm">3</span>
+                    </div>
+                    <span className="text-gray-700">다음 방문까지 자동 로그인</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl p-4 border border-amber-200">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-gray-900 mb-1">보안 안내</h5>
+                    <p className="text-sm text-gray-700">
+                      로그인 정보는 다음 예약일까지만<br />
+                      휴대폰에 안전하게 저장됩니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* 버튼 */}
+            <div className="flex gap-3 p-6 pt-0">
+              <button
+                onClick={() => setShowModal(false)}
+                className="flex-1 bg-gray-100 text-gray-700 rounded-xl py-3 px-4 font-bold
+                         hover:bg-gray-200 transition-all duration-300">
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  // 알림 설정 API 호출
+                  setShowModal(false);
+                  alert('알림이 설정되었습니다');
+                }}
+                className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-xl py-3 px-4 font-bold
+                         hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 shadow-lg">
+                동의하고 설정
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </FormatBTemplate>
   );
 }

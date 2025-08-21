@@ -140,32 +140,47 @@ const useJourneyStore = create(
                 ]);
 
                 // 디버깅 로그 추가
-                console.log('📋 scheduleRes:', scheduleRes);
-                console.log('📋 scheduleRes.data:', scheduleRes.data);
-                console.log('📋 scheduleRes.data.appointments:', scheduleRes.data?.appointments);
-                console.log('🔍 queuesRes:', queuesRes);
-                console.log('🔍 queuesRes.data:', queuesRes.data);
+                console.log('📋 schedule API 응답:', scheduleRes);
+                console.log('🔍 queue API 응답:', queuesRes);
 
                 // API 명세서에 따른 데이터 구조 파싱
                 // 1. 스케줄 API: /api/v1/schedule/today
-                const scheduleData = scheduleRes.data?.data || scheduleRes.data;
+                // axios 인터셉터가 이미 response.data를 반환하므로
+                const scheduleData = scheduleRes;
                 let appointments = scheduleData?.appointments || [];
                 
-                // 개발 환경에서 REGISTERED 상태일 때 테스트 데이터 추가
+                // 개발 환경에서 테스트 데이터 추가
                 const currentPatientState = get().patientState;
-                if (import.meta.env.DEV && appointments.length === 0 && currentPatientState === 'REGISTERED') {
-                  console.log('🧪 개발 환경: REGISTERED 상태에서 테스트 데이터 추가');
+                if (import.meta.env.DEV && appointments.length === 0 && 
+                    (currentPatientState === 'REGISTERED' || currentPatientState === 'UNREGISTERED')) {
+                  console.log('🧪 개발 환경: 테스트 데이터 추가 (상태:', currentPatientState, ')');
                   appointments = [
                     {
                       appointment_id: 'dev-001',
                       exam: {
-                        exam_id: 'exam_001',
+                        exam_id: 'blood_test',
                         title: '혈액검사',
                         building: '본관',
                         floor: '1',
                         room: '채혈실',
                         department: '진단검사의학과',
-                        average_duration: 15
+                        average_duration: 15,
+                        preparations: [
+                          {
+                            prep_id: 1,
+                            type: 'fasting',
+                            title: '검사 전날 밤 10시 이후 금식',
+                            description: '정확한 검사를 위해 전날 밤 10시 이후 음식물 섭취를 중단해주세요.',
+                            is_required: true
+                          },
+                          {
+                            prep_id: 2,
+                            type: 'documents',
+                            title: '신분증 및 건강보험증 지참',
+                            description: '본인 확인을 위해 신분증과 건강보험증을 반드시 지참해주세요.',
+                            is_required: true
+                          }
+                        ]
                       },
                       scheduled_at: new Date().toISOString(),
                       status: 'scheduled'
@@ -173,13 +188,29 @@ const useJourneyStore = create(
                     {
                       appointment_id: 'dev-002',
                       exam: {
-                        exam_id: 'exam_002',
+                        exam_id: 'xray_chest',
                         title: '흉부 X-ray',
                         building: '본관',
                         floor: '2',
                         room: '영상의학과',
                         department: '영상의학과',
-                        average_duration: 10
+                        average_duration: 10,
+                        preparations: [
+                          {
+                            prep_id: 3,
+                            type: 'clothing',
+                            title: '금속 제거',
+                            description: '정확한 영상 촬영을 위해 목걸이, 귀걸이 등 금속 액세서리를 제거해주세요.',
+                            is_required: true
+                          },
+                          {
+                            prep_id: 4,
+                            type: 'general',
+                            title: '임신 가능성 확인',
+                            description: '임신 가능성이 있는 경우 반드시 의료진에게 알려주세요.',
+                            is_required: false
+                          }
+                        ]
                       },
                       scheduled_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
                       status: 'scheduled'

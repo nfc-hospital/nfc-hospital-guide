@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Exam, Appointment, ExamPreparation, AppointmentHistory, ExamResult
+from .models import Exam, Appointment, ExamPreparation, AppointmentHistory, ExamResult, ExamPostCareInstruction
 from django.utils import timezone # For actions that update timestamps
 import uuid
 
@@ -13,6 +13,18 @@ class ExamPreparationInline(admin.TabularInline):
     fields = ('title', 'description', 'is_required')
     # 특정 필드를 읽기 전용으로 설정하고 싶다면 아래를 사용 (여기서는 모든 필드 수정 가능)
     # readonly_fields = ('prep_id',)
+
+
+# ExamPostCareInstruction을 Exam Admin에 인라인으로 추가
+class ExamPostCareInstructionInline(admin.TabularInline):
+    """
+    Exam 모델에 ExamPostCareInstruction을 인라인으로 추가하여 함께 관리합니다.
+    """
+    model = ExamPostCareInstruction
+    extra = 1  # 기본으로 보여줄 빈 폼의 개수
+    fields = ('type', 'title', 'description', 'priority', 'duration_hours', 'icon', 'is_critical')
+    # 특정 필드를 읽기 전용으로 설정하고 싶다면 아래를 사용 (여기서는 모든 필드 수정 가능)
+    # readonly_fields = ('instruction_id',)
 
 
 # Exam 모델 관리자 설정
@@ -48,7 +60,7 @@ class ExamAdmin(admin.ModelAdmin):
     # exam_id는 primary_key이므로 생성 후에는 수정 불가하도록 읽기 전용으로 설정
     readonly_fields = ('exam_id', 'created_at', 'updated_at')
     ordering = ('department', 'title')
-    inlines = [ExamPreparationInline] # ExamPreparation을 인라인으로 포함
+    inlines = [ExamPreparationInline, ExamPostCareInstructionInline] # ExamPreparation과 ExamPostCareInstruction을 인라인으로 포함
 
     # 검사 ID 자동 생성 (선택 사항: 필요한 경우)
     def save_model(self, request, obj, form, change):
@@ -250,3 +262,76 @@ class ExamResultAdmin(admin.ModelAdmin):
         if not obj.created_by:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+
+
+# ExamPostCareInstruction 모델 관리자 설정
+@admin.register(ExamPostCareInstruction)
+class ExamPostCareInstructionAdmin(admin.ModelAdmin):
+    """
+    Django 관리자 페이지에서 ExamPostCareInstruction 모델을 관리합니다.
+    """
+    list_display = (
+        'instruction_id', 'exam', 'type', 'title', 'priority', 
+        'duration_hours', 'is_critical'
+    )
+    list_filter = (
+        'type', 'priority', 'is_critical', 'exam__department'
+    )
+    search_fields = (
+        'title', 'description', 'exam__title', 'exam__department'
+    )
+    autocomplete_fields = ('exam',) # exam 선택 시 검색 필드 제공
+    ordering = ('exam__title', '-priority', 'title')
+
+    fieldsets = (
+        (None, {
+            'fields': ('exam', 'type', 'title', 'description')
+        }),
+        ('우선순위 및 기간', {
+            'fields': ('priority', 'duration_hours', 'is_critical'),
+            'description': '주의사항의 중요도와 지켜야 할 기간을 설정합니다.'
+        }),
+        ('표시 설정', {
+            'fields': ('icon',),
+            'description': '주의사항을 나타낼 아이콘을 설정합니다.'
+        }),
+    )
+
+    # 액션 추가: 우선순위 변경
+    actions = [
+        'set_priority_high',
+        'set_priority_medium', 
+        'set_priority_low',
+        'mark_as_critical',
+        'unmark_as_critical'
+    ]
+
+    def set_priority_high(self, request, queryset):
+        """선택된 주의사항을 높은 우선순위로 변경합니다."""
+        updated = queryset.update(priority='high')
+        self.message_user(request, f'{updated}개의 주의사항이 높은 우선순위로 변경되었습니다.')
+    set_priority_high.short_description = "선택된 주의사항을 높은 우선순위로 설정"
+
+    def set_priority_medium(self, request, queryset):
+        """선택된 주의사항을 보통 우선순위로 변경합니다."""
+        updated = queryset.update(priority='medium')
+        self.message_user(request, f'{updated}개의 주의사항이 보통 우선순위로 변경되었습니다.')
+    set_priority_medium.short_description = "선택된 주의사항을 보통 우선순위로 설정"
+
+    def set_priority_low(self, request, queryset):
+        """선택된 주의사항을 낮은 우선순위로 변경합니다."""
+        updated = queryset.update(priority='low')
+        self.message_user(request, f'{updated}개의 주의사항이 낮은 우선순위로 변경되었습니다.')
+    set_priority_low.short_description = "선택된 주의사항을 낮은 우선순위로 설정"
+
+    def mark_as_critical(self, request, queryset):
+        """선택된 주의사항을 응급 주의사항으로 표시합니다."""
+        updated = queryset.update(is_critical=True)
+        self.message_user(request, f'{updated}개의 주의사항이 응급 주의사항으로 표시되었습니다.')
+    mark_as_critical.short_description = "선택된 주의사항을 응급 주의사항으로 표시"
+
+    def unmark_as_critical(self, request, queryset):
+        """선택된 주의사항의 응급 주의사항 표시를 해제합니다."""
+        updated = queryset.update(is_critical=False)
+        self.message_user(request, f'{updated}개의 주의사항의 응급 표시가 해제되었습니다.')
+    unmark_as_critical.short_description = "선택된 주의사항의 응급 주의사항 표시 해제"

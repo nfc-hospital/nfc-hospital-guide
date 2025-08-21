@@ -6,9 +6,9 @@ export default function PrivateRoute({ children }) {
   const { user } = useAuth();
   const location = useLocation();
   
-  // 인증되지 않은 경우 로그인 페이지로 리다이렉트
+  // 인증되지 않은 경우 홈페이지로 리다이렉트
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/" replace />;
   }
   
   // 인증된 경우 자식 컴포넌트 렌더링

@@ -172,6 +172,7 @@ const Home = () => {
     console.log('📍 현재 user:', user);
     console.log('📍 현재 patientState:', patientState);
     console.log('🏷️ NFC 태그 ID:', tagId);
+    console.log('📅 현재 todaysAppointments:', todaysAppointments);
     
     // 사용자 정보가 없으면 데이터 로드
     if (!user && localStorage.getItem('access_token')) {
@@ -184,6 +185,7 @@ const Home = () => {
     } else if (user && user.role === 'patient') {
       // 환자 사용자인 경우 일정 데이터 로드
       fetchTodaySchedule();
+      
     }
     
     // 컴포넌트 언마운트 시 태그 정보 초기화
@@ -192,7 +194,7 @@ const Home = () => {
         clearTagInfo();
       }
     };
-  }, [tagId, user]);
+  }, [tagId]); // user를 dependency에서 제거하여 무한 루프 방지
 
   // 로딩 상태
   if (isLoading) {
