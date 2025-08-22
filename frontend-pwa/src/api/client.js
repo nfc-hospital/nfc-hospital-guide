@@ -4,7 +4,7 @@ import { getCSRFToken, debugCSRFToken } from '../utils/csrf';
 // API 클라이언트 생성
 const apiClient = axios.create({
   baseURL: '/api/v1',  // Vite 프록시가 처리
-  timeout: 30000,  // 타임아웃을 30초로 증가
+  timeout: 60000,  // 타임아웃을 60초로 증가 (대기열 데이터가 많을 경우 대비)
   headers: {
     'Content-Type': 'application/json',
   },

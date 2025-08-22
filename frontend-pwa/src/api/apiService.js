@@ -250,10 +250,18 @@ const apiService = {
     // 실시간 대기열 데이터 조회 (관리자용 API 활용)
     getRealtimeData: async () => {
       try {
-        const response = await api.get('/queue/dashboard/realtime-data/');
+        // timeout을 더 늘린 요청
+        const response = await api.get('/queue/dashboard/realtime-data/', {
+          timeout: 60000 // 60초로 개별 설정
+        });
         return response;
       } catch (error) {
         console.error('Failed to fetch realtime queue data:', error);
+        // timeout 에러인 경우 빈 데이터 반환
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          console.warn('Queue data request timed out, returning empty data');
+          return { data: { queues: [] } };
+        }
         throw error;
       }
     }

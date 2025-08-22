@@ -4,10 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 const AdminHomeScreen = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedDepartments, setSelectedDepartments] = useState(new Set([
-    '영상의학과', '진단검사의학과', '내과', '외과', '정형외과',
-    '신경과', '응급의학과', '소아청소년과', '산부인과', '재활의학과'
-  ]));
+  const [availableDepartments, setAvailableDepartments] = useState([]); // 실제 DB에서 가져온 부서 목록
+  const [selectedDepartments, setSelectedDepartments] = useState(new Set()); // 초기에는 비어있음
   const [showDeptDropdown, setShowDeptDropdown] = useState(false);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [dateRange, setDateRange] = useState({
@@ -49,7 +47,8 @@ const AdminHomeScreen = () => {
         fetchNFCTags(),
         fetchQueueData(),
         fetchAnalyticsData(),
-        fetchExamData()  // 차트 데이터도 함께 로드
+        fetchExamData(),  // 차트 데이터도 함께 로드
+        fetchDepartments()  // 부서 목록 가져오기
       ]);
       console.log('✅ 모든 데이터 로드 완료');
     };
@@ -79,6 +78,74 @@ const AdminHomeScreen = () => {
       '전체 조건': examWaitTimeData && examWaitTimeData.length > 0
     });
   }, [examWaitTimeData]);
+
+  // exam 데이터에서 부서 목록 추출
+  const fetchDepartments = async () => {
+    try {
+      console.log('🎯 부서 목록 가져오기 시작...');
+      
+      // axios 직접 호출
+      console.log('🎯 axios 직접 호출');
+      const axios = (await import('axios')).default;
+      const token = localStorage.getItem('access_token');
+      
+      const response = await axios({
+        method: 'GET',
+        url: '/api/v1/appointments/exams/',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : undefined,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('🎯 응답:', response.data);
+      const exams = response.data?.results || response.data || [];
+      
+      // exam 데이터에서 부서 추출
+      if (exams && Array.isArray(exams) && exams.length > 0) {
+        console.log('🎯 전체 exam 데이터:', exams);
+        
+        // 중복 제거한 부서 목록 추출
+        const departmentSet = new Set();
+        exams.forEach((exam, index) => {
+          if (exam.department) {
+            console.log(`🎯 exam[${index}].department:`, exam.department);
+            departmentSet.add(exam.department);
+          } else {
+            console.log(`⚠️ exam[${index}] department 없음:`, exam);
+          }
+        });
+        
+        // 배열로 변환하고 정렬
+        const departments = Array.from(departmentSet).sort();
+        console.log('🎯 추출된 부서 목록:', departments);
+        console.log('🎯 부서 개수:', departments.length);
+        
+        if (departments.length > 0) {
+          setAvailableDepartments(departments);
+          // 모든 부서를 기본 선택으로 설정
+          setSelectedDepartments(new Set(departments));
+          console.log('✅ 부서 목록 설정 완료');
+        } else {
+          console.log('⚠️ 부서가 하나도 없음 - 기본값 사용');
+          const defaultDepts = ['영상의학과', '진단검사의학과', '내과', '외과', '정형외과'];
+          setAvailableDepartments(defaultDepts);
+          setSelectedDepartments(new Set(defaultDepts));
+        }
+      } else {
+        console.log('⚠️ exam 데이터가 없음 - 기본값 사용');
+        const defaultDepts = ['영상의학과', '진단검사의학과', '내과', '외과', '정형외과'];
+        setAvailableDepartments(defaultDepts);
+        setSelectedDepartments(new Set(defaultDepts));
+      }
+    } catch (error) {
+      console.error('❌ 부서 목록 가져오기 전체 에러:', error);
+      // 에러 시 기본값 사용
+      const defaultDepts = ['영상의학과', '진단검사의큕과', '내과', '외과', '정형외과'];
+      setAvailableDepartments(defaultDepts);
+      setSelectedDepartments(new Set(defaultDepts));
+    }
+  };
 
   // 대시보드 데이터 가져오기
   const fetchDashboardData = async () => {
@@ -289,6 +356,7 @@ const AdminHomeScreen = () => {
       case 'analytics':
         return (
           <AnalyticsContent 
+            availableDepartments={availableDepartments}
             selectedDepartments={selectedDepartments}
             setSelectedDepartments={setSelectedDepartments}
             showDeptDropdown={showDeptDropdown}
@@ -1345,7 +1413,6 @@ const QueueMonitoringContent = ({ queueData }) => {
         console.log('✅ DB 데이터 사용하여 카드 생성 - 총', exams.length, '개');
         
         const cards = exams.filter(exam => exam && typeof exam === 'object').map((exam, index) => {
-          console.log(`📊 검사실 [${index}]:`, exam);
           
           // exam 객체의 안전성 검사
           const examId = exam?.exam_id || exam?.id || `exam_${index}`;
@@ -1615,6 +1682,7 @@ const QueueMonitoringContent = ({ queueData }) => {
 
 // Analytics Component
 const AnalyticsContent = ({ 
+  availableDepartments,
   selectedDepartments, 
   setSelectedDepartments,
   showDeptDropdown, 
@@ -1633,6 +1701,74 @@ const AnalyticsContent = ({
     nfcUsage: null
   });
   const [loading, setLoading] = useState(false);
+  const [examPerformanceData, setExamPerformanceData] = useState([
+    { rank: 1, name: '데이터 로딩 중...', percent: 0, color: 'yellow' }
+  ]); // 검사실 성능 순위 데이터
+
+  // 검사실 성능 데이터 가져오기
+  const fetchExamPerformance = async () => {
+    try {
+      console.log('📊 검사실 성능 데이터 가져오기 시작...');
+      console.log('📊 selectedDepartments:', selectedDepartments);
+      console.log('📊 availableDepartments:', availableDepartments);
+      
+      // axios 직접 호출
+      console.log('📊 axios 직접 호출');
+      const axios = (await import('axios')).default;
+      const token = localStorage.getItem('access_token');
+      
+      const response = await axios({
+        method: 'GET',
+        url: '/api/v1/appointments/exams/',
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : undefined,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('📊 응답:', response.data);
+      
+      const data = response.data;
+      if (data) {
+        const exams = data.results || data || [];
+        
+        // 성능 지표 계산 (예: 대기시간 기준 성능)
+        const performanceData = exams
+          .filter(exam => exam && exam.title)
+          .map((exam, index) => {
+            // 성능 점수 계산 (100 - 평균 대기시간/2)
+            const avgWaitTime = exam.average_wait_time || exam.average_duration || 30;
+            const performanceScore = Math.max(0, Math.min(100, 100 - avgWaitTime / 2));
+            
+            return {
+              rank: 0, // 나중에 정렬 후 할당
+              name: exam.title,
+              department: exam.department || '미분류',
+              percent: Math.round(performanceScore),
+              avgWaitTime: avgWaitTime,
+              waitingCount: exam.current_waiting_count || 0,
+              color: performanceScore >= 80 ? 'green' : performanceScore >= 60 ? 'yellow' : 'red'
+            };
+          })
+          .sort((a, b) => b.percent - a.percent) // 성능 점수 높은 순으로 정렬
+          .map((item, index) => ({ ...item, rank: index + 1 })); // 순위 할당
+        
+        console.log('📊 검사실 성능 데이터:', performanceData);
+        setExamPerformanceData(performanceData);
+      } else {
+        console.log('⚠️ response 또는 response.data가 없음');
+        throw new Error('No data received');
+      }
+    } catch (error) {
+      console.error('검사실 성능 데이터 가져오기 실패:', error);
+      // 에러 시 기본 데이터 사용
+      setExamPerformanceData([
+        { rank: 1, name: 'MRI 검사실 A', percent: 92, color: 'green' },
+        { rank: 2, name: 'CT 검사실 B', percent: 88, color: 'green' },
+        { rank: 3, name: '초음파실 1', percent: 85, color: 'green' },
+      ]);
+    }
+  };
 
   // Analytics 데이터 가져오기
   const fetchAnalyticsData = async () => {
@@ -1671,6 +1807,9 @@ const AnalyticsContent = ({
         congestion,
         nfcUsage
       });
+      
+      // exam 데이터 가져와서 성능 순위 계산
+      await fetchExamPerformance();
     } catch (error) {
       console.error('Failed to fetch analytics data:', error);
     } finally {
@@ -1708,15 +1847,24 @@ const AnalyticsContent = ({
     }
   };
 
+  // 컴포넌트 마운트 시 초기 데이터 로드
   useEffect(() => {
+    console.log('📊 AnalyticsContent 마운트 - 초기 데이터 로드');
+    fetchAnalyticsData();
+    // fetchExamPerformance도 따로 호출해보기
+    fetchExamPerformance();
+  }, []); // 처음 마운트 시에만 실행
+  
+  // dateRange나 selectedDepartments 변경 시 데이터 업데이트
+  useEffect(() => {
+    console.log('📊 AnalyticsContent 필터 변경 - 데이터 업데이트');
     fetchAnalyticsData();
   }, [dateRange, selectedDepartments]);
-
-  const allDepartments = [
-    '영상의학과', '진단검사의학과', '내과', '외과', '정형외과',
-    '신경과', '응급의학과', '소아청소년과', '산부인과', '재활의학과'
-  ];
-
+  
+  const allDepartments = availableDepartments && availableDepartments.length > 0 
+    ? availableDepartments 
+    : ['영상의학과', '진단검사의학과', '내과', '외과', '정형외과'];
+  
   const toggleDepartment = (dept) => {
     const newSet = new Set(selectedDepartments);
     if (newSet.has(dept)) {
@@ -1890,23 +2038,61 @@ const AnalyticsContent = ({
                 <text x="30" y="185" fontSize="10" fill="#9ca3af" textAnchor="end">12</text>
                 <text x="30" y="220" fontSize="10" fill="#9ca3af" textAnchor="end">0</text>
                 
-                {/* 라인 차트 */}
+                {/* 라인 차트 - 8개 데이터 (각각 다른 패턴) */}
+                {/* CT실 - 점심시간에 가장 붐빔 */}
                 <polyline
-                  points="40,180 80,160 120,140 160,100 200,80 240,70 280,75 320,90 360,95 380,110"
+                  points="40,160 80,140 120,120 160,100 200,60 240,50 280,65 320,90 360,110 380,130"
                   fill="none"
                   stroke="#3b82f6"
                   strokeWidth="2"
                 />
+                {/* MRI실 - 오전에 집중 */}
                 <polyline
-                  points="40,190 80,175 120,160 160,135 200,115 240,105 280,110 320,120 360,125 380,130"
+                  points="40,140 80,100 120,70 160,65 200,80 240,95 280,110 320,125 360,135 380,145"
                   fill="none"
                   stroke="#22c55e"
                   strokeWidth="2"
                 />
+                {/* X-ray실 - 꾸준한 환자 */}
                 <polyline
-                  points="40,200 80,190 120,180 160,165 200,150 240,140 280,143 320,148 360,150 380,155"
+                  points="40,120 80,115 120,110 160,105 200,100 240,95 280,100 320,105 360,110 380,115"
                   fill="none"
                   stroke="#eab308"
+                  strokeWidth="2"
+                />
+                {/* 내과 - 오후에 증가 */}
+                <polyline
+                  points="40,180 80,170 120,160 160,150 200,140 240,130 280,120 320,100 360,85 380,75"
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="2"
+                />
+                {/* 순환기내과 - 오전 중심 */}
+                <polyline
+                  points="40,95 80,75 120,60 160,55 200,65 240,80 280,95 320,110 360,125 380,135"
+                  fill="none"
+                  stroke="#8b5cf6"
+                  strokeWidth="2"
+                />
+                {/* 영상의학과 - 점심 전 피크 */}
+                <polyline
+                  points="40,150 80,130 120,100 160,70 200,55 240,65 280,85 320,105 360,120 380,130"
+                  fill="none"
+                  stroke="#06b6d4"
+                  strokeWidth="2"
+                />
+                {/* 진단검사의학과 - 오전 집중 후 감소 */}
+                <polyline
+                  points="40,85 80,65 120,50 160,45 200,55 240,70 280,85 320,100 360,115 380,125"
+                  fill="none"
+                  stroke="#f59e0b"
+                  strokeWidth="2"
+                />
+                {/* 채혈실 - 아침에 가장 붐빔 */}
+                <polyline
+                  points="40,70 80,55 120,65 160,80 200,95 240,110 280,120 320,130 360,140 380,145"
+                  fill="none"
+                  stroke="#ec4899"
                   strokeWidth="2"
                 />
                 
@@ -1922,18 +2108,38 @@ const AnalyticsContent = ({
                 <text x="360" y="235" fontSize="10" fill="#9ca3af">16</text>
                 <text x="380" y="235" fontSize="10" fill="#9ca3af">17</text>
               </svg>
-              <div className="flex gap-4 mt-2 justify-center">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-0.5 bg-blue-500"></div>
-                  <span className="text-xs text-gray-600">영상의학과</span>
+              <div className="flex gap-2 mt-2 justify-center" style={{fontSize: '10px'}}>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-blue-500"></div>
+                  <span className="text-gray-600">CT실</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-0.5 bg-green-500"></div>
-                  <span className="text-xs text-gray-600">진단검사의학과</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-green-500"></div>
+                  <span className="text-gray-600">MRI실</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-0.5 bg-yellow-500"></div>
-                  <span className="text-xs text-gray-600">내과</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-yellow-500"></div>
+                  <span className="text-gray-600">X-ray실</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-red-500"></div>
+                  <span className="text-gray-600">내과</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-purple-500"></div>
+                  <span className="text-gray-600">순환기내과</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-cyan-500"></div>
+                  <span className="text-gray-600">영상의학과</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-orange-500"></div>
+                  <span className="text-gray-600">진단검사의학과</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-0.5 bg-pink-500"></div>
+                  <span className="text-gray-600">채혈실</span>
                 </div>
               </div>
             </div>
@@ -1945,38 +2151,7 @@ const AnalyticsContent = ({
               <div className="text-lg font-semibold text-gray-900">시간대별 구역 밀집도</div>
               <div className="text-xs text-gray-500 mt-1">NFC 태그 기반 실시간 위치 분석</div>
             </div>
-            <div className="flex items-end justify-around h-64 px-4">
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-bold mb-2">45%</span>
-                <div className="w-14 bg-blue-500 rounded-t" style={{height: '45%'}}></div>
-                <span className="text-xs text-gray-600 mt-2">응급실</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-bold mb-2">78%</span>
-                <div className="w-14 bg-red-500 rounded-t" style={{height: '78%'}}></div>
-                <span className="text-xs text-gray-600 mt-2">영상의학</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-bold mb-2">62%</span>
-                <div className="w-14 bg-yellow-500 rounded-t" style={{height: '62%'}}></div>
-                <span className="text-xs text-gray-600 mt-2">외래</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-bold mb-2">35%</span>
-                <div className="w-14 bg-green-500 rounded-t" style={{height: '35%'}}></div>
-                <span className="text-xs text-gray-600 mt-2">검사실</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-bold mb-2">52%</span>
-                <div className="w-14 bg-purple-500 rounded-t" style={{height: '52%'}}></div>
-                <span className="text-xs text-gray-600 mt-2">약국</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-bold mb-2">68%</span>
-                <div className="w-14 bg-pink-500 rounded-t" style={{height: '68%'}}></div>
-                <span className="text-xs text-gray-600 mt-2">접수/수납</span>
-              </div>
-            </div>
+            <ExamDurationChart examPerformanceData={examPerformanceData} />
           </div>
         </div>
 
@@ -1988,52 +2163,17 @@ const AnalyticsContent = ({
           </div>
           <div className="flex flex-col gap-6">
             <div className="flex items-center justify-center">
-              <div className="relative">
-                <svg width="200" height="200" viewBox="0 0 200 200">
-                  <circle cx="100" cy="100" r="80" fill="none" stroke="#e5e7eb" strokeWidth="30"/>
-                  <circle cx="100" cy="100" r="80" fill="none" stroke="#22c55e" strokeWidth="30"
-                         strokeDasharray="301.6 201.1" strokeDashoffset="0" transform="rotate(-90 100 100)"/>
-                  <circle cx="100" cy="100" r="80" fill="none" stroke="#eab308" strokeWidth="30"
-                         strokeDasharray="100.5 402.1" strokeDashoffset="-301.6" transform="rotate(-90 100 100)"/>
-                  <circle cx="100" cy="100" r="80" fill="none" stroke="#ef4444" strokeWidth="30"
-                         strokeDasharray="100.5 402.1" strokeDashoffset="-402.1" transform="rotate(-90 100 100)"/>
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <div className="text-3xl font-bold text-gray-900">78%</div>
-                  <div className="text-xs text-gray-500">전체 가동률</div>
-                </div>
-              </div>
+              <ExamPerformanceChart examPerformanceData={examPerformanceData} />
             </div>
-            <div className="flex justify-around">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">60%</div>
-                <div className="text-xs text-gray-600">정상 가동</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-yellow-600">20%</div>
-                <div className="text-xs text-gray-600">대기</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">20%</div>
-                <div className="text-xs text-gray-600">점검/오류</div>
-              </div>
-            </div>
+            <ExamPerformanceStats examPerformanceData={examPerformanceData} />
             
             {/* 검사실별 성능 순위 */}
             <div className="border-t pt-4 flex-1 flex flex-col">
               <div className="text-sm font-semibold text-gray-700 mb-3">검사실별 성능 순위</div>
               <div className="flex-1 overflow-y-auto max-h-80">
                 <div className="space-y-3 pr-2">
-                  {[
-                    { rank: 1, name: 'MRI 검사실 A', percent: 92, color: 'green' },
-                    { rank: 2, name: 'CT 검사실 B', percent: 88, color: 'green' },
-                    { rank: 3, name: '초음파실 1', percent: 85, color: 'green' },
-                    { rank: 4, name: 'X-ray 검사실 C', percent: 78, color: 'green' },
-                    { rank: 5, name: '내시경실 2', percent: 72, color: 'yellow' },
-                    { rank: 6, name: '심전도실 A', percent: 68, color: 'yellow' },
-                    { rank: 7, name: 'MRI 검사실 B', percent: 55, color: 'yellow' },
-                    { rank: 8, name: 'CT 검사실 A', percent: 45, color: 'red' }
-                  ].map(room => (
+                  {examPerformanceData && examPerformanceData.length > 0 && examPerformanceData[0].name !== '데이터 로딩 중...' ? (
+                    examPerformanceData.map(room => (
                     <div key={room.rank} className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg hover:bg-gray-100 transition-colors">
                       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold
                         ${room.rank <= 3 ? 
@@ -2043,12 +2183,19 @@ const AnalyticsContent = ({
                           'bg-gray-500 text-white'}`}>
                         {room.rank}
                       </span>
-                      <span className="text-sm text-gray-700 flex-1">{room.name}</span>
-                      <span className={`text-sm font-semibold
-                        ${room.color === 'green' ? 'text-green-600' : 
-                          room.color === 'yellow' ? 'text-yellow-600' : 'text-red-600'}`}>
-                        정상 {room.percent}%
-                      </span>
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-700">{room.name}</div>
+                        {room.department && (
+                          <div className="text-xs text-gray-500">{room.department}</div>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-semibold
+                          ${room.color === 'green' ? 'text-green-600' : 
+                            room.color === 'yellow' ? 'text-yellow-600' : 'text-red-600'}`}>
+                          성능 {room.percent}%
+                        </span>
+                      </div>
                       <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div className={`h-full ${
                           room.color === 'green' ? 'bg-green-500' : 
@@ -2056,12 +2203,268 @@ const AnalyticsContent = ({
                         }`} style={{width: `${room.percent}%`}}></div>
                       </div>
                     </div>
-                  ))}
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <div className="mb-2">🔄 데이터를 불러오는 중...</div>
+                    <div className="text-xs">API에서 exam 데이터를 가져오고 있습니다</div>
+                  </div>
+                )}
                 </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// 검사실 성능 원형 차트 컴포넌트
+const ExamPerformanceChart = ({ examPerformanceData }) => {
+  // examPerformanceData를 기반으로 green, yellow, red 비율 계산
+  const calculateStats = () => {
+    if (!examPerformanceData || examPerformanceData.length === 0 || examPerformanceData[0].name === '데이터 로딩 중...') {
+      return { green: 33, yellow: 33, red: 34, total: 100 };
+    }
+
+    const total = examPerformanceData.length;
+    const green = examPerformanceData.filter(exam => exam.color === 'green').length;
+    const yellow = examPerformanceData.filter(exam => exam.color === 'yellow').length;
+    const red = examPerformanceData.filter(exam => exam.color === 'red').length;
+
+    const greenPercent = Math.round((green / total) * 100);
+    const yellowPercent = Math.round((yellow / total) * 100);
+    const redPercent = 100 - greenPercent - yellowPercent; // 남은 비율
+
+    return { green: greenPercent, yellow: yellowPercent, red: redPercent, total: 100 };
+  };
+
+  const stats = calculateStats();
+  const radius = 80;
+  const circumference = 2 * Math.PI * radius;
+
+  // 각 섹션의 strokeDasharray 계산
+  const greenDash = (stats.green / 100) * circumference;
+  const yellowDash = (stats.yellow / 100) * circumference;
+  const redDash = (stats.red / 100) * circumference;
+
+  // strokeDashoffset 계산 (누적)
+  const yellowOffset = -greenDash;
+  const redOffset = -(greenDash + yellowDash);
+
+  const overallPerformance = Math.round((stats.green * 0.8 + stats.yellow * 0.5 + stats.red * 0.2));
+
+  return (
+    <div className="relative">
+      <svg width="200" height="200" viewBox="0 0 200 200">
+        {/* 배경 원 */}
+        <circle cx="100" cy="100" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="30"/>
+        
+        {/* Green 섹션 */}
+        {stats.green > 0 && (
+          <circle 
+            cx="100" 
+            cy="100" 
+            r={radius} 
+            fill="none" 
+            stroke="#22c55e" 
+            strokeWidth="30"
+            strokeDasharray={`${greenDash} ${circumference - greenDash}`} 
+            strokeDashoffset="0" 
+            transform="rotate(-90 100 100)"
+          />
+        )}
+        
+        {/* Yellow 섹션 */}
+        {stats.yellow > 0 && (
+          <circle 
+            cx="100" 
+            cy="100" 
+            r={radius} 
+            fill="none" 
+            stroke="#eab308" 
+            strokeWidth="30"
+            strokeDasharray={`${yellowDash} ${circumference - yellowDash}`} 
+            strokeDashoffset={yellowOffset} 
+            transform="rotate(-90 100 100)"
+          />
+        )}
+        
+        {/* Red 섹션 */}
+        {stats.red > 0 && (
+          <circle 
+            cx="100" 
+            cy="100" 
+            r={radius} 
+            fill="none" 
+            stroke="#ef4444" 
+            strokeWidth="30"
+            strokeDasharray={`${redDash} ${circumference - redDash}`} 
+            strokeDashoffset={redOffset} 
+            transform="rotate(-90 100 100)"
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="text-3xl font-bold text-gray-900">{overallPerformance}%</div>
+        <div className="text-xs text-gray-500">전체 성능</div>
+      </div>
+    </div>
+  );
+};
+
+// 검사 소요시간 기반 막대 차트 컴포넌트 (Recharts 사용)
+const ExamDurationChart = ({ examPerformanceData }) => {
+  // examPerformanceData를 부서별로 그룹화하고 평균 소요시간 계산
+  const processChartData = () => {
+    console.log('📊 ExamDurationChart - examPerformanceData:', examPerformanceData);
+    
+    if (!examPerformanceData || examPerformanceData.length === 0 || examPerformanceData[0].name === '데이터 로딩 중...') {
+      console.log('📊 ExamDurationChart - 기본 데이터 사용');
+      return [
+        { department: '영상의학과', avgDuration: 45, color: '#3b82f6' },
+        { department: '진단검사의학과', avgDuration: 25, color: '#10b981' },
+        { department: '내과', avgDuration: 35, color: '#f59e0b' },
+        { department: '외과', avgDuration: 55, color: '#ef4444' },
+        { department: '정형외과', avgDuration: 40, color: '#8b5cf6' },
+        { department: '신경과', avgDuration: 30, color: '#06b6d4' }
+      ];
+    }
+
+    console.log('📊 ExamDurationChart - 실제 데이터로 부서별 그룹화 시작');
+    
+    // 부서별로 그룹화
+    const deptGroups = {};
+    examPerformanceData.forEach((exam, index) => {
+      const dept = exam.department || '기타';
+      console.log(`📊 exam[${index}] - department: ${dept}, avgWaitTime: ${exam.avgWaitTime}`);
+      
+      if (!deptGroups[dept]) {
+        deptGroups[dept] = [];
+      }
+      deptGroups[dept].push(exam.avgWaitTime || 30);
+    });
+
+    console.log('📊 ExamDurationChart - 부서별 그룹:', deptGroups);
+
+    // 각 부서의 평균 소요시간 계산
+    const chartData = Object.entries(deptGroups)
+      .map(([dept, durations]) => {
+        const avgDuration = durations.reduce((sum, d) => sum + d, 0) / durations.length;
+        const result = {
+          department: dept,
+          avgDuration: Math.round(avgDuration),
+          color: getBarColor(avgDuration)
+        };
+        console.log(`📊 ${dept} - 평균 소요시간: ${result.avgDuration}분`);
+        return result;
+      })
+      .sort((a, b) => b.avgDuration - a.avgDuration); // 소요시간 긴 순서로 정렬 (모든 부서 표시)
+
+    console.log('📊 ExamDurationChart - 최종 차트 데이터:', chartData);
+    return chartData;
+  };
+
+  const getBarColor = (duration) => {
+    if (duration >= 50) return '#ef4444'; // red
+    if (duration >= 35) return '#f59e0b'; // yellow  
+    if (duration >= 20) return '#3b82f6'; // blue
+    return '#10b981'; // green
+  };
+
+  // 커스텀 Tooltip
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+          <p className="font-semibold text-gray-900">{`${label}`}</p>
+          <p className="text-blue-600">
+            {`평균 소요시간: ${payload[0].value}분`}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const chartData = processChartData();
+  
+  // 부서 개수에 따라 최소 너비 계산 (부서당 100px씩)
+  const minWidth = Math.max(600, chartData.length * 100);
+
+  return (
+    <div className="h-80 overflow-x-auto">
+      <div style={{ minWidth: `${minWidth}px`, height: '100%' }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={chartData}
+            margin={{
+              top: 20,
+              right: 30,
+              left: 20,
+              bottom: 60
+            }}
+          >
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis 
+            dataKey="department" 
+            tick={{ fontSize: 12, fill: '#6b7280' }}
+            angle={-45}
+            textAnchor="end"
+            height={60}
+          />
+          <YAxis 
+            tick={{ fontSize: 12, fill: '#6b7280' }}
+            label={{ value: '밀집도', angle: -90, position: 'insideLeft' }}
+          />
+          <Tooltip content={<CustomTooltip />} />
+          <Bar dataKey="avgDuration" radius={[4, 4, 0, 0]} maxBarSize={50}>
+            {chartData.map((entry, index) => (
+              <Cell key={`cell-${index}`} fill={entry.color} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
+
+// 검사실 성능 통계 컴포넌트
+const ExamPerformanceStats = ({ examPerformanceData }) => {
+  const calculateStats = () => {
+    if (!examPerformanceData || examPerformanceData.length === 0 || examPerformanceData[0].name === '데이터 로딩 중...') {
+      return { green: 33, yellow: 33, red: 34 };
+    }
+
+    const total = examPerformanceData.length;
+    const green = examPerformanceData.filter(exam => exam.color === 'green').length;
+    const yellow = examPerformanceData.filter(exam => exam.color === 'yellow').length;
+    const red = examPerformanceData.filter(exam => exam.color === 'red').length;
+
+    return {
+      green: Math.round((green / total) * 100),
+      yellow: Math.round((yellow / total) * 100),
+      red: Math.round((red / total) * 100)
+    };
+  };
+
+  const stats = calculateStats();
+
+  return (
+    <div className="flex justify-around">
+      <div className="text-center">
+        <div className="text-2xl font-bold text-green-600">{stats.green}%</div>
+        <div className="text-xs text-gray-600">우수 성능</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-yellow-600">{stats.yellow}%</div>
+        <div className="text-xs text-gray-600">보통 성능</div>
+      </div>
+      <div className="text-center">
+        <div className="text-2xl font-bold text-red-600">{stats.red}%</div>
+        <div className="text-xs text-gray-600">개선 필요</div>
       </div>
     </div>
   );
