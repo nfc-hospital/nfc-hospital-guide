@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDownIcon, ChevronUpIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
@@ -10,7 +10,7 @@ const getNextActionText = (patientState, currentExam, taggedLocation, nextLocati
   // 상태별 기본 행동
   const stateActions = {
     'ARRIVED': '원무과에서 접수하기',
-    'REGISTERED': '첫 번째 검사실로 이동하기',
+    'REGISTERED': '검사실로 이동하기',
     'WAITING': '대기실에서 순서 기다리기',
     'CALLED': '검사실로 입장하기',
     'ONGOING': '검사 진행 중',
@@ -19,29 +19,32 @@ const getNextActionText = (patientState, currentExam, taggedLocation, nextLocati
     'FINISHED': '귀가하기'
   };
 
-  // 현재 위치와 목적지가 있는 경우 구체적인 안내
-  if (taggedLocation && nextLocation) {
-    const currentPlace = taggedLocation.description || `${taggedLocation.building} ${taggedLocation.floor}층`;
+  // 목적지가 있는 경우 구체적인 안내
+  if (nextLocation) {
     const destination = nextLocation.name || nextLocation.room || '목적지';
     
     if (patientState === 'REGISTERED' || patientState === 'COMPLETED') {
-      return `${destination}(으)로 이동하기`;
-    }
-    if (patientState === 'WAITING') {
-      return `${destination} 대기실에서 기다리기`;
+      return `${destination}실로 이동하기`;
     }
   }
 
   // 현재 검사 정보가 있는 경우
   if (currentExam) {
+    const examTitle = currentExam.title || '';
+    
     if (patientState === 'WAITING') {
-      return `${currentExam.title} 대기 중 (${currentExam.room})`;
+      // 태그 위치가 있으면 이미 도착한 것으로 판단
+      if (taggedLocation) {
+        return `${examTitle} 대기 중`;
+      } else {
+        return `${examTitle} 대기실로 이동하기`;
+      }
     }
     if (patientState === 'CALLED') {
       return `${currentExam.room}으로 입장하기`;
     }
     if (patientState === 'ONGOING') {
-      return `${currentExam.title} 진행 중`;
+      return `${examTitle} 진행 중`;
     }
   }
 
@@ -66,7 +69,7 @@ const FormatATemplate = ({
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('location');
   const [expandedItems, setExpandedItems] = useState([]);
-  const [showDemoMap, setShowDemoMap] = useState(false);
+  const [showDemoMap, setShowDemoMap] = useState(true);
   const [isDemoExpanded, setIsDemoExpanded] = useState(true);
   
   // journeyStore에서 현재 위치 정보 가져오기
@@ -361,8 +364,8 @@ const FormatATemplate = ({
                 <div className="flex flex-col items-end flex-shrink-0">
                   <div className="text-white/70 text-xs sm:text-sm">진행</div>
                   <div className="text-white flex items-baseline gap-0.5">
-                    <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{getVisibleSteps().currentStep + 1}</span>
-                    <span className="text-sm sm:text-base lg:text-xl text-white/70">/{getVisibleSteps().totalSteps}</span>
+                    <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{todaySchedule.filter(s => s.status === 'completed').length}</span>
+                    <span className="text-sm sm:text-base lg:text-xl text-white/70">/{todaySchedule.length}</span>
                   </div>
                 </div>
               </div>
@@ -565,43 +568,47 @@ const FormatATemplate = ({
                           <h4 className="font-semibold text-gray-900">{schedule.examName}</h4>
                           <p className="text-sm text-gray-600">
                             {schedule.location}
-                            {isCurrentStep && queueData && (
+                            {isCurrentStep && waitingInfo && (
                               <span className="ml-2 text-amber-600">
-                                • 내 앞에 {queueData.peopleAhead}명
+                                • 내 앞에 {waitingInfo.peopleAhead}명
                               </span>
                             )}
                           </p>
                         </div>
                         
-                        {/* 펼침/접힘 화살표 */}
-                        {isExpanded ? (
-                          <ChevronUpIcon className="w-5 h-5 text-gray-400" />
-                        ) : (
-                          <ChevronDownIcon className="w-5 h-5 text-gray-400" />
-                        )}
+                        {/* 펼침/접힘 화살표 - 회전 애니메이션 */}
+                        <ChevronDownIcon 
+                          className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+                            isExpanded ? 'rotate-180' : ''
+                          }`} 
+                        />
                       </button>
                       
-                      {/* 상세 정보 */}
-                      {isExpanded && (
-                        <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
-                          <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-blue-50/90 transition-colors duration-300">
+                      {/* 상세 정보 - 부드러운 애니메이션 */}
+                      <div 
+                        className={`overflow-hidden transition-all duration-500 ease-in-out ${
+                          isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+                        }`}
+                      >
+                        <div className="px-4 pb-4 pt-3 space-y-3 border-t border-gray-100">
+                          <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-blue-50/90 transition-colors duration-300 transform transition-transform hover:scale-[1.02]">
                             <h5 className="text-sm font-medium text-blue-900 mb-1">검사 목적</h5>
                             <p className="text-sm text-blue-700">{schedule.purpose || schedule.description || '건강 상태 확인 및 진단'}</p>
                           </div>
                           
                           {schedule.preparation && (
-                            <div className="bg-amber-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-amber-50/90 transition-colors duration-300">
+                            <div className="bg-amber-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-amber-50/90 transition-colors duration-300 transform transition-transform hover:scale-[1.02]">
                               <h5 className="text-sm font-medium text-amber-900 mb-1">준비사항</h5>
                               <p className="text-sm text-amber-700">{schedule.preparation}</p>
                             </div>
                           )}
                           
-                          <div className="bg-gray-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-gray-50/90 transition-colors duration-300">
+                          <div className="bg-gray-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-gray-50/90 transition-colors duration-300 transform transition-transform hover:scale-[1.02]">
                             <h5 className="text-sm font-medium text-gray-900 mb-1">소요시간</h5>
                             <p className="text-sm text-gray-700">약 {schedule.duration}분</p>
                           </div>
                         </div>
-                      )}
+                      </div>
                     </div>
                   );
                 })}

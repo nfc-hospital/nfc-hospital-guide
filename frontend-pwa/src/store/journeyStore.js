@@ -236,18 +236,7 @@ const useJourneyStore = create(
                 
                 console.log('🔍 최종 currentQueues:', currentQueues);
                 
-                // 큐 데이터에서 exam ID를 exam 객체로 확장 (임시 해결책)
-                currentQueues = currentQueues.map(queue => ({
-                  ...queue,
-                  exam: typeof queue.exam === 'string' ? {
-                    exam_id: queue.exam,
-                    title: `검사 ${queue.exam}`,
-                    building: '본관',
-                    floor: '1',
-                    room: '검사실',
-                    department: '일반'
-                  } : queue.exam
-                }));
+                // 백엔드에서 exam 정보가 완전히 포함되어 오므로 추가 처리 불필요
 
                 // appointments가 비어있으면 queue 데이터를 appointment 형태로 변환
                 let finalAppointments = appointments;

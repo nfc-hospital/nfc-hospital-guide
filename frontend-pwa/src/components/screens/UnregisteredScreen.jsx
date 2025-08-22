@@ -11,6 +11,7 @@ export default function UnregisteredScreen({ taggedLocation }) {
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
+  const [allRequiredCompleted, setAllRequiredCompleted] = useState(false);
 
   // 컴포넌트 마운트 시 예약 데이터 확인
   React.useEffect(() => {
@@ -114,16 +115,28 @@ export default function UnregisteredScreen({ taggedLocation }) {
     }
   ];
 
+  // 완료 상태 변경 핸들러
+  const handleCompletionChange = (isCompleted) => {
+    setAllRequiredCompleted(isCompleted);
+  };
+
   // 검사별 준비사항을 준비사항 탭 내용으로 포함
   const customPreparationContent = (
     <div className="mt-6">
-      <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-        <span className="text-2xl">🏥</span>
-        검사별 준비사항
-      </h3>
+      <div className="flex items-center gap-3 mb-4">
+        <h3 className="text-xl font-bold text-gray-900">
+          검사별 준비사항
+        </h3>
+        {allRequiredCompleted && (
+          <span className="px-3 py-1 bg-green-500 text-white text-xs rounded-full font-bold animate-[scale-in_0.3s_ease-out]">
+            준비 완료!
+          </span>
+        )}
+      </div>
       <ExamPreparationChecklist 
         appointments={todaysAppointments}
         onRescheduleRequest={handleRescheduleRequest}
+        onCompletionChange={handleCompletionChange}
       />
     </div>
   );
@@ -138,6 +151,7 @@ export default function UnregisteredScreen({ taggedLocation }) {
         todaySchedule={todaySchedule}
         preparationItems={preparationItems}
         customPreparationContent={customPreparationContent}
+        showQuickNavigation={false}
       />
       <RescheduleModal />
     </>

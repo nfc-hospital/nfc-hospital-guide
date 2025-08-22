@@ -4,6 +4,7 @@ import useJourneyStore from '../store/journeyStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import AdminHomeScreen from '../components/screens/AdminHomeScreen';
 import { api } from '../api/client';
+import { getFacilityByName } from '../data/facilityManagement';
 
 // 비로그인 사용자용 컴포넌트
 import PublicGuide from '../components/PublicGuide';
@@ -13,7 +14,6 @@ import UnregisteredScreen from '../components/screens/UnregisteredScreen';
 import ArrivedScreen from '../components/screens/ArrivedScreen';
 import RegisteredScreen from '../components/screens/RegisteredScreen';
 import WaitingScreen from '../components/screens/WaitingScreen';
-import CalledScreen from '../components/screens/CalledScreen';
 import PaymentScreen from '../components/screens/PaymentScreen';
 import FinishedScreen from '../components/screens/FinishedScreen';
 
@@ -30,7 +30,7 @@ const CompletedScreen = ({ taggedLocation, upcoming_tasks, completed_tasks }) =>
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
     id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
+    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor ? apt.exam.floor + '층' : ''} ${apt.exam?.room || ''}`.trim(),
     status: apt.status,
     description: apt.exam?.description,
     purpose: apt.exam?.description || '건강 상태 확인 및 진단',
@@ -44,14 +44,33 @@ const CompletedScreen = ({ taggedLocation, upcoming_tasks, completed_tasks }) =>
   const currentStep = todaySchedule.findIndex(s => s.status === 'completed');
   const actualCurrentStep = currentStep === -1 ? 0 : currentStep;
   
+  // 다음 검사실 정보 찾기
+  const completedCount = todaySchedule.filter(s => s.status === 'completed').length;
+  const nextExam = completedCount < todaysAppointments.length ? 
+    todaysAppointments[completedCount]?.exam : null;
+  
+  // facilityManagement에서 시설 정보 찾기
+  const facilityData = nextExam ? getFacilityByName(nextExam.title) : null;
+  
+  const locationInfo = nextExam ? {
+    name: nextExam.title,
+    building: nextExam.building || '본관',
+    floor: `${nextExam.floor || '2'}층`,
+    room: nextExam.room,
+    department: nextExam.department,
+    directions: '다음 검사실로 이동해주세요',
+    mapFile: facilityData?.mapFile || 'main_1f.svg',
+    svgId: facilityData?.svgId
+  } : null;
+  
   return (
     <FormatATemplate
       screenType="completed"
       currentStep={actualCurrentStep}
       totalSteps={todaySchedule.length || 7}
-      nextAction="다음 검사실로 이동하기"
+      nextAction={null} // 자동 생성되도록 null 전달
       waitingInfo={null}
-      locationInfo={null}
+      locationInfo={locationInfo}
       todaySchedule={todaySchedule}
       queueData={null}
       taggedLocation={taggedLocation}
@@ -277,6 +296,18 @@ const Home = () => {
     
     // CalledModal 상태 체크 (다른 화면들 위에 모달로 표시)
     const isCalledModalOpen = currentState === 'CALLED';
+    
+    // 개발 환경에서 디버깅을 위한 로그
+    if (import.meta.env.DEV) {
+      console.log('🏥 환자 화면 렌더링 정보:', {
+        currentState,
+        patientState,
+        userState: user?.state,
+        locationType,
+        todaysAppointments: todaysAppointments?.length || 0,
+        completedCount: todaysAppointments?.filter(apt => ['completed', 'done'].includes(apt.status)).length || 0
+      });
+    }
     
     // 호출 상태가 아닌 다른 상태들 처리
     

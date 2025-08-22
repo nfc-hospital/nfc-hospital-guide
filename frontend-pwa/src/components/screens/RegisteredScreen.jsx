@@ -23,18 +23,25 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
   const currentExam = currentTask?.exam;
   
   // 오늘의 일정 준비 - exam의 description 필드 활용
-  const todaySchedule = todaysAppointments?.map((apt, index) => ({
-    id: apt.appointment_id,
-    examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
-    status: apt.status,
-    description: apt.exam?.description, // exam의 description 필드 추가
-    purpose: apt.exam?.description || '건강 상태 확인 및 진단',
-    preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
-    duration: apt.exam?.average_duration || 30,
-    scheduled_at: apt.scheduled_at,
-    department: apt.exam?.department
-  })) || [];
+  const todaySchedule = todaysAppointments?.map((apt, index) => {
+    // 디버깅을 위한 로그
+    if (import.meta.env.DEV) {
+      console.log('Appointment exam data:', apt.exam);
+    }
+    
+    return {
+      id: apt.appointment_id,
+      examName: apt.exam?.title || `검사 ${index + 1}`,
+      location: `${apt.exam?.building || '본관'} ${apt.exam?.floor ? apt.exam.floor + '층' : ''} ${apt.exam?.room || ''}`.trim(),
+      status: apt.status,
+      description: apt.exam?.description, // exam의 description 필드 추가
+      purpose: apt.exam?.description || '건강 상태 확인 및 진단',
+      preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
+      duration: apt.exam?.average_duration || 30,
+      scheduled_at: apt.scheduled_at,
+      department: apt.exam?.department
+    };
+  }) || [];
   
   // 현재 단계 계산
   const currentStep = todaySchedule.findIndex(s => 
@@ -48,18 +55,30 @@ export default function RegisteredScreen({ taggedLocation, current_task, upcomin
     estimatedTime: activeQueue.estimated_wait_time || 15
   } : null;
   
-  // 위치 정보 - 첫 번째 검사실
-  const firstExam = todaysAppointments?.[0]?.exam;
+  // 다음에 갈 검사실 정보 찾기
+  // REGISTERED 상태에서는 첫 번째 검사실로, COMPLETED 상태에서는 다음 검사실로
+  let nextExam = null;
+  
+  if (patientState === 'REGISTERED' || (patientState === 'COMPLETED' && actualCurrentStep === -1)) {
+    // 첫 번째 검사실
+    nextExam = todaysAppointments?.[0]?.exam;
+  } else if (patientState === 'COMPLETED' && actualCurrentStep >= 0) {
+    // 현재 검사가 완료되었으면 다음 검사 찾기
+    const completedCount = todaySchedule.filter(s => s.status === 'completed').length;
+    if (completedCount < todaySchedule.length) {
+      nextExam = todaysAppointments?.[completedCount]?.exam;
+    }
+  }
   
   // facilityManagement에서 시설 정보 찾기
-  const facilityData = firstExam ? getFacilityByName(firstExam.title) : null;
+  const facilityData = nextExam ? getFacilityByName(nextExam.title) : null;
   
-  const locationInfo = firstExam ? {
-    name: firstExam.title,
-    building: firstExam.building || '본관',
-    floor: `${firstExam.floor || '2'}층`,
-    room: firstExam.room,
-    department: firstExam.department,
+  const locationInfo = nextExam ? {
+    name: nextExam.title,
+    building: nextExam.building || '본관',
+    floor: `${nextExam.floor || '2'}층`,
+    room: nextExam.room,
+    department: nextExam.department,
     directions: '엘리베이터를 타고 이동 후 안내 표지판을 따라가세요',
     mapFile: facilityData?.mapFile || 'main_1f.svg', // 지도 파일 추가
     svgId: facilityData?.svgId // SVG 요소 ID 추가

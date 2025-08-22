@@ -7,9 +7,50 @@ class QueueSerializer(serializers.ModelSerializer):
     """
     대기열 모델을 위한 시리얼라이저
     """
+    # exam 정보를 중첩된 객체로 포함 (읽기 전용)
+    exam = ExamSerializer(read_only=True)
+    # exam_id는 생성/수정 시에만 사용
+    exam_id = serializers.CharField(write_only=True, required=False, source='exam.exam_id')
+    
     class Meta:
         model = Queue
-        fields = '__all__' 
+        fields = '__all__'
+    
+    def to_representation(self, instance):
+        """
+        읽기 시 exam 정보를 완전히 포함
+        """
+        data = super().to_representation(instance)
+        # exam이 Foreign Key 관계이므로 select_related로 가져왔을 때 전체 정보 포함
+        if instance.exam:
+            data['exam'] = ExamSerializer(instance.exam).data
+        return data
+    
+    def create(self, validated_data):
+        # exam 관련 데이터 처리
+        exam_data = validated_data.pop('exam', {})
+        exam_id = exam_data.get('exam_id') if exam_data else None
+        
+        if exam_id:
+            try:
+                validated_data['exam'] = Exam.objects.get(exam_id=exam_id)
+            except Exam.DoesNotExist:
+                raise serializers.ValidationError(f"Exam with id {exam_id} does not exist")
+                
+        return super().create(validated_data)
+    
+    def update(self, instance, validated_data):
+        # exam 관련 데이터 처리
+        exam_data = validated_data.pop('exam', {})
+        exam_id = exam_data.get('exam_id') if exam_data else None
+        
+        if exam_id:
+            try:
+                validated_data['exam'] = Exam.objects.get(exam_id=exam_id)
+            except Exam.DoesNotExist:
+                raise serializers.ValidationError(f"Exam with id {exam_id} does not exist")
+                
+        return super().update(instance, validated_data) 
 
 class MyPositionSerializer(serializers.Serializer):
     """

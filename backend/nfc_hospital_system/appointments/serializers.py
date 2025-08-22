@@ -24,7 +24,8 @@ class ExamSerializer(serializers.ModelSerializer):
             'exam_id', 'title', 'description', 'department', 'average_duration', 'buffer_time',
             'is_active', 'created_at', 'updated_at', 'preparations',
             'category',
-            'location'
+            'building', 'floor', 'room',  # 개별 필드 추가
+            'location'  # 통합 객체도 제공
         ]
         read_only_fields = ['created_at', 'updated_at']
 

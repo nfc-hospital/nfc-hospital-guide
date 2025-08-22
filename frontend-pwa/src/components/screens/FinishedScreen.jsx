@@ -3,12 +3,74 @@ import useJourneyStore from '../../store/journeyStore';
 import { useNavigate } from 'react-router-dom';
 import FormatBTemplate from '../templates/FormatBTemplate';
 import apiService from '../../api/apiService';
+import { CheckCircleIcon } from '@heroicons/react/24/outline';
 
-export default function FinishedScreen({ taggedLocation }) {
-  const { user, todaysAppointments = [], appointments = [] } = useJourneyStore();
+export default function FinishedScreen({ taggedLocation, completed_tasks }) {
+  const { 
+    user, 
+    todaysAppointments = [], 
+    appointments = [], 
+    patientState,
+    isLoading 
+  } = useJourneyStore();
   const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [postCareInstructions, setPostCareInstructions] = useState([]);
+  
+  // 디버깅
+  useEffect(() => {
+    console.log('🔍 FinishedScreen 렌더링됨:', {
+      user,
+      todaysAppointments,
+      patientState,
+      taggedLocation,
+      completed_tasks,
+      completedCount: todaysAppointments?.filter(apt => ['completed', 'done'].includes(apt.status)).length || 0
+    });
+  }, [todaysAppointments, patientState]);
+
+  // 소요 시간 계산을 위한 시작/종료 시간 찾기
+  const calculateTotalDuration = () => {
+    if (!todaysAppointments || todaysAppointments.length === 0) return 0;
+    
+    // 완료된 검사들만 필터링
+    const completedAppts = todaysAppointments.filter(apt => 
+      ['completed', 'done'].includes(apt.status)
+    );
+    
+    if (completedAppts.length === 0) return 0;
+    
+    // 가장 이른 시작 시간 찾기 (접수 시간 또는 첫 검사 시작)
+    const startTimes = completedAppts.map(apt => {
+      // created_at이 있으면 사용 (접수 시간)
+      if (apt.created_at) return new Date(apt.created_at);
+      // 없으면 scheduled_at 사용
+      return new Date(apt.scheduled_at);
+    }).filter(date => !isNaN(date));
+    
+    if (startTimes.length === 0) return 0;
+    
+    const firstTime = new Date(Math.min(...startTimes));
+    
+    // 가장 늦은 완료 시간 찾기
+    const endTimes = completedAppts.map(apt => {
+      if (apt.completed_at) return new Date(apt.completed_at);
+      if (apt.updated_at) return new Date(apt.updated_at);
+      // 완료 시간이 없으면 예상 시간을 더해서 추정
+      const scheduled = new Date(apt.scheduled_at);
+      const duration = apt.exam?.average_duration || 30;
+      return new Date(scheduled.getTime() + duration * 60 * 1000);
+    }).filter(date => !isNaN(date));
+    
+    if (endTimes.length === 0) return 0;
+    
+    const lastTime = new Date(Math.max(...endTimes));
+    
+    // 분 단위로 계산
+    const durationInMinutes = Math.round((lastTime - firstTime) / (1000 * 60));
+    
+    return Math.max(0, durationInMinutes); // 음수 방지
+  };
 
   // 완료된 검사들의 후 주의사항 가져오기
   useEffect(() => {
@@ -105,11 +167,18 @@ export default function FinishedScreen({ taggedLocation }) {
     ['completed', 'done'].includes(apt.status)
   );
   const completedCount = completedAppointments.length;
-  const totalDuration = completedAppointments
-    .reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
-  const totalCost = 80000; // 예시 비용
-
-  // completionStats 제거 - FormatBTemplate에서 처리
+  
+  // 소요 시간 계산 - 고정값 사용
+  const totalDuration = calculateTotalDuration();
+  
+  // 총 비용 계산 - 실제 비용 정보가 있으면 사용, 없으면 예상 비용
+  const totalCost = completedAppointments
+    .reduce((sum, apt) => {
+      const cost = apt.cost || apt.exam?.cost || '25000';
+      const numericCost = typeof cost === 'string' ? 
+        parseInt(cost.replace(/[^0-9]/g, '')) : cost;
+      return sum + numericCost;
+    }, 0);
 
   // 처방 여부 확인
   const hasPrescription = completedAppointments.some(apt => 
@@ -196,10 +265,22 @@ export default function FinishedScreen({ taggedLocation }) {
   const precautions = generatePrecautions();
   
   // 오늘의 일정 - 완료된 것들만
+  // 로딩 중이면 로딩 표시
+  if (isLoading && (!todaysAppointments || todaysAppointments.length === 0)) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-500 via-emerald-600 to-green-700 text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-xl">데이터를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+  
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
     id: apt.appointment_id,
     examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor || ''}층 ${apt.exam?.room || ''}`,
+    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor ? apt.exam.floor + '층' : ''} ${apt.exam?.room || ''}`.trim(),
     status: apt.status,
     description: apt.exam?.description,
     purpose: apt.exam?.description || '건강 상태 확인 및 진단',
@@ -220,72 +301,44 @@ export default function FinishedScreen({ taggedLocation }) {
       status="완료"
       nextSchedule={nextSchedule}
       summaryCards={[
-        { label: '소요시간', value: `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분` },
+        { label: '소요시간', value: totalDuration >= 60 ? 
+          `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분` : 
+          `${totalDuration}분` 
+        },
         { label: '완료', value: `${completedCount}개` }
       ]}
       todaySchedule={todaySchedule}
-      showCheckboxes={true}
-      checkItems={checkItems}
       showPaymentInfo={true}
       paymentAmount={totalCost}
       precautions={precautions}
     >
 
-      {/* 빠른 길찾기 - PublicHome 스타일과 일치 */}
-      <section className="mb-8">
-        <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-          <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-          빠른 길찾기
-        </h3>
-        
-        <div className="grid grid-cols-3 gap-4">
-          <button 
-            onClick={() => navigate('/public?place=pharmacy')}
-            className="group bg-white border-2 border-green-200 rounded-2xl p-4 transition-all duration-300 hover:border-green-300 hover:shadow-lg hover:bg-green-50">
-            <div className="flex flex-col items-center text-center space-y-2">
-              <div className="w-16 h-16 bg-green-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                💊
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-gray-900">약국</h4>
-                <p className="text-xs text-gray-600">본관 1층</p>
-              </div>
+      {/* 귀가 전 체크리스트 */}
+      {checkItems.length > 0 && (
+        <section className="mb-8">
+          <div className="bg-white rounded-2xl p-6 shadow-lg">
+            <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <CheckCircleIcon className="w-7 h-7 text-emerald-600" />
+              귀가 전 확인사항
+            </h3>
+            <div className="space-y-3">
+              {checkItems.map((item, index) => (
+                <label 
+                  key={index}
+                  className="flex items-center gap-3 p-4 bg-gray-50 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors duration-200"
+                >
+                  <input 
+                    type="checkbox" 
+                    className="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+                  />
+                  <span className="text-lg text-gray-700">{item}</span>
+                </label>
+              ))}
             </div>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/public?place=parking')}
-            className="group bg-white border-2 border-purple-200 rounded-2xl p-4 transition-all duration-300 hover:border-purple-300 hover:shadow-lg hover:bg-purple-50">
-            <div className="flex flex-col items-center text-center space-y-2">
-              <div className="w-16 h-16 bg-purple-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                🚗
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-gray-900">주차장</h4>
-                <p className="text-xs text-gray-600">지하/야외</p>
-              </div>
-            </div>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/map')}
-            className="group bg-white border-2 border-blue-200 rounded-2xl p-4 transition-all duration-300 hover:border-blue-300 hover:shadow-lg hover:bg-blue-50">
-            <div className="flex flex-col items-center text-center space-y-2">
-              <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform duration-300 shadow-sm">
-                🗺️
-              </div>
-              <div>
-                <h4 className="text-base font-bold text-gray-900">지도</h4>
-                <p className="text-xs text-gray-600">전체 안내</p>
-              </div>
-            </div>
-          </button>
-        </div>
-      </section>
-
+          </div>
+        </section>
+      )}
+      
       {/* 다음 예약 관련 액션 */}
       <section className="mb-8">
         {nextAppointment && (
@@ -354,17 +407,6 @@ export default function FinishedScreen({ taggedLocation }) {
             <h3 className="text-xl font-bold mb-2">모든 검사가 완료되었습니다</h3>
             <p className="text-slate-300">안전한 귀가를 위해 주의사항을 확인하세요</p>
           </div>
-          
-          <button 
-            onClick={() => navigate('/')}
-            className="w-full group bg-white text-slate-900 rounded-xl py-4 px-6 font-bold text-lg 
-                     hover:bg-gray-100 transition-all duration-300 shadow-md hover:shadow-lg 
-                     flex items-center justify-center gap-2">
-            처음으로 돌아가기
-            <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-            </svg>
-          </button>
         </div>
       </section>
       

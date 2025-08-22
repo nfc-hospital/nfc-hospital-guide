@@ -55,27 +55,18 @@ def simple_login(request):
         else:
             birth_date_formatted = birth_date
         
-        # 단순화된 사용자 찾기/생성
+        # 기존 사용자 찾기만 허용 (자동 생성 비활성화)
         try:
-            # 먼저 기존 사용자 찾기
             user = User.objects.filter(
                 phone_number=phone_number,
                 birth_date=birth_date_formatted
             ).first()
             
             if not user:
-                # 없으면 새로 생성
-                # phone_last4 추출 (로그용)
-                phone_last4 = phone_number.split('-')[-1]
-                user = User.objects.create(
-                    name=f'환자{phone_last4}',
-                    phone_number=phone_number,
-                    birth_date=birth_date_formatted,
-                    email=f'patient{phone_last4}_{birth_date}@temp.com',  # 이메일 필드 추가
-                )
+                return APIResponse.error("등록되지 않은 사용자입니다. 병원 접수처에서 등록 후 이용해주세요.", code="AUTH_USER_NOT_FOUND")
             
-        except Exception as create_error:
-            return APIResponse.error(f"사용자 생성 실패: {str(create_error)}", code="AUTH_004")
+        except Exception as lookup_error:
+            return APIResponse.error(f"사용자 조회 실패: {str(lookup_error)}", code="AUTH_004")
         
         # JWT 토큰 생성 (수동 방식)
         try:
@@ -208,13 +199,11 @@ def kakao_login(request):
         user_response = requests.get(user_url, headers=headers)
         user_json = user_response.json()
         
-        # 3. 사용자 생성 또는 조회 (실제 필드명에 맞게 수정)
+        # 3. 기존 사용자 조회만 허용 (자동 생성 비활성화)
         kakao_id = str(user_json['id'])
-        nickname = user_json.get('kakao_account', {}).get('profile', {}).get('nickname', f'user_{kakao_id}')
         
-        # 안전한 사용자 찾기/생성
+        # 기존 카카오 사용자 찾기만 허용
         try:
-            # 먼저 기존 카카오 사용자 찾기 (여러 방법으로 시도)
             user = None
             
             # 방법 1: 이름으로 찾기
@@ -222,28 +211,18 @@ def kakao_login(request):
             
             # 방법 2: 이메일로 찾기
             if not user:
-                user = User.objects.filter(email=f'kakao_{kakao_id}@temp.com').first()
+                user = User.objects.filter(email__icontains=f'kakao_{kakao_id}').first()
             
             # 방법 3: phoneNumber로 찾기
             if not user:
                 user = User.objects.filter(phone_number=f'kakao_{kakao_id}').first()
             
-            # 사용자가 없으면 새로 생성
+            # 사용자가 없으면 에러 반환
             if not user:
-                # 고유한 이메일 생성 (타임스탬프 추가)
-                import time
-                timestamp = int(time.time())
-                unique_email = f'kakao_{kakao_id}_{timestamp}@temp.com'
+                return APIResponse.error("카카오 계정이 병원 시스템에 등록되지 않았습니다. 병원 접수처에서 계정 연동 후 이용해주세요.", code="AUTH_KAKAO_NOT_REGISTERED")
                 
-                user = User.objects.create(
-                    name=f'카카오_{nickname}',
-                    phone_number=f'kakao_{kakao_id}',
-                    birth_date='19900101',
-                    email=unique_email,
-                )
-                
-        except Exception as create_error:
-            return APIResponse.error(f"카카오 사용자 생성 실패: {str(create_error)}", code="AUTH_006")
+        except Exception as lookup_error:
+            return APIResponse.error(f"카카오 사용자 조회 실패: {str(lookup_error)}", code="AUTH_006")
         
         # 4. JWT 토큰 생성 (수동 방식)
         try:
@@ -492,7 +471,7 @@ def kakao_login_mock(request):
         kakao_id = "test_kakao_123"
         nickname = "테스트사용자"
         
-        # 안전한 사용자 찾기/생성
+        # 기존 카카오 사용자 찾기만 허용 (자동 생성 비활성화)
         try:
             user = None
             
@@ -501,28 +480,18 @@ def kakao_login_mock(request):
             
             # 방법 2: 이메일로 찾기
             if not user:
-                user = User.objects.filter(email=f'kakao_{kakao_id}@temp.com').first()
+                user = User.objects.filter(email__icontains=f'kakao_{kakao_id}').first()
             
             # 방법 3: phone_number로 찾기
             if not user:
                 user = User.objects.filter(phone_number=f'kakao_{kakao_id}').first()
             
-            # 사용자가 없으면 새로 생성
+            # 사용자가 없으면 에러 반환
             if not user:
-                # 고유한 이메일 생성 (타임스탬프 추가)
-                import time
-                timestamp = int(time.time())
-                unique_email = f'kakao_{kakao_id}_{timestamp}@temp.com'
+                return APIResponse.error("카카오 계정이 병원 시스템에 등록되지 않았습니다. Mock 테스트는 비활성화되었습니다.", code="AUTH_KAKAO_MOCK_DISABLED")
                 
-                user = User.objects.create(
-                    name=f'카카오_{nickname}',
-                    phone_number=f'kakao_{kakao_id}',
-                    birth_date='19900101',
-                    email=unique_email,
-                )
-                
-        except Exception as create_error:
-            return APIResponse.error(f"카카오 사용자 생성 실패: {str(create_error)}", code="AUTH_006")
+        except Exception as lookup_error:
+            return APIResponse.error(f"카카오 사용자 조회 실패: {str(lookup_error)}", code="AUTH_006")
         
         # JWT 토큰 생성 (수동 방식)
         try:

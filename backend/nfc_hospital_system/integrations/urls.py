@@ -11,6 +11,11 @@ urlpatterns = [
     # 시연용 가상 EMR 테스트 API
     path('test/patients/', views.test_patient_list, name='test-patient-list'),
     path('test/patient-state/', views.test_update_patient_state, name='test-update-state'),
+    path('test/queue-state/', views.test_update_queue_state, name='test-update-queue-state'),
     path('test/simulate/', views.test_simulate_patient_flow, name='test-simulate'),
     path('test/reset/', views.test_reset_all_states, name='test-reset'),
+    
+    # 시연용 검사/진료 관리 API
+    path('test/available-exams/', views.test_get_available_exams, name='test-available-exams'),
+    path('test/add-exam/', views.test_add_exam_to_patient, name='test-add-exam'),
 ]
