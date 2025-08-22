@@ -30,7 +30,7 @@ const ChatbotSystem = ({ elderlyMode = false }) => {
       // 기본 병원 정보
       hospitalInfo: {
         mainNumber: '1588-0000',
-        address: '서울특별시 종로구 대학로 101',
+        address: '서울특별시 종로구 한이음로 119',
         emergency: '02-0000-0000',
         consultation: '02-0000-0001',
         departments: {
@@ -212,17 +212,22 @@ const ChatbotSystem = ({ elderlyMode = false }) => {
       // 사용자 컨텍스트 가져오기
       const context = await getUserContext();
       
-      // apiService.sendChatbotQuery 사용
-      // 강제로 대기 순서 관련 질문임을 명시
-      const enhancedQuestion = question.includes('순서') || question.includes('대기') ? 
-        `${question} [사용자가 본인의 진료/대기 순서를 묻고 있습니다. 컨텍스트의 대기 정보를 바로 알려주세요.]` : 
-        question;
+      // 컨텍스트를 chatbotAPI의 fallback에서 사용할 수 있도록 전달
+      const { chatbotAPI: chatbot } = await import('./utils/chatbotAPI');
       
-      const response = await apiService.sendChatbotQuery(enhancedQuestion, context);
+      const response = await chatbot.sendMessage(question, {
+        currentQueues: currentQueues,
+        todaysAppointments: todaysAppointments,
+        patientState: context.patientState,
+        userInfo: context.userInfo,
+        ...context
+      });
+      
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        text: response.response || response.data?.response?.content || '죄송합니다, 답변을 가져올 수 없습니다.',
+        text: response.message || '죄송합니다, 답변을 가져올 수 없습니다.',
+        structuredData: response.structuredData || null,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, botMessage]);
@@ -255,16 +260,22 @@ const ChatbotSystem = ({ elderlyMode = false }) => {
       // 사용자 컨텍스트 가져오기
       const context = await getUserContext();
       
-      // 강제로 대기 순서 관련 질문임을 명시
-      const enhancedText = text.includes('순서') || text.includes('대기') ? 
-        `${text} [사용자가 본인의 진료/대기 순서를 묻고 있습니다. 컨텍스트의 대기 정보를 바로 알려주세요.]` : 
-        text;
+      // 컨텍스트를 chatbotAPI의 fallback에서 사용할 수 있도록 전달
+      const { chatbotAPI: chatbot } = await import('./utils/chatbotAPI');
       
-      const response = await apiService.sendChatbotQuery(enhancedText, context);
+      const response = await chatbot.sendMessage(text, {
+        currentQueues: currentQueues,
+        todaysAppointments: todaysAppointments,
+        patientState: context.patientState,
+        userInfo: context.userInfo,
+        ...context
+      });
+      
       const botMessage = {
         id: Date.now() + 1,
         type: 'bot',
-        text: response.response || response.data?.response?.content || '죄송합니다, 답변을 가져올 수 없습니다.',
+        text: response.message || '죄송합니다, 답변을 가져올 수 없습니다.',
+        structuredData: response.structuredData || null,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, botMessage]);

@@ -104,6 +104,24 @@ def simple_login(request):
         except Exception as token_error:
             return APIResponse.error(f"토큰 생성 실패: {str(token_error)}", code="AUTH_005")
         
+        # PatientState 생성 또는 업데이트
+        from p_queue.models import PatientState
+        patient_state, created = PatientState.objects.get_or_create(
+            user=user,
+            defaults={
+                'current_state': 'ARRIVED',  # 로그인 시 기본적으로 ARRIVED 상태
+                'is_logged_in': True
+            }
+        )
+        
+        # 이미 존재하는 경우 is_logged_in만 업데이트
+        if not created:
+            patient_state.is_logged_in = True
+            # 상태가 UNREGISTERED인 경우에만 ARRIVED로 변경
+            if patient_state.current_state == 'UNREGISTERED':
+                patient_state.current_state = 'ARRIVED'
+            patient_state.save()
+        
         # User 모델의 실제 기본키 필드 확인
         user_id = None
         for field_name in ['user_id', 'pk', 'id']:
@@ -259,6 +277,24 @@ def kakao_login(request):
             }
         except Exception as token_error:
             return APIResponse.error(f"토큰 생성 실패: {str(token_error)}", code="AUTH_007")
+        
+        # PatientState 생성 또는 업데이트
+        from p_queue.models import PatientState
+        patient_state, created = PatientState.objects.get_or_create(
+            user=user,
+            defaults={
+                'current_state': 'ARRIVED',  # 로그인 시 기본적으로 ARRIVED 상태
+                'is_logged_in': True
+            }
+        )
+        
+        # 이미 존재하는 경우 is_logged_in만 업데이트
+        if not created:
+            patient_state.is_logged_in = True
+            # 상태가 UNREGISTERED인 경우에만 ARRIVED로 변경
+            if patient_state.current_state == 'UNREGISTERED':
+                patient_state.current_state = 'ARRIVED'
+            patient_state.save()
         
         # 자동 로그인 옵션 확인
         remember_me = request.data.get('rememberMe', False)
@@ -528,6 +564,24 @@ def kakao_login_mock(request):
             }
         except Exception as token_error:
             return APIResponse.error(f"토큰 생성 실패: {str(token_error)}", code="AUTH_007")
+        
+        # PatientState 생성 또는 업데이트
+        from p_queue.models import PatientState
+        patient_state, created = PatientState.objects.get_or_create(
+            user=user,
+            defaults={
+                'current_state': 'ARRIVED',  # 로그인 시 기본적으로 ARRIVED 상태
+                'is_logged_in': True
+            }
+        )
+        
+        # 이미 존재하는 경우 is_logged_in만 업데이트
+        if not created:
+            patient_state.is_logged_in = True
+            # 상태가 UNREGISTERED인 경우에만 ARRIVED로 변경
+            if patient_state.current_state == 'UNREGISTERED':
+                patient_state.current_state = 'ARRIVED'
+            patient_state.save()
         
         return APIResponse.success({
             "user": {

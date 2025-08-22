@@ -1,9 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import useJourneyStore from '../../store/journeyStore';
 import FormatATemplate from '../templates/FormatATemplate';
 
 export default function PaymentScreen({ taggedLocation }) {
-  const { user, todaysAppointments, patientState, currentQueues = [] } = useJourneyStore();
+  const { user, todaysAppointments = [], patientState, currentQueues = [] } = useJourneyStore();
+  
+  // 개발 환경에서 데이터 확인
+  if (import.meta.env.DEV) {
+    console.log('💳 PaymentScreen 데이터:', {
+      todaysAppointments,
+      appointmentCount: todaysAppointments?.length || 0,
+      patientState
+    });
+  }
   
   // 완료된 검사 목록
   const completedExams = todaysAppointments?.filter(
@@ -24,8 +33,8 @@ export default function PaymentScreen({ taggedLocation }) {
     department: apt.exam?.department
   })) || [];
   
-  // 수납 단계는 모든 검사가 완료된 후이므로 마지막 단계
-  const currentStep = todaySchedule.length - 1;
+  // 현재 단계 계산 - 수납 단계는 모든 검사 완료 후이므로 전체 길이
+  const currentStep = todaySchedule.length;
   
   // 수납 대기 큐 찾기
   const paymentQueue = currentQueues.find(q => 
@@ -66,17 +75,6 @@ export default function PaymentScreen({ taggedLocation }) {
     >
       {/* 추가 콘텐츠 영역 - 수납 안내 */}
       <div className="space-y-4">
-        {/* 검사 완료 현황 */}
-        <div className="bg-green-50 rounded-2xl p-6 text-center">
-          <div className="text-4xl mb-3">✅</div>
-          <p className="text-lg text-green-800 font-medium">
-            모든 검사가 완료되었습니다
-          </p>
-          <p className="text-xl text-green-900 font-bold mt-2">
-            완료된 검사: {completedExams.length}건
-          </p>
-        </div>
-        
         {/* 수납 절차 안내 */}
         <div className="bg-amber-50 rounded-2xl p-6">
           <h3 className="text-lg font-semibold text-amber-900 mb-3">

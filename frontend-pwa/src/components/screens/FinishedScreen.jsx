@@ -6,6 +6,30 @@ import apiService from '../../api/apiService';
 import { CheckCircleIcon } from '@heroicons/react/24/outline';
 
 export default function FinishedScreen({ taggedLocation, completed_tasks }) {
+  // CSS 애니메이션 스타일 정의
+  const animationStyles = `
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  `;
   const { 
     user, 
     todaysAppointments = [], 
@@ -296,44 +320,41 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
   })) || [];
 
   return (
-    <FormatBTemplate
+    <>
+      <style>{animationStyles}</style>
+      <FormatBTemplate
       screenType="completed"
       status="완료"
       nextSchedule={nextSchedule}
-      summaryCards={[
-        { label: '소요시간', value: totalDuration >= 60 ? 
-          `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분` : 
-          `${totalDuration}분` 
-        },
-        { label: '완료', value: `${completedCount}개` }
-      ]}
+      summaryCards={[]}
       todaySchedule={todaySchedule}
       showPaymentInfo={true}
       paymentAmount={totalCost}
+      completedAppointments={completedAppointments}
+      totalDuration={totalDuration}
+      completedCount={completedCount}
       precautions={precautions}
     >
-
-      {/* 귀가 전 체크리스트 */}
-      {checkItems.length > 0 && (
-        <section className="mb-8">
-          <div className="bg-white rounded-2xl p-6 shadow-lg">
+      {/* 처방전 안내 */}
+      {hasPrescription && (
+        <section className="mb-8" style={{ animation: 'fadeUp 0.8s ease-out' }}>
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-3xl p-6 shadow-lg border border-blue-200">
             <h3 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <CheckCircleIcon className="w-7 h-7 text-emerald-600" />
-              귀가 전 확인사항
+              <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              처방전 안내
             </h3>
-            <div className="space-y-3">
-              {checkItems.map((item, index) => (
-                <label 
-                  key={index}
-                  className="flex items-center gap-3 p-4 bg-gray-50 hover:bg-gray-100 rounded-xl cursor-pointer transition-colors duration-200"
-                >
-                  <input 
-                    type="checkbox" 
-                    className="w-5 h-5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
-                  />
-                  <span className="text-lg text-gray-700">{item}</span>
-                </label>
-              ))}
+            <div className="bg-white rounded-xl p-4">
+              <p className="text-lg text-gray-700 mb-3">
+                조제약국에서 처방전을 제출하여 약을 받으세요.
+              </p>
+              <div className="flex items-center gap-2 text-sm text-blue-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>처방전은 발행일로부터 3일 이내에 사용하세요</span>
+              </div>
             </div>
           </div>
         </section>
@@ -396,24 +417,14 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
           </div>
         )}
         
-        {/* 완료 액션 */}
-        <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white">
-          <div className="text-center mb-4">
-            <div className="w-16 h-16 mx-auto mb-3 bg-emerald-500 rounded-2xl flex items-center justify-center">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold mb-2">모든 검사가 완료되었습니다</h3>
-            <p className="text-slate-300">안전한 귀가를 위해 주의사항을 확인하세요</p>
-          </div>
-        </div>
       </section>
       
       {/* 알림 설정 모달 - 더 세련되게 */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl animate-scaleIn overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+             style={{ animation: 'fadeUp 0.3s ease-out' }}>
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden"
+               style={{ animation: 'fadeUp 0.4s ease-out' }}>
             {/* 헤더 */}
             <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-6 text-white text-center">
               <div className="w-16 h-16 mx-auto mb-3 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
@@ -494,6 +505,7 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
           </div>
         </div>
       )}
-    </FormatBTemplate>
+      </FormatBTemplate>
+    </>
   );
 }

@@ -440,3 +440,83 @@ input, textarea, select {
 .animate-scale-in {
   animation: scale-in 0.3s ease-out;
 }
+
+/* ArrivedScreen을 위한 추가 애니메이션 */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-up {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.5s ease-out;
+}
+
+.animate-slide-down {
+  animation: slide-down 0.4s ease-out;
+}
+
+.animate-scale-up {
+  animation: scale-up 0.3s ease-out;
+}
+
+/* 부드러운 확장/축소 애니메이션 */
+.expand-collapse-transition {
+  transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease-out,
+              transform 0.3s ease-out;
+}
+
+/* 카드 호버 효과 */
+.card-hover-effect {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover-effect:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.15);
+}
+
+/* 고령자 친화적 터치 피드백 */
+.touch-feedback {
+  transition: all 0.2s ease-out;
+}
+
+.touch-feedback:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* 부드러운 색상 전환 */
+.color-transition {
+  transition: background-color 0.3s ease-out,
+              border-color 0.3s ease-out,
+              color 0.3s ease-out;
+}

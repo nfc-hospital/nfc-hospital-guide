@@ -353,9 +353,11 @@ const MapNavigator = ({ mapId, highlightRoom, facilityName, multiFloor = false, 
             svgElement.appendChild(pathGroup);
           }
           
-          // 컨테이너에 SVG 삽입
-          svgContainerRef.current.innerHTML = '';
-          svgContainerRef.current.appendChild(svgElement);
+          // 컨테이너에 SVG 삽입 (null 체크 추가)
+          if (svgContainerRef.current) {
+            svgContainerRef.current.innerHTML = '';
+            svgContainerRef.current.appendChild(svgElement);
+          }
         } catch (error) {
           console.error('SVG 로드 오류:', error);
         }

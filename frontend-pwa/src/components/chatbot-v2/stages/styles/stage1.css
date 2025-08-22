@@ -1,8 +1,11 @@
 .floating-button-stage1 {
   border: none;
   border-radius: 50%;
-  background: var(--primary-blue, #2563EB);
-  box-shadow: 0 10px 30px rgba(37, 99, 235, 0.3);
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 50%, #4f46e5 100%);
+  box-shadow: 
+    0 4px 20px rgba(37, 99, 235, 0.5),
+    0 8px 32px rgba(37, 99, 235, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 9999;
@@ -10,6 +13,8 @@
   align-items: center;
   justify-content: center;
   outline: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .floating-button-stage1:focus {
@@ -27,9 +32,29 @@
 }
 
 .floating-button-stage1:hover {
-  transform: scale(1.1);
-  box-shadow: 0 15px 40px rgba(37, 99, 235, 0.4);
-  background: var(--primary-blue-dark, #1D4ED8);
+  transform: scale(1.1) translateY(-2px);
+  box-shadow: 
+    0 6px 24px rgba(37, 99, 235, 0.6),
+    0 12px 40px rgba(37, 99, 235, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #4338ca 100%);
+}
+
+.floating-button-stage1::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+  transform: rotate(45deg);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.floating-button-stage1:hover::before {
+  opacity: 1;
 }
 
 .floating-button-stage1:active {
@@ -45,12 +70,14 @@
 }
 
 .button-content .icon {
-  font-size: 32px;
-  line-height: 1;
+  width: 32px;
+  height: 32px;
+  color: white;
 }
 
 .elderly-size .button-content .icon {
-  font-size: 44px;
+  width: 44px;
+  height: 44px;
 }
 
 .button-content .text {
@@ -123,11 +150,13 @@
   }
 
   .button-content .icon {
-    font-size: 28px;
+    width: 28px;
+    height: 28px;
   }
 
   .elderly-size .button-content .icon {
-    font-size: 40px;
+    width: 40px;
+    height: 40px;
   }
 
   .button-content .text {

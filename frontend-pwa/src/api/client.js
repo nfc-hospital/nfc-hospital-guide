@@ -55,6 +55,11 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
+    // 토큰 갱신 관련 요청인 경우 재시도하지 않음
+    if (originalRequest.url?.includes('/auth/token/refresh/')) {
+      return Promise.reject(error);
+    }
+
     // 401 에러 처리 (토큰 만료)
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
@@ -65,6 +70,10 @@ apiClient.interceptors.response.use(
           // 토큰 갱신 시도
           const response = await axios.post('/api/v1/auth/token/refresh/', {
             refresh: refreshToken,
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+            }
           });
 
           const { access } = response.data;
@@ -73,12 +82,25 @@ apiClient.interceptors.response.use(
           // 원래 요청 재시도
           originalRequest.headers.Authorization = `Bearer ${access}`;
           return apiClient(originalRequest);
+        } else {
+          // refresh token이 없으면 바로 로그인 페이지로
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+          // 현재 페이지가 이미 로그인 페이지가 아닌 경우에만 리다이렉트
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+          return Promise.reject(error);
         }
       } catch (refreshError) {
         // 토큰 갱신 실패 - 로그아웃 처리
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
+        // 현재 페이지가 이미 로그인 페이지가 아닌 경우에만 리다이렉트
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshError);
       }
     }
 
@@ -479,33 +501,59 @@ export class WebSocketClient {
 
 export const wsClient = new WebSocketClient();
 
+// CSRF 토큰 캐시
+let csrfTokenPromise = null;
+let csrfTokenTimestamp = null;
+const CSRF_TOKEN_CACHE_DURATION = 30 * 60 * 1000; // 30분
+
 // CSRF 토큰 초기화 함수 (앱 시작 시 호출)
 export const initializeCSRFToken = async () => {
-  try {
-    // Django의 CSRF 토큰을 가져오기 위한 GET 요청
-    const response = await fetch('/api/v1/auth/csrf-token/', {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✅ CSRF token initialized successfully:', data.success);
-      
-      // 개발 환경에서 CSRF 토큰 상태 디버깅
-      if (process.env.NODE_ENV === 'development') {
-        setTimeout(() => debugCSRFToken(), 100);
-      }
-    } else {
-      console.warn('❌ CSRF token request failed:', response.status);
-    }
-  } catch (error) {
-    console.warn('❌ Failed to initialize CSRF token:', error.message);
-    // 실패해도 앱 동작은 계속 진행
+  // 캐시된 토큰이 유효한 경우 재사용
+  if (csrfTokenPromise && csrfTokenTimestamp && 
+      (Date.now() - csrfTokenTimestamp < CSRF_TOKEN_CACHE_DURATION)) {
+    console.log('✅ Using cached CSRF token initialization');
+    return csrfTokenPromise;
   }
+
+  // 진행 중인 요청이 있으면 재사용
+  if (csrfTokenPromise) {
+    return csrfTokenPromise;
+  }
+
+  // 새로운 요청 생성
+  csrfTokenPromise = (async () => {
+    try {
+      // Django의 CSRF 토큰을 가져오기 위한 GET 요청
+      const response = await fetch('/api/v1/auth/csrf-token/', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ CSRF token initialized successfully:', data.success);
+        csrfTokenTimestamp = Date.now();
+        
+        // 개발 환경에서 CSRF 토큰 상태 디버깅
+        if (process.env.NODE_ENV === 'development') {
+          setTimeout(() => debugCSRFToken(), 100);
+        }
+        return data;
+      } else {
+        console.warn('❌ CSRF token request failed:', response.status);
+        csrfTokenPromise = null; // 실패 시 캐시 무효화
+      }
+    } catch (error) {
+      console.warn('❌ Failed to initialize CSRF token:', error.message);
+      csrfTokenPromise = null; // 실패 시 캐시 무효화
+      // 실패해도 앱 동작은 계속 진행
+    }
+  })();
+
+  return csrfTokenPromise;
 };
 
 // CSRF 토큰 유틸리티 함수들 내보내기
