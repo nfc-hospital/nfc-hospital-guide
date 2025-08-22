@@ -389,6 +389,19 @@ export const adminAPI = {
     getMissingPatients: () => api.get('/queue/medical/missing-patients/'),
   },
 
+  // 콘텐츠 관리 (검사/진료)
+  content: {
+    getExams: (params) => api.get('/dashboard/content/exams/', { params }),
+    createExam: (data) => api.post('/dashboard/content/exams/', data),
+    updateExam: (examId, data) => api.put(`/dashboard/content/exams/${examId}/`, data),
+    deleteExam: (examId) => api.delete(`/dashboard/content/exams/${examId}/`),
+  },
+
+  // 대시보드 API
+  dashboard: {
+    getExams: (params) => api.get('/appointments/exams/', { params }), // 기존 exam API 사용
+  },
+
   // 통계 및 분석
   analytics: {
     getPatientFlow: (params) => api.get('/analytics/patient-flow/', { params }),

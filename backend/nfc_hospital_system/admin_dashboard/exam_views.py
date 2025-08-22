@@ -58,6 +58,9 @@ class ExamContentViewSet(viewsets.ModelViewSet):
         """
         queryset = self.get_queryset()
         
+        # 부서 파라미터 가져오기
+        department = self.request.query_params.get('department')
+        
         # 오늘 날짜
         today = timezone.now().date()
         
@@ -91,7 +94,10 @@ class ExamContentViewSet(viewsets.ModelViewSet):
         
         # 각 검사에 대한 데이터 구성
         exam_data = []
-        for exam in queryset[:20]:  # 최대 20개만 처리 (성능 최적화)
+        # 부서별 필터링 시에는 제한 없이, 전체 조회 시에만 제한
+        limit = None if department else 50  # 전체 조회 시 최대 50개
+        exam_list = queryset[:limit] if limit else queryset
+        for exam in exam_list:
             exam_id = exam.exam_id
             queue_info = queue_data_by_exam.get(exam_id, {
                 'completed': [],

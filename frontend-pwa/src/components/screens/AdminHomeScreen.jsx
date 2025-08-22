@@ -1267,9 +1267,14 @@ const QueueMonitoringContent = ({ queueData }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  // 컴포넌트 마운트 시 초기 데이터 로드
+  useEffect(() => {
+    fetchQueueData(selectedDept);
+  }, []); // 처음 마운트 시에만 실행
+
   // 실시간 대기열 데이터 가져오기
-  const fetchQueueData = async () => {
-    console.log('🔄 fetchQueueData 시작');
+  const fetchQueueData = async (department = 'all') => {
+    console.log('🔄 fetchQueueData 시작 - 부서:', department);
     try {
       setLoading(true);
       
@@ -1284,7 +1289,9 @@ const QueueMonitoringContent = ({ queueData }) => {
       // 방법1: apiService.appointments.getAllExams 시도
       try {
         console.log('🔄 방법1: apiService.appointments.getAllExams 시도');
-        const examsResponse = await apiService.appointments.getAllExams();
+        // 부서별 필터링 파라미터 추가
+        const params = department !== 'all' ? { department } : {};
+        const examsResponse = await apiService.appointments.getAllExams(params);
         console.log('📊 방법1 응답:', examsResponse);
         
         exams = examsResponse?.data?.results || examsResponse?.results || examsResponse?.data || [];
@@ -1296,7 +1303,9 @@ const QueueMonitoringContent = ({ queueData }) => {
         try {
           console.log('🔄 방법2: adminAPI 사용 시도');
           const { adminAPI } = await import('../../api/client');
-          const adminResponse = await adminAPI.content.getExams?.() || await adminAPI.dashboard.getExams?.();
+          // 부서별 필터링 파라미터 추가
+          const params = department !== 'all' ? { department } : {};
+          const adminResponse = await adminAPI.content.getExams?.(params) || await adminAPI.dashboard.getExams?.(params);
           console.log('📊 방법2 응답:', adminResponse);
           
           exams = adminResponse?.data?.results || adminResponse?.results || adminResponse?.data || [];
@@ -1307,7 +1316,9 @@ const QueueMonitoringContent = ({ queueData }) => {
           // 방법3: 직접 fetch 사용
           try {
             console.log('🔄 방법3: 직접 fetch 사용');
-            const directResponse = await fetch('/api/v1/appointments/exams/');
+            // 부서별 필터링 쿼리 파라미터 추가
+            const queryParams = department !== 'all' ? `?department=${encodeURIComponent(department)}` : '';
+            const directResponse = await fetch(`/api/v1/appointments/exams/${queryParams}`);
             const directData = await directResponse.json();
             console.log('📊 방법3 응답:', directData);
             
@@ -1495,7 +1506,12 @@ const QueueMonitoringContent = ({ queueData }) => {
                   ? 'bg-blue-600 text-white' 
                   : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
               }`}
-              onClick={() => setSelectedDept(dept)}
+              onClick={() => {
+                setSelectedDept(dept);
+                // '전체' 선택 시 'all'로 전달, 그 외에는 부서명 그대로 전달
+                const deptParam = dept === '전체' ? 'all' : dept;
+                fetchQueueData(deptParam);
+              }}
             >
               {dept}
             </button>
@@ -1584,7 +1600,7 @@ const QueueMonitoringContent = ({ queueData }) => {
                 <div className="text-gray-600 text-xs">진행중</div>
               </div>
               <div className="text-center">
-                <div className={`text-sm font-medium ${
+                <div className={`text-lg font-semibold ${
                   room.equipment === '정상' ? 'text-green-600' : 'text-red-600'
                 }`}>{room.equipment}</div>
                 <div className="text-gray-600 text-xs">장비상태</div>
