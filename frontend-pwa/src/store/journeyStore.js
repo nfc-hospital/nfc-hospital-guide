@@ -147,13 +147,22 @@ const useJourneyStore = create(
                 // 1. 스케줄 API: /api/v1/schedule/today
                 // axios 인터셉터가 이미 response.data를 반환하므로
                 const scheduleData = scheduleRes;
+                let queuesData = queuesRes;
+                
                 let appointments = scheduleData?.appointments || [];
                 
-                // 개발 환경에서 테스트 데이터 추가
+                // 실제 API 응답 확인을 위한 로그
+                console.log('🔍 실제 API appointments 데이터:', appointments);
+                console.log('🔍 appointments.length:', appointments.length);
+                
+                // 개발 환경에서 테스트 데이터 추가 (임시 비활성화)
                 const currentPatientState = get().patientState;
-                if (import.meta.env.DEV && appointments.length === 0 && 
-                    (currentPatientState === 'REGISTERED' || currentPatientState === 'UNREGISTERED')) {
+                if (false && import.meta.env.DEV && appointments.length === 0) {
                   console.log('🧪 개발 환경: 테스트 데이터 추가 (상태:', currentPatientState, ')');
+                  
+                  // PAYMENT 상태일 때는 완료된 검사 데이터
+                  const isPaymentState = currentPatientState === 'PAYMENT';
+                  
                   appointments = [
                     {
                       appointment_id: 'dev-001',
@@ -183,7 +192,7 @@ const useJourneyStore = create(
                         ]
                       },
                       scheduled_at: new Date().toISOString(),
-                      status: 'scheduled'
+                      status: isPaymentState ? 'completed' : 'scheduled'
                     },
                     {
                       appointment_id: 'dev-002',
@@ -213,7 +222,7 @@ const useJourneyStore = create(
                         ]
                       },
                       scheduled_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-                      status: 'scheduled'
+                      status: isPaymentState ? 'completed' : 'scheduled'
                     }
                   ];
                 }

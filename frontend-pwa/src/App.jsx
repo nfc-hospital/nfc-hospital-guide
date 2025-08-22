@@ -37,7 +37,7 @@ import './styles/global.css';
 function AppContent() {
   const [elderlyMode, setElderlyMode] = useState(false);
   const { isAuthenticated } = useAuth();
-  const { isLoading, fetchJourneyData } = useJourneyStore();
+  const { isLoading, fetchJourneyData, user } = useJourneyStore();
 
   // 앱 시작 시 토큰 확인 및 데이터 로딩
   useEffect(() => {
@@ -49,19 +49,25 @@ function AppContent() {
     
     const loadUserData = async () => {
       const token = localStorage.getItem('access_token');
-      if (token && isAuthenticated) {
+      if (token) {
         console.log('🔄 기존 로그인 세션 감지, 환자 데이터 로딩...');
         try {
           await fetchJourneyData();
           console.log('✅ 환자 데이터 로드 완료');
         } catch (error) {
           console.error('❌ 환자 데이터 로드 실패:', error);
+          // 401 에러인 경우에만 토큰 제거
+          if (error.status === 401) {
+            console.log('❌ 인증 만료, 토큰 제거');
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+          }
         }
       }
     };
     
     loadUserData();
-  }, [isAuthenticated]);
+  }, []); // 의존성 배열을 빈 배열로 변경하여 최초 1회만 실행
 
   // 전역 로딩 상태 표시
   if (isLoading) {

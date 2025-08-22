@@ -119,7 +119,7 @@ cancelled  → 취소
 
 ### 🔐 인증 API (`/api/v1/auth/`)
 ```bash
-POST   /api/v1/auth/simple-login         # 전화번호+생년월일 간편 로그인 
+POST   /api/v1/auth/simple-login         # 전화번호+생년월일 간편 로그인 (phoneNumber, birthDate) 
 POST   /api/v1/auth/kakao                # 카카오 OAuth 로그인 
 POST   /api/v1/auth/pass                 # PASS 앱 본인인증 
 POST   /api/v1/auth/sms-verify           # SMS 인증번호 발송/검증 

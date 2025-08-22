@@ -118,16 +118,25 @@ const ErrorScreen = ({ message }) => (
 // 메인 Home 컴포넌트 - 동적 라우팅 컨트롤러
 const Home = () => {
   const { tagId } = useParams(); // URL에서 NFC 태그 ID 가져오기
+  
+  // 기존 store 데이터 (점진적 마이그레이션을 위해 유지)
   const {
     user,
-    patientState,
-    taggedLocationInfo,
-    todaysAppointments,
-    isLoading,
-    error,
+    patientState: storePatientState,
+    taggedLocationInfo: storeTaggedLocation,
+    todaysAppointments: storeTodaysAppointments,
+    isLoading: storeIsLoading,
+    error: storeError,
     fetchJourneyData,
     clearTagInfo
   } = useJourneyStore();
+  
+  // 기존 시스템 사용 (최적화 Hook 비활성화)
+  const patientState = storePatientState;
+  const taggedLocationInfo = storeTaggedLocation;
+  const todaysAppointments = storeTodaysAppointments;
+  const isLoading = storeIsLoading;
+  const error = storeError;
 
   // 일정 데이터 상태 관리
   const [scheduleData, setScheduleData] = useState({
@@ -140,71 +149,41 @@ const Home = () => {
   });
 
   // 당일 일정 데이터 가져오기
-  const fetchTodaySchedule = async () => {
-    if (!user || user.role !== 'patient') return;
-
-    setScheduleData(prev => ({ ...prev, isLoading: true, error: null }));
-    
-    try {
-      const response = await api.get('/schedule/today');
-      const data = response.data;
-      
-      // 응답 데이터를 상태별로 분류
-      const appointments = data.appointments || [];
-      
+  // journeyStore의 데이터를 사용하므로 별도 fetchTodaySchedule 함수 불필요
+  // todaysAppointments 데이터를 직접 활용하여 scheduleData 업데이트
+  useEffect(() => {
+    if (todaysAppointments && todaysAppointments.length > 0) {
       // 현재 진행 중인 작업 찾기 (WAITING, CALLED, ONGOING 상태)
-      const currentTask = appointments.find(apt => 
+      const currentTask = todaysAppointments.find(apt => 
         ['waiting', 'called', 'ongoing'].includes(apt.status)
       );
       
       // 예정된 작업들 (scheduled 상태)
-      const upcomingTasks = appointments.filter(apt => 
+      const upcomingTasks = todaysAppointments.filter(apt => 
         apt.status === 'scheduled' || apt.status === 'pending'
       );
       
       // 완료된 작업들 (done, completed 상태)
-      const completedTasks = appointments.filter(apt => 
+      const completedTasks = todaysAppointments.filter(apt => 
         apt.status === 'done' || apt.status === 'completed'
       );
       
       setScheduleData({
-        state: data.state,
+        state: patientState,
         currentTask,
         upcomingTasks,
         completedTasks,
         isLoading: false,
         error: null
       });
-    } catch (error) {
-      console.error('Failed to fetch today schedule:', error);
-      setScheduleData(prev => ({
-        ...prev,
-        isLoading: false,
-        error: '일정을 불러오는데 실패했습니다.'
-      }));
     }
-  };
+  }, [todaysAppointments, patientState]);
 
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
-    console.log('🏠 Home 컴포넌트 마운트됨');
-    console.log('📍 현재 user:', user);
-    console.log('📍 현재 patientState:', patientState);
-    console.log('🏷️ NFC 태그 ID:', tagId);
-    console.log('📅 현재 todaysAppointments:', todaysAppointments);
-    
-    // 사용자 정보가 없으면 데이터 로드
-    if (!user && localStorage.getItem('access_token')) {
-      console.log('🔄 토큰은 있지만 user 정보가 없어서 fetchJourneyData 호출');
-      fetchJourneyData(tagId); // NFC 태그 ID와 함께 데이터 로드
-    } else if (tagId && user) {
-      // 사용자 정보는 있지만 새로운 태그를 스캔한 경우
-      console.log('🏷️ 새로운 NFC 태그 스캔, 데이터 재로드');
+    // 태그 ID가 변경된 경우에만 데이터 재로드
+    if (tagId) {
       fetchJourneyData(tagId);
-    } else if (user && user.role === 'patient') {
-      // 환자 사용자인 경우 일정 데이터 로드
-      fetchTodaySchedule();
-      
     }
     
     // 컴포넌트 언마운트 시 태그 정보 초기화
@@ -222,7 +201,10 @@ const Home = () => {
 
   // 에러 상태
   if (error) {
-    return <ErrorScreen message={error} />;
+    const errorMessage = typeof error === 'string' ? error : 
+                        error?.message || 
+                        (error && typeof error === 'object' ? JSON.stringify(error) : '알 수 없는 오류가 발생했습니다');
+    return <ErrorScreen message={errorMessage} />;
   }
 
   // 사용자 정보가 없는 경우 - 비로그인 상태

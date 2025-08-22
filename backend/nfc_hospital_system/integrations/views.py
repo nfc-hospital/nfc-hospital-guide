@@ -549,7 +549,9 @@ def test_add_exam_to_patient(request):
             # 환자 상태도 업데이트
             patient_state, created = PatientState.objects.get_or_create(user=user)
             patient_state.current_exam = exam
-            if patient_state.current_state in ['UNREGISTERED', 'ARRIVED', 'REGISTERED']:
+            # ARRIVED 상태는 유지 - 접수를 완료해야만 REGISTERED로 변경
+            # REGISTERED 상태만 WAITING으로 변경
+            if patient_state.current_state == 'REGISTERED':
                 patient_state.current_state = 'WAITING'
             patient_state.save()
         

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDownIcon, MapPinIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, MapPinIcon, CalendarIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
@@ -53,7 +53,7 @@ const getNextActionText = (patientState, currentExam, taggedLocation, nextLocati
 };
 
 const FormatATemplate = ({ 
-  screenType, // 'registered' | 'waiting' | 'payment'
+  screenType, // 'registered' | 'waiting' | 'payment' | 'arrived'
   currentStep,
   totalSteps,
   nextAction,
@@ -64,6 +64,7 @@ const FormatATemplate = ({
   taggedLocation,
   patientState, // 환자의 현재 상태 추가
   currentExam, // 현재 진행 중인 검사
+  preparationItems, // 준비사항 데이터
   children
 }) => {
   const navigate = useNavigate();
@@ -365,7 +366,7 @@ const FormatATemplate = ({
                   <div className="text-white/70 text-xs sm:text-sm">진행</div>
                   <div className="text-white flex items-baseline gap-0.5">
                     <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{todaySchedule.filter(s => s.status === 'completed').length}</span>
-                    <span className="text-sm sm:text-base lg:text-xl text-white/70">/{todaySchedule.length}</span>
+                    <span className="text-sm sm:text-base lg:text-xl text-white/70">/{todaySchedule.length || totalSteps || 7}</span>
                   </div>
                 </div>
               </div>
@@ -425,6 +426,22 @@ const FormatATemplate = ({
                 <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600" />
               )}
             </button>
+            {preparationItems && (
+              <button
+                onClick={() => setActiveTab('preparation')}
+                className={`flex-1 pb-3 pt-2 flex items-center justify-center gap-2 transition-all duration-300 relative ${
+                  activeTab === 'preparation' 
+                    ? 'text-blue-600' 
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <ClipboardDocumentListIcon className="w-5 h-5" />
+                <span className="font-medium">준비사항</span>
+                {activeTab === 'preparation' && (
+                  <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600" />
+                )}
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('schedule')}
               className={`flex-1 pb-3 pt-2 flex items-center justify-center gap-2 transition-all duration-300 relative ${
@@ -528,6 +545,35 @@ const FormatATemplate = ({
                   </div>
                 </div>
 
+                {/* 접수 안내 - ARRIVED 상태일 때만 표시 */}
+                {screenType === 'arrived' && (
+                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-3">
+                      📝 접수하는 방법
+                    </h4>
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          1
+                        </div>
+                        <p className="text-sm text-gray-800">원무과 접수 창구로 가세요</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          2
+                        </div>
+                        <p className="text-sm text-gray-800">신분증과 건강보험증을 제출하세요</p>
+                      </div>
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 bg-gray-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                          3
+                        </div>
+                        <p className="text-sm text-gray-800">접수 완료 후 검사실 안내를 받으세요</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* 다른 장소 찾기 버튼 */}
                 <button
                   onClick={() => navigate('/')}
@@ -535,6 +581,18 @@ const FormatATemplate = ({
                 >
                   다른 장소 찾기 →
                 </button>
+              </div>
+            ) : activeTab === 'preparation' ? (
+              <div className="space-y-4">
+                {/* 준비사항 내용 */}
+                {preparationItems || (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <ClipboardDocumentListIcon className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-500">준비사항이 없습니다</p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-3">

@@ -10,7 +10,7 @@ export default function Footer() {
               병원 정보
             </h3>
             <p className="text-gray-600 text-xs">
-              서울특별시 종로구 대학로 101<br />
+              서울특별시 종로구 한이음로 119<br />
               대표전화: 1588-0000
             </p>
           </div>
@@ -39,7 +39,7 @@ export default function Footer() {
         
         <div className="mt-4 border-t border-gray-200 pt-4 text-center">
           <p className="text-xs text-gray-500">
-            © 2024 NFC Hospital Guide. All rights reserved.
+            © 2025 NFC + AI Hospital Guide. All rights reserved.
           </p>
         </div>
       </div>
