@@ -414,39 +414,36 @@ const ExamPreparationChecklist = ({ appointments, onRescheduleRequest, onComplet
                             : 'hover:bg-blue-50/50 hover:scale-[1.01]'
                         }`}
                       >
-                        {/* 체크박스 */}
+                        {/* 준비사항 내용 - 왼쪽 */}
+                        <div className="flex-1">
+                          <h5 className={`text-lg font-bold mb-1.5 flex items-center gap-2 ${
+                            isChecked ? 'text-gray-400 line-through' : 'text-gray-900'
+                          }`}>
+                            {prep.title}
+                            {prep.is_required && (
+                              <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">필수</span>
+                            )}
+                          </h5>
+                          <p className={`text-sm text-gray-600 leading-relaxed ${
+                            isChecked ? 'line-through' : ''
+                          }`}>
+                            {prep.description}
+                          </p>
+                        </div>
+                        
+                        {/* 체크박스 - 오른쪽 */}
                         <button
                           onClick={() => toggleChecked(apt.appointment_id, prep.prep_id || prep.title)}
-                          className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 transform mt-0.5 touch-target focus-visible ${
+                          className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all duration-300 transform mt-0.5 touch-target focus-visible flex-shrink-0 ${
                             isChecked 
                               ? 'bg-blue-600 border-blue-600 scale-110 shadow-lg check-complete' 
-                              : 'bg-white border-gray-400 hover:border-blue-500 hover:scale-105'
+                              : 'bg-gray-50 border-gray-500 hover:bg-gray-100 hover:border-gray-700 hover:scale-105 shadow-sm'
                           }`}
                         >
                           {isChecked && (
                             <CheckIconSolid className="w-5 h-5 text-white animate-[scale-in_0.3s_ease-out]" />
                           )}
                         </button>
-                        
-                        {/* 준비사항 내용 */}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xl">{getPreparationIcon(prep.type)}</span>
-                            <h5 className={`font-semibold ${
-                              isChecked ? 'text-gray-500 line-through' : 'text-gray-900'
-                            }`}>
-                              {prep.title}
-                              {prep.is_required && (
-                                <span className="ml-2 text-xs text-red-600 font-bold">(필수)</span>
-                              )}
-                            </h5>
-                          </div>
-                          <p className={`text-sm leading-relaxed ${
-                            isChecked ? 'text-gray-400' : 'text-gray-700'
-                          }`}>
-                            {prep.description}
-                          </p>
-                        </div>
                       </div>
                     );
                   })

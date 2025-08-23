@@ -176,10 +176,10 @@ const FormatBTemplate = ({
               }`}
             >
               {/* 카테고리 아이콘 - 더 크고 배경 추가 */}
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-sm ${
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${
                 isAllChecked ? 'bg-green-100' : 'bg-gray-100'
               }`}>
-                {category.icon}
+                <span className="text-2xl">{category.icon}</span>
               </div>
               
               {/* 카테고리 정보 */}
@@ -221,28 +221,37 @@ const FormatBTemplate = ({
                           : 'hover:bg-blue-50/50 hover:scale-[1.01]'
                       }`}
                     >
-                      {/* 체크박스 - 더 큼직하고 부드럽게 */}
+                      {/* 항목 텍스트 - 더 읽기 쉽게 */}
+                      <div className="flex-1">
+                        <h5 className={`text-lg font-bold mb-1.5 transition-all duration-300 ${
+                          isChecked 
+                            ? 'text-gray-400 line-through' 
+                            : 'text-gray-900'
+                        }`}>
+                          {item.title || item.text}
+                        </h5>
+                        {item.description && (
+                          <p className={`text-sm text-gray-600 leading-relaxed transition-all duration-300 ${
+                            isChecked ? 'line-through' : ''
+                          }`}>
+                            {item.description}
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* 체크박스 - 오른쪽으로 이동 */}
                       <button
                         onClick={() => toggleChecked(categoryIndex, itemIndex)}
-                        className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all duration-300 transform ${
+                        className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all duration-300 transform flex-shrink-0 ${
                           isChecked 
                             ? 'bg-blue-600 border-blue-600 scale-110 shadow-lg' 
-                            : 'bg-white border-gray-400 hover:border-blue-500 hover:scale-105'
+                            : 'bg-gray-50 border-gray-500 hover:bg-gray-100 hover:border-gray-700 hover:scale-105 shadow-sm'
                         }`}
                       >
                         {isChecked && (
                           <CheckIconSolid className="w-5 h-5 text-white animate-[scale-in_0.3s_ease-out]" />
                         )}
                       </button>
-                      
-                      {/* 항목 텍스트 - 더 읽기 쉽게 */}
-                      <span className={`flex-1 text-base leading-relaxed transition-all duration-300 ${
-                        isChecked 
-                          ? 'text-gray-400 line-through' 
-                          : 'text-gray-700'
-                      }`}>
-                        {item.text}
-                      </span>
                     </div>
                   );
                 })}

@@ -93,43 +93,44 @@ export default function CurrentTaskCard({ appointment }) {
           </h4>
           <div className="space-y-3">
             {preparations.map((prep) => (
-              <label
+              <div
                 key={prep.prep_id}
-                className={`flex items-start p-3 rounded-lg cursor-pointer transition-all ${
+                className={`flex items-start p-4 rounded-xl transition-all ${
                   checkedItems[prep.prep_id] 
-                    ? 'bg-green-50 border-green-200' 
-                    : 'bg-gray-50 hover:bg-gray-100 border-gray-200'
-                } border`}
+                    ? 'bg-gray-100/70 scale-[0.98]' 
+                    : 'hover:bg-blue-50/50 hover:scale-[1.01]'
+                } border-2 ${checkedItems[prep.prep_id] ? 'border-green-300' : 'border-gray-200'}`}
               >
-                <input
-                  type="checkbox"
-                  checked={checkedItems[prep.prep_id] || false}
-                  onChange={() => handleCheckToggle(prep.prep_id)}
-                  className="mt-0.5 h-5 w-5 text-primary-600 rounded border-gray-300 focus:ring-primary-500"
-                />
-                <div className="ml-3 flex-1">
-                  <p className={`font-medium ${
-                    checkedItems[prep.prep_id] ? 'text-green-800' : 'text-gray-900'
+                <div className="flex-1">
+                  <h5 className={`text-lg font-bold mb-1.5 flex items-center gap-2 ${
+                    checkedItems[prep.prep_id] ? 'text-gray-400 line-through' : 'text-gray-900'
                   }`}>
                     {prep.title}
-                  </p>
+                    {prep.is_required && (
+                      <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold">필수</span>
+                    )}
+                  </h5>
                   {prep.description && (
-                    <p className={`text-sm mt-1 ${
-                      checkedItems[prep.prep_id] ? 'text-green-700' : 'text-gray-600'
+                    <p className={`text-sm text-gray-600 leading-relaxed ${
+                      checkedItems[prep.prep_id] ? 'line-through' : ''
                     }`}>
                       {prep.description}
                     </p>
                   )}
-                  {prep.is_required && (
-                    <span className="inline-block mt-1 px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 rounded">
-                      필수
-                    </span>
-                  )}
                 </div>
-                {checkedItems[prep.prep_id] && (
-                  <CheckCircleIcon className="h-6 w-6 text-green-600 ml-2" />
-                )}
-              </label>
+                <button
+                  onClick={() => handleCheckToggle(prep.prep_id)}
+                  className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all duration-300 transform flex-shrink-0 ml-4 ${
+                    checkedItems[prep.prep_id] 
+                      ? 'bg-blue-600 border-blue-600 scale-110 shadow-lg' 
+                      : 'bg-gray-50 border-gray-500 hover:bg-gray-100 hover:border-gray-700 hover:scale-105 shadow-sm'
+                  }`}
+                >
+                  {checkedItems[prep.prep_id] && (
+                    <CheckCircleIcon className="h-5 w-5 text-white" />
+                  )}
+                </button>
+              </div>
             ))}
           </div>
           <p className="mt-3 text-sm text-gray-500 italic">

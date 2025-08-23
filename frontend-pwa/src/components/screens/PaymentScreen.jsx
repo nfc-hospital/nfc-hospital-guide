@@ -75,37 +75,50 @@ export default function PaymentScreen({ taggedLocation }) {
     >
       {/* 추가 콘텐츠 영역 - 수납 안내 */}
       <div className="space-y-4">
-        {/* 수납 절차 안내 */}
-        <div className="bg-amber-50 rounded-2xl p-6">
-          <h3 className="text-lg font-semibold text-amber-900 mb-3">
-            💳 수납 절차
+        {/* 수납 절차 안내 - 상단 위치 */}
+        <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
+          <h3 className="text-xl font-semibold text-gray-800 mb-4">
+            수납 절차 안내
           </h3>
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-amber-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 bg-gray-700 text-white rounded-full flex items-center justify-center text-lg font-medium flex-shrink-0">
                 1
               </div>
-              <p className="text-sm text-amber-800">원무과에서 대기번호표를 받으세요</p>
+              <div>
+                <p className="text-lg text-gray-700 font-medium">대기번호표를 받아주세요</p>
+                <p className="text-sm text-gray-600 mt-1">원무과 입구에서 번호표를 뽑아주시기 바랍니다</p>
+              </div>
             </div>
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-amber-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 bg-gray-700 text-white rounded-full flex items-center justify-center text-lg font-medium flex-shrink-0">
                 2
               </div>
-              <p className="text-sm text-amber-800">번호가 호출되면 창구로 가세요</p>
+              <div>
+                <p className="text-lg text-gray-700 font-medium">호출 시 창구로 이동해주세요</p>
+                <p className="text-sm text-gray-600 mt-1">화면과 음성으로 안내해드립니다</p>
+              </div>
             </div>
-            <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-amber-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 bg-gray-700 text-white rounded-full flex items-center justify-center text-lg font-medium flex-shrink-0">
                 3
               </div>
-              <p className="text-sm text-amber-800">수납 후 영수증을 받아 보관하세요</p>
+              <div>
+                <p className="text-lg text-gray-700 font-medium">수납 후 영수증을 받아주세요</p>
+                <p className="text-sm text-gray-600 mt-1">영수증은 꼭 보관해주시기 바랍니다</p>
+              </div>
             </div>
           </div>
         </div>
         
-        {/* 문의 정보 */}
-        <div className="bg-white rounded-2xl p-4 border border-gray-200 text-center">
-          <p className="text-sm text-gray-600">문의사항이 있으신가요?</p>
-          <p className="text-lg font-bold text-gray-900 mt-1">📞 02-1234-5678</p>
+        {/* 문의 정보 - 더 공손한 톤 */}
+        <div className="bg-white rounded-2xl p-5 border-2 border-gray-300">
+          <p className="text-base text-gray-700 mb-2">도움이 필요하시면 언제든지 문의해주세요</p>
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-2xl">📞</span>
+            <p className="text-xl font-bold text-gray-900">02-1234-5678</p>
+          </div>
+          <p className="text-sm text-gray-600 mt-2 text-center">원무과 직통전화</p>
         </div>
       </div>
     </FormatATemplate>
