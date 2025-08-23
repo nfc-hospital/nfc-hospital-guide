@@ -32,6 +32,7 @@ export default function PublicHome() {
   const [error, setError] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [selectedFacility, setSelectedFacility] = useState(null); // 선택된 시설 상태 추가
+  const [isSpeaking, setIsSpeaking] = useState(false); // 음성 재생 상태 추가
   
   // facilityManagement.js에서 가져온 실제 부서들 사용
   const commonDepartments = DEFAULT_DISPLAY_DEPARTMENTS;
@@ -184,6 +185,63 @@ export default function PublicHome() {
     setError(''); // 에러 메시지 초기화
   }, []);
 
+  // 음성 안내 기능 (TTS)
+  const handleVoiceGuide = useCallback((facility) => {
+    if (isSpeaking) {
+      // 이미 재생 중이면 정지
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    // 음성 안내 텍스트 구성
+    const locationText = `${facility.name}은 ${facility.building} ${facility.floor}`;
+    const roomText = facility.room ? ` ${facility.room}에 있습니다.` : '에 있습니다.';
+    const descriptionText = facility.description ? ` ${facility.description}` : '';
+    
+    const fullText = `${locationText}${roomText}${descriptionText} 지도를 확인하시고 안내된 경로를 따라가세요.`;
+    
+    // Web Speech API 사용하여 음성 재생
+    const utterance = new SpeechSynthesisUtterance(fullText);
+    utterance.lang = 'ko-KR';
+    utterance.rate = 0.9; // 속도를 조금 느리게 (고령자 친화적)
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    
+    utterance.onstart = () => {
+      setIsSpeaking(true);
+    };
+    
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+    
+    utterance.onerror = (event) => {
+      console.error('음성 재생 오류:', event);
+      setIsSpeaking(false);
+      setError('음성 재생에 실패했습니다. 다시 시도해 주세요.');
+    };
+    
+    window.speechSynthesis.speak(utterance);
+  }, [isSpeaking]);
+
+  // 다른 시설 찾기 기능
+  const handleFindOtherFacility = useCallback(() => {
+    // 음성 재생 중이면 정지
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+    
+    // 시설 선택 초기화하고 메인 화면으로 돌아가기
+    setSelectedFacility(null);
+    setSelectedDepartment(null);
+    setError('');
+    
+    // 페이지 상단으로 스크롤
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [isSpeaking]);
+
 
   if (selectedDepartment) {
     return (
@@ -250,6 +308,37 @@ export default function PublicHome() {
                 highlightRoom={selectedFacility.name}
                 facilityName={selectedFacility.name}
               />
+            </div>
+            
+            {/* 버튼 섹션 추가 */}
+            <div className="border-t border-gray-200 p-4 bg-gray-50">
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handleVoiceGuide(selectedFacility)}
+                  className={`flex items-center justify-center gap-2 px-4 py-3 ${
+                    isSpeaking ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                  } text-white rounded-xl font-semibold text-base transition-all duration-300 shadow-md hover:shadow-lg`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {isSpeaking ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    )}
+                  </svg>
+                  <span>{isSpeaking ? '음성 정지' : '음성으로 듣기'}</span>
+                </button>
+                
+                <button
+                  onClick={handleFindOtherFacility}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 text-white rounded-xl font-semibold text-base hover:bg-gray-700 transition-all duration-300 shadow-md hover:shadow-lg"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <span>다른 시설 찾기</span>
+                </button>
+              </div>
             </div>
           </div>
 
