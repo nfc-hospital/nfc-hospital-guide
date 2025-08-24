@@ -269,7 +269,7 @@ export default function Login() {
                 </svg>
                 <div className="ml-3">
                   <p className="text-sm font-bold text-amber-800">
-                    실제 PASS 인증이 아닌 시연용 구현입니다
+                    실제 PASS 인증이 아닌 데모용 가상 구현입니다
                   </p>
                 </div>
               </div>

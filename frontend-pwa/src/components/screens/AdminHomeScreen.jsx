@@ -1,6 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import apiService from '../../api/apiService';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+
+// New Dashboard Components
+import PatientJourneyTime from '../admin/dashboard/PatientJourneyTime';
+import CongestionAlert from '../admin/dashboard/CongestionAlert';
+import LSTMPrediction from '../admin/dashboard/LSTMPrediction';
+import DelayDominoPrediction from '../admin/dashboard/DelayDominoPrediction';
+import ResourceEfficiencyScore from '../admin/dashboard/ResourceEfficiencyScore';
+import ResourceSimulator from '../admin/dashboard/ResourceSimulator';
+import KPIDashboard from '../admin/dashboard/KPIDashboard';
+import RiskHeatmap from '../admin/dashboard/RiskHeatmap';
+import WeeklyCongestionCalendar from '../admin/dashboard/WeeklyCongestionCalendar';
+import PatientETAGuide from '../admin/dashboard/PatientETAGuide';
+import ExecutiveDashboard from '../admin/dashboard/ExecutiveDashboard';
+import OperationalMonitor from '../admin/dashboard/OperationalMonitor';
+import AIInsights from '../admin/dashboard/AIInsights';
 
 const AdminHomeScreen = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -32,6 +47,8 @@ const AdminHomeScreen = () => {
   // Navigation tabs configuration
   const navItems = [
     { id: 'dashboard', icon: '📊', label: '대시보드' },
+    { id: 'lstm', icon: '🤖', label: 'LSTM 예측' },
+    { id: 'schedule', icon: '📅', label: 'LSTM 스케줄' },
     { id: 'nfc', icon: '📱', label: 'NFC 태그 관리' },
     { id: 'queue', icon: '👥', label: '대기열 모니터링' },
     { id: 'analytics', icon: '📈', label: '통계 및 분석' }
@@ -349,6 +366,10 @@ const AdminHomeScreen = () => {
     switch(activeTab) {
       case 'dashboard':
         return <DashboardContent stats={stats} loading={loading} error={error} examWaitTimeData={examWaitTimeData} examDataLoading={examDataLoading} />;
+      case 'lstm':
+        return <LSTMPredictionSection />;
+      case 'schedule':
+        return <LSTMScheduleSection />;
       case 'nfc':
         return <NFCManagementContent tags={nfcTags} />;
       case 'queue':
@@ -506,6 +527,7 @@ const DashboardContent = ({ stats, loading, error, examWaitTimeData, examDataLoa
             <span className="text-red-600 font-medium">↑ 5%</span>
           </div>
         </div>
+
       </div>
 
       {/* Charts Section */}
@@ -669,6 +691,25 @@ const DashboardContent = ({ stats, loading, error, examWaitTimeData, examDataLoa
             </div>
           </div>
         </div>
+      </div>
+
+      {/* 핵심 성과 지표 (KPI) */}
+      <div className="mt-6">
+        <KPIDashboard />
+      </div>
+
+      {/* Executive Dashboard - 경영진용 지표 */}
+      <div className="mt-6">
+        <ExecutiveDashboard />
+      </div>
+
+      {/* 대시보드 섹션 추가 컴포넌트들 */}
+      <div className="mt-6 space-y-6">
+        {/* 혼잡도 경보 시스템 */}
+        <CongestionAlert />
+        
+        {/* 운영 효율 모니터 */}
+        <OperationalMonitor />
       </div>
     </div>
   );
@@ -1334,10 +1375,68 @@ const QueueMonitoringContent = ({ queueData }) => {
     completed: 0
   });
   const [loading, setLoading] = useState(false);
+  const [waitTimeHistory, setWaitTimeHistory] = useState([]);
+  const [animatedIndex, setAnimatedIndex] = useState(0);
 
   // 컴포넌트 마운트 시 초기 데이터 로드
   useEffect(() => {
     fetchQueueData(selectedDept);
+    
+    // 대기시간 추이 데이터 초기화 - 8월 25일 오후 2시 기준
+    const initHistory = () => {
+      const baseTime = new Date('2025-08-25T14:00:00');
+      const history = [];
+      
+      for (let i = 9; i >= 0; i--) {
+        const time = new Date(baseTime - i * 60000); // 1분 간격
+        const timeStr = time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+        
+        // 시간대별 변화를 더 현실적으로 시뮬레이션
+        const timeFactor = Math.sin((14 - i/10) * Math.PI / 6) * 0.3 + 1; // 오후 2시 기준 변동
+        
+        history.push({
+          time: timeStr,
+          내과: Math.floor(18 + timeFactor * 8 + Math.sin(i * 0.5) * 5),
+          영상의학과: Math.floor(23 + timeFactor * 10 + Math.cos(i * 0.4) * 6),
+          진단검사: Math.floor(12 + timeFactor * 6 + Math.sin(i * 0.6) * 4),
+          정형외과: Math.floor(20 + timeFactor * 9 + Math.cos(i * 0.3) * 5),
+          응급실: Math.floor(25 + timeFactor * 12 + Math.random() * 8)
+        });
+      }
+      setWaitTimeHistory(history);
+    };
+    initHistory();
+    
+    // 15초마다 데이터 업데이트 with 애니메이션
+    const historyInterval = setInterval(() => {
+      const currentTime = new Date();
+      const timeStr = currentTime.toLocaleTimeString('ko-KR', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      // 이전 값 기반으로 부드러운 변화
+      setWaitTimeHistory(prev => {
+        const lastData = prev[prev.length - 1] || {};
+        const trend = Math.random() > 0.5 ? 1 : -1; // 증가 또는 감소 트렌드
+        
+        const updated = [...prev, {
+          time: timeStr,
+          내과: Math.max(10, Math.min(40, (lastData.내과 || 20) + trend * Math.floor(Math.random() * 3))),
+          영상의학과: Math.max(15, Math.min(45, (lastData.영상의학과 || 25) + trend * Math.floor(Math.random() * 4))),
+          진단검사: Math.max(8, Math.min(30, (lastData.진단검사 || 15) + trend * Math.floor(Math.random() * 2))),
+          정형외과: Math.max(12, Math.min(40, (lastData.정형외과 || 22) + trend * Math.floor(Math.random() * 3))),
+          응급실: Math.max(20, Math.min(50, (lastData.응급실 || 30) + trend * Math.floor(Math.random() * 5)))
+        }];
+        
+        // 애니메이션 트리거
+        setAnimatedIndex(prev.length);
+        
+        return updated.slice(-10); // 최근 10개만 유지
+      });
+    }, 15000);
+    
+    return () => clearInterval(historyInterval);
   }, []); // 처음 마운트 시에만 실행
 
   // 실시간 대기열 데이터 가져오기
@@ -1594,8 +1693,120 @@ const QueueMonitoringContent = ({ queueData }) => {
             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
           </div>
         </div>
-        <div className="h-48 bg-gray-50 rounded-lg flex items-center justify-center">
-          <span className="text-gray-400">실시간 차트 영역</span>
+        <div className="h-64 relative">
+          {waitTimeHistory.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart 
+                data={waitTimeHistory} 
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="time" 
+                  tick={{ fontSize: 11 }}
+                  interval="preserveStartEnd"
+                />
+                <YAxis 
+                  label={{ value: '대기시간(분)', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }}
+                  tick={{ fontSize: 11 }}
+                  domain={[0, 50]}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Legend 
+                  wrapperStyle={{ fontSize: '12px' }}
+                  iconType="line"
+                />
+                
+                {/* 각 부서별 라인 with 애니메이션 */}
+                <Line 
+                  type="monotone" 
+                  dataKey="내과" 
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={500}
+                  animationBegin={animatedIndex === waitTimeHistory.length - 1 ? 0 : undefined}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="영상의학과" 
+                  stroke="#10b981" 
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={500}
+                  animationBegin={animatedIndex === waitTimeHistory.length - 1 ? 100 : undefined}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="진단검사" 
+                  stroke="#eab308" 
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={500}
+                  animationBegin={animatedIndex === waitTimeHistory.length - 1 ? 200 : undefined}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="정형외과" 
+                  stroke="#a855f7" 
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 5 }}
+                  animationDuration={500}
+                  animationBegin={animatedIndex === waitTimeHistory.length - 1 ? 300 : undefined}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="응급실" 
+                  stroke="#ef4444" 
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={{ r: 3 }}
+                  activeDot={{ r: 6, strokeWidth: 2 }}
+                  animationDuration={500}
+                  animationBegin={animatedIndex === waitTimeHistory.length - 1 ? 400 : undefined}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-500">실시간 데이터 로딩 중...</p>
+              </div>
+            </div>
+          )}
+        </div>
+        {/* 실시간 지표 배지 */}
+        <div className="flex gap-2 mt-3 justify-center flex-wrap">
+          {waitTimeHistory.length > 0 && (
+            <>
+              <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                내과: {waitTimeHistory[waitTimeHistory.length - 1]?.내과 || '-'}분
+              </span>
+              <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                영상의학과: {waitTimeHistory[waitTimeHistory.length - 1]?.영상의학과 || '-'}분
+              </span>
+              <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full">
+                진단검사: {waitTimeHistory[waitTimeHistory.length - 1]?.진단검사 || '-'}분
+              </span>
+              <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
+                정형외과: {waitTimeHistory[waitTimeHistory.length - 1]?.정형외과 || '-'}분
+              </span>
+              <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full animate-pulse">
+                응급실: {waitTimeHistory[waitTimeHistory.length - 1]?.응급실 || '-'}분
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -1675,6 +1886,11 @@ const QueueMonitoringContent = ({ queueData }) => {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* 환자 여정 평균 소요시간 */}
+      <div className="mt-6">
+        <PatientJourneyTime />
       </div>
     </div>
   );
@@ -2216,6 +2432,11 @@ const AnalyticsContent = ({
           </div>
         </div>
       </div>
+
+      {/* 자원 효율성 스코어 - 통계 및 분석 섹션 */}
+      <div className="mt-6">
+        <ResourceEfficiencyScore />
+      </div>
     </div>
   );
 };
@@ -2465,6 +2686,56 @@ const ExamPerformanceStats = ({ examPerformanceData }) => {
       <div className="text-center">
         <div className="text-2xl font-bold text-red-600">{stats.red}%</div>
         <div className="text-xs text-gray-600">개선 필요</div>
+      </div>
+    </div>
+  );
+};
+
+// LSTM Prediction Section Component
+const LSTMPredictionSection = () => {
+  return (
+    <div className="p-8 bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-3">AI 예측 분석 센터</h1>
+        <p className="text-gray-600">LSTM 기반 실시간 예측 및 자원 최적화 시스템</p>
+      </div>
+
+      {/* 상단 - LSTM 예측 및 지연 도미노 */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+        <LSTMPrediction />
+        <DelayDominoPrediction />
+      </div>
+
+      {/* 중단 - 리스크 히트맵 (전체 너비) */}
+      <div className="mb-6">
+        <RiskHeatmap />
+      </div>
+
+      {/* 하단 - AI 인사이트 (전체 너비) */}
+      <div className="mb-6">
+        <AIInsights />
+      </div>
+
+      {/* 최하단 - 시뮬레이터 */}
+      <div>
+        <ResourceSimulator />
+      </div>
+    </div>
+  );
+};
+
+// LSTM Schedule Section Component
+const LSTMScheduleSection = () => {
+  return (
+    <div className="p-8 bg-gradient-to-br from-gray-50 to-purple-50">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-3">지능형 스케줄 관리</h1>
+        <p className="text-gray-600">예약 기반 혼잡도 예측 및 환자별 대기시간 관리</p>
+      </div>
+
+      <div className="space-y-6">
+        <WeeklyCongestionCalendar />
+        <PatientETAGuide />
       </div>
     </div>
   );
