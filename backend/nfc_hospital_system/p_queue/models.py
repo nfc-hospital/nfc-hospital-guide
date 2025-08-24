@@ -298,10 +298,12 @@ class QueueStatusLog(models.Model):
 
     changed_by = models.ForeignKey(
         User,
-        on_delete=models.SET_NULL,
+        on_delete=models.CASCADE,
         null=True,
+        blank=True,
         related_name='queue_changes',
         verbose_name='변경자',
+        db_column='changed_by_id'
     )
 
     reason = models.CharField(

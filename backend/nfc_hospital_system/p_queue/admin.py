@@ -206,7 +206,7 @@ class QueueStatusLogAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        return request.user.is_superuser  # 슈퍼유저만 삭제 가능
 
     readonly_fields = (
         'log_id', 'queue', 'previous_state', 'new_state', 'previous_number',
