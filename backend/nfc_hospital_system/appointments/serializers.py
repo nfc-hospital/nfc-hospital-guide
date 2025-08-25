@@ -25,6 +25,7 @@ class ExamSerializer(serializers.ModelSerializer):
             'is_active', 'created_at', 'updated_at', 'preparations',
             'category',
             'building', 'floor', 'room',  # 개별 필드 추가
+            'x_coord', 'y_coord',  # 좌표 필드 추가
             'location'  # 통합 객체도 제공
         ]
         read_only_fields = ['created_at', 'updated_at']
@@ -233,6 +234,8 @@ class TodayScheduleExamSerializer(serializers.Serializer):
     title = serializers.CharField()
     department = serializers.CharField()
     category = serializers.CharField(allow_null=True)
+    x_coord = serializers.FloatField()  # 좌표 필드 추가
+    y_coord = serializers.FloatField()  # 좌표 필드 추가
     location = serializers.SerializerMethodField()
     duration = serializers.IntegerField(source='average_duration')
     preparations = ExamPreparationSerializer(many=True, read_only=True)

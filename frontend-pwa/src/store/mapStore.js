@@ -294,7 +294,7 @@ const useMapStore = create(
           
           // 3-1. 먼저 정확한 경로 찾기
           try {
-            console.log(`🔍 1단계: 정확한 경로 검색 (${routeName})`);
+            console.log(`🔍 1단계: 정확한 경로 검색 - 지금은 주석 처리 중 (${routeName})`);
             const facilityRoute = await getFacilityRoute(routeName);
             routeData = facilityRoute;
             console.log('✅ 1단계 성공: 정확한 경로 찾음', routeData);

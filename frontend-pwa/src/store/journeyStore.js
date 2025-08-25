@@ -375,6 +375,8 @@ const useJourneyStore = create(
                         room: '채혈실',
                         department: '진단검사의학과',
                         average_duration: 15,
+                        x_coord: 507,
+                        y_coord: 230,
                         preparations: [
                           {
                             prep_id: 1,
@@ -405,6 +407,8 @@ const useJourneyStore = create(
                         room: '검체채취실',
                         department: '진단검사의학과',
                         average_duration: 10,
+                        x_coord: 507,
+                        y_coord: 190,
                         preparations: [
                           {
                             prep_id: 5,
@@ -435,6 +439,8 @@ const useJourneyStore = create(
                         room: '영상의학과',
                         department: '영상의학과',
                         average_duration: 10,
+                        x_coord: 400,
+                        y_coord: 300,
                         preparations: [
                           {
                             prep_id: 7,
@@ -719,75 +725,8 @@ const useJourneyStore = create(
   )
 );
 
-// ✅ 위치 변경 감시자 설정 (Store 간 협업)
-// 이전 위치를 저장할 변수
-let previousLocationInfo = null;
-let previousMapLocation = null; // 지도 변경 감지용
-
-// journeyStore의 taggedLocationInfo 변경 감시
-useJourneyStore.subscribe(
-  (state) => state.taggedLocationInfo,
-  (taggedLocationInfo) => {
-    // 위치가 변경되었을 때만 실행
-    if (taggedLocationInfo && taggedLocationInfo !== previousLocationInfo) {
-      console.log('📍 위치 변경 감지:', {
-        이전: previousLocationInfo,
-        현재: taggedLocationInfo
-      });
-      
-      // mapStore의 현재 위치 업데이트 및 경로 재계산
-      import('./mapStore').then(({ default: useMapStore }) => {
-        const mapStore = useMapStore.getState();
-        
-        // ✅ 안전장치: '탐색 모드'일 때는 자동 경로 업데이트 스킵
-        if (mapStore.navigationMode === 'explore') {
-          console.log('🚫 탐색 모드 중이므로 자동 경로 업데이트 스킵');
-          return;
-        }
-        
-        // 1. 현재 위치 업데이트
-        mapStore.updateCurrentLocation({
-          x_coord: taggedLocationInfo.x_coord,
-          y_coord: taggedLocationInfo.y_coord,
-          building: taggedLocationInfo.building,
-          floor: taggedLocationInfo.floor,
-          room: taggedLocationInfo.room,
-          description: taggedLocationInfo.description
-        });
-        
-        // 2. 새로운 위치 기반으로 경로 자동 업데이트
-        mapStore.updateRouteBasedOnLocation({
-          x_coord: taggedLocationInfo.x_coord,
-          y_coord: taggedLocationInfo.y_coord,
-          building: taggedLocationInfo.building,
-          floor: taggedLocationInfo.floor,
-          room: taggedLocationInfo.room,
-          description: taggedLocationInfo.description
-        });
-        
-        // 3. 건물/층이 변경되었으면 새로운 지도 로드
-        if (!previousMapLocation || 
-            previousMapLocation.building !== taggedLocationInfo.building ||
-            previousMapLocation.floor !== taggedLocationInfo.floor) {
-          console.log('🗺️ 지도 변경 필요:', {
-            이전: previousMapLocation,
-            현재: { 
-              building: taggedLocationInfo.building, 
-              floor: taggedLocationInfo.floor 
-            }
-          });
-          mapStore.loadMapForLocation(taggedLocationInfo);
-          previousMapLocation = {
-            building: taggedLocationInfo.building,
-            floor: taggedLocationInfo.floor
-          };
-        }
-      });
-      
-      // 이전 위치 업데이트
-      previousLocationInfo = taggedLocationInfo;
-    }
-  }
-);
+// ✅ Store 간 협업은 App.jsx에서 처리하도록 변경됨
+// journeyStore는 오직 환자의 여정 데이터만 관리하고,
+// mapStore와의 연결은 App.jsx에서 지휘합니다.
 
 export default useJourneyStore;

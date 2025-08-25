@@ -54,16 +54,166 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
     });
   }, [todaysAppointments, patientState]);
 
+  // 김미경 환자 Mock 데이터 추가
+  const mockPatientData = {
+    name: '김미경',
+    age: 50,
+    visitPurpose: '내과 정기 검진',
+    appointmentTime: '14:00',
+    condition: '고혈압'
+  };
+
+  // Mock 검사 후 주의사항 데이터
+  const mockPostCareInstructions = [
+    {
+      type: 'blood_test',
+      title: '채혈 후 주의사항',
+      priority: 'high',
+      icon: '💉',
+      description: '채혈 부위를 5분 이상 꾹 눌러주세요'
+    },
+    {
+      type: 'blood_test',
+      title: '채혈 후 주의사항',
+      priority: 'medium',
+      icon: '💉',
+      description: '오늘은 무리한 운동을 피하세요'
+    },
+    {
+      type: 'blood_test',
+      title: '채혈 후 주의사항',
+      priority: 'low',
+      icon: '💉',
+      description: '충분한 수분 섭취를 하세요'
+    },
+    {
+      type: 'xray',
+      title: 'X-ray 검사 후 안내',
+      priority: 'low',
+      icon: '📷',
+      description: '검사 결과는 3일 후 확인 가능합니다'
+    },
+    {
+      type: 'medication',
+      title: '고혈압 약물 복용 안내',
+      priority: 'high',
+      icon: '💊',
+      description: '처방받은 약은 매일 같은 시간에 복용하세요'
+    },
+    {
+      type: 'medication',
+      title: '고혈압 약물 복용 안내',
+      priority: 'high',
+      icon: '💊',
+      description: '약 복용 후 어지러움이 있을 수 있으니 천천히 일어나세요'
+    },
+    {
+      type: 'general',
+      title: '일반 주의사항',
+      priority: 'medium',
+      icon: '📋',
+      description: '다음 정기 검진은 3개월 후입니다'
+    },
+    {
+      type: 'general',
+      title: '일반 주의사항',
+      priority: 'low',
+      icon: '📋',
+      description: '검사 결과는 모바일 앱에서 확인 가능합니다'
+    }
+  ];
+
+  // Mock 완료된 검사 데이터
+  const mockCompletedExams = [
+    {
+      appointment_id: 'apt_001',
+      exam: {
+        exam_id: 'blood_test_001',
+        title: '채혈 검사',
+        description: '혈당, 콜레스테롤, 간 기능 검사',
+        department: '진단검사의학과',
+        building: '본관',
+        floor: '1',
+        room: '채혈실',
+        cost: '35,000',
+        average_duration: 15
+      },
+      status: 'completed',
+      scheduled_at: '2025-08-25T13:00:00',
+      completed_at: '2025-08-25T13:15:00',
+      completedAt: '13:15 완료'  // FormatBTemplate용
+    },
+    {
+      appointment_id: 'apt_002',
+      exam: {
+        exam_id: 'urine_test_001',
+        title: '소변 검사',
+        description: '당뇨, 신장 기능 검사',
+        department: '진단검사의학과',
+        building: '본관',
+        floor: '1',
+        room: '검체 채취실',
+        cost: '15,000',
+        average_duration: 10
+      },
+      status: 'completed',
+      scheduled_at: '2025-08-25T13:20:00',
+      completed_at: '2025-08-25T13:30:00',
+      completedAt: '13:30 완료'  // FormatBTemplate용
+    },
+    {
+      appointment_id: 'apt_003',
+      exam: {
+        exam_id: 'xray_001',
+        title: '흉부 X-ray',
+        description: '폐 건강 확인',
+        department: '영상의학과',
+        building: '본관',
+        floor: '2',
+        room: 'X-ray 촬영실',
+        cost: '25,000',
+        average_duration: 20
+      },
+      status: 'completed',
+      scheduled_at: '2025-08-25T13:35:00',
+      completed_at: '2025-08-25T13:55:00',
+      completedAt: '13:55 완료'  // FormatBTemplate용
+    },
+    {
+      appointment_id: 'apt_004',
+      exam: {
+        exam_id: 'consultation_001',
+        title: '내과 진료',
+        description: '고혈압 약물 처방 및 상담',
+        department: '내과',
+        building: '본관',
+        floor: '3',
+        room: '내과 2 진료실',
+        cost: '15,000',
+        average_duration: 20,
+        has_prescription: true
+      },
+      status: 'completed',
+      scheduled_at: '2025-08-25T14:00:00',
+      completed_at: '2025-08-25T14:20:00',
+      completedAt: '14:20 완료'  // FormatBTemplate용
+    }
+  ];
+
   // 소요 시간 계산을 위한 시작/종료 시간 찾기
   const calculateTotalDuration = () => {
-    if (!todaysAppointments || todaysAppointments.length === 0) return 0;
+    // Mock 데이터 사용 시 고정값 반환
+    if (!todaysAppointments || todaysAppointments.length === 0) {
+      // 13:00 검사 시작 ~ 14:20 내과 진료 완료 = 80분
+      return 80;
+    }
     
     // 완료된 검사들만 필터링
     const completedAppts = todaysAppointments.filter(apt => 
       ['completed', 'done'].includes(apt.status)
     );
     
-    if (completedAppts.length === 0) return 0;
+    if (completedAppts.length === 0) return 80; // Mock 데이터 기본값
     
     // 가장 이른 시작 시간 찾기 (접수 시간 또는 첫 검사 시작)
     const startTimes = completedAppts.map(apt => {
@@ -73,7 +223,7 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
       return new Date(apt.scheduled_at);
     }).filter(date => !isNaN(date));
     
-    if (startTimes.length === 0) return 0;
+    if (startTimes.length === 0) return 80; // Mock 데이터 기본값
     
     const firstTime = new Date(Math.min(...startTimes));
     
@@ -87,7 +237,7 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
       return new Date(scheduled.getTime() + duration * 60 * 1000);
     }).filter(date => !isNaN(date));
     
-    if (endTimes.length === 0) return 0;
+    if (endTimes.length === 0) return 80; // Mock 데이터 기본값
     
     const lastTime = new Date(Math.max(...endTimes));
     
@@ -135,13 +285,20 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
           return priorityOrder[b.priority] - priorityOrder[a.priority];
         });
 
-        setPostCareInstructions(sortedInstructions);
+        setPostCareInstructions(sortedInstructions.length > 0 ? sortedInstructions : mockPostCareInstructions);
       } catch (error) {
         console.error('검사 후 주의사항 조회 중 오류:', error);
+        // 오류 시 Mock 데이터 사용
+        setPostCareInstructions(mockPostCareInstructions);
       }
     };
 
-    fetchPostCareInstructions();
+    // todaysAppointments가 없으면 Mock 데이터 바로 사용
+    if (!todaysAppointments || todaysAppointments.length === 0) {
+      setPostCareInstructions(mockPostCareInstructions);
+    } else {
+      fetchPostCareInstructions();
+    }
   }, [todaysAppointments]);
 
   // 다음 일정 찾기 - 오늘 남은 일정 또는 미래 예약
@@ -191,19 +348,21 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
   const completedAppointments = todaysAppointments.filter(apt => 
     ['completed', 'done'].includes(apt.status)
   );
-  const completedCount = completedAppointments.length;
+  // 완료된 검사 개수 - Mock 데이터가 있으면 4개 (채혈, 소변, X-ray, 내과진료)
+  const completedCount = completedAppointments.length > 0 ? completedAppointments.length : 4;
   
   // 소요 시간 계산 - 고정값 사용
   const totalDuration = calculateTotalDuration();
   
-  // 총 비용 계산 - 실제 비용 정보가 있으면 사용, 없으면 예상 비용
-  const totalCost = completedAppointments
-    .reduce((sum, apt) => {
-      const cost = apt.cost || apt.exam?.cost || '25000';
-      const numericCost = typeof cost === 'string' ? 
-        parseInt(cost.replace(/[^0-9]/g, '')) : cost;
-      return sum + numericCost;
-    }, 0);
+  // 총 비용 계산 - 실제 비용 정보가 있으면 사용, 없으면 Mock 90,000원
+  const totalCost = completedAppointments.length > 0
+    ? completedAppointments.reduce((sum, apt) => {
+        const cost = apt.cost || apt.exam?.cost || '25000';
+        const numericCost = typeof cost === 'string' ? 
+          parseInt(cost.replace(/[^0-9]/g, '')) : cost;
+        return sum + numericCost;
+      }, 0)
+    : 90000; // Mock 데이터: 35,000 + 15,000 + 25,000 + 15,000 = 90,000원
 
   // 처방 여부 확인
   const hasPrescription = completedAppointments.some(apt => 
@@ -242,8 +401,13 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
 
   // 실제 API 데이터를 기반으로 주의사항 생성
   const generatePrecautions = () => {
-    if (postCareInstructions.length === 0) {
-      // API 데이터가 없는 경우 기본 주의사항 반환
+    // postCareInstructions가 있으면 사용 (mock 또는 실제 데이터)
+    const instructionsToUse = postCareInstructions.length > 0 
+      ? postCareInstructions 
+      : mockPostCareInstructions;
+    
+    if (instructionsToUse.length === 0) {
+      // 데이터가 없는 경우 기본 주의사항 반환
       return [{
         icon: '📋',
         title: '검사 후 일반 주의사항',
@@ -260,7 +424,7 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
     // API 데이터를 기반으로 주의사항 그룹화
     const groupedInstructions = {};
     
-    postCareInstructions.forEach(instruction => {
+    instructionsToUse.forEach(instruction => {
       const key = `${instruction.type}_${instruction.priority}`;
       if (!groupedInstructions[key]) {
         groupedInstructions[key] = {
@@ -314,10 +478,17 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
     scheduled_at: apt.scheduled_at,
     department: apt.exam?.department,
     completedAt: apt.status === 'completed' || apt.status === 'done' 
-      ? new Date(apt.updated_at || apt.completed_at || new Date()).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+      ? apt.completed_at 
+        ? new Date(apt.completed_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+        : apt.updated_at 
+          ? new Date(apt.updated_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+          : '완료'
       : null,
     cost: apt.status === 'completed' || apt.status === 'done' ? 
-      (apt.cost || apt.exam?.cost || '25,000') : null
+      (apt.exam?.cost || apt.cost || '25,000') : null,
+    // FormatBTemplate에서 사용할 속성 추가
+    exam: apt.exam,
+    appointment_id: apt.appointment_id
   })) || [];
 
   // P-7 마무리: 퇴원 안내 위치 정보 (시연용)
@@ -361,7 +532,7 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
       todaySchedule={todaySchedule}
       showPaymentInfo={true}
       paymentAmount={totalCost}
-      completedAppointments={completedAppointments}
+      completedAppointments={completedAppointments.length > 0 ? completedAppointments : mockCompletedExams} // 데이터 없으면 Mock 사용
       totalDuration={totalDuration}
       completedCount={completedCount}
       precautions={precautions}

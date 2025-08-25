@@ -66,7 +66,10 @@ const MapNavigator = ({
   // Store에서 가져온 데이터가 없으면 props 사용 (폴백)
   const corridorNodes = routeData.nodes?.length > 0 ? routeData.nodes : propPathNodes;
   const corridorEdges = routeData.edges?.length > 0 ? routeData.edges : propPathEdges;
-  const currentLocation = storeCurrentLocation || propCurrentLocation;
+  
+  // 현재 위치 설정 - 첫 번째 노드를 현재 위치로 사용
+  const currentLocation = storeCurrentLocation || propCurrentLocation || 
+    (corridorNodes.length > 0 ? corridorNodes[0] : null);
   
   // 디버깅용 로그
   console.log('🗺️ MapNavigator 경로 데이터:', {
@@ -207,10 +210,6 @@ const MapNavigator = ({
           }
         }
         
-        // 현재 위치 마커는 별도 useEffect에서 처리
-        
-        // 목적지 마커 제거 - 사용자 요청에 따라 현재 위치만 표시
-        
         // 노드 표시 모드 (showNodes가 true일 때만 노드 표시)
         if (showNodes && corridorNodes.length > 0) {
           const nodesGroup = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -259,7 +258,7 @@ const MapNavigator = ({
           svgElement.appendChild(nodesGroup);
         }
         
-        // 경로 표시 (경로 데이터가 있으면 항상 표시)
+        // 1. 먼저 경로 표시 (경로 데이터가 있으면 항상 표시)
         if (corridorNodes.length > 0 && corridorEdges.length > 0) {
           const pathGroup = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'g');
           pathGroup.setAttribute('id', 'path-route');
@@ -306,20 +305,91 @@ const MapNavigator = ({
                 line.setAttribute('marker-end', 'url(#arrowhead)');
               }
               
-              // 애니메이션 추가
+              // 애니메이션 추가 (점선이 움직이는 효과)
               const animate = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'animate');
               animate.setAttribute('attributeName', 'stroke-dashoffset');
-              animate.setAttribute('from', '18');
-              animate.setAttribute('to', '0');
-              animate.setAttribute('dur', '1s');
+              animate.setAttribute('from', '0');
+              animate.setAttribute('to', '-18');  // 음수로 설정하여 정방향 이동
+              animate.setAttribute('dur', '1.5s');
               animate.setAttribute('repeatCount', 'indefinite');
               line.appendChild(animate);
+              
+              // 추가: 선 자체에 클래스 추가 (CSS 애니메이션 대비)
+              line.setAttribute('class', 'path-line-animated');
               
               pathGroup.appendChild(line);
             }
           });
           
           svgElement.appendChild(pathGroup);
+        }
+        
+        // 2. 그 다음에 현재 위치 마커 추가 (경로보다 위에 그려짐)
+        const locationToShow = currentLocation || (corridorNodes.length > 0 ? corridorNodes[0] : null);
+        if (locationToShow) {
+          const xCoord = locationToShow.x_coord || locationToShow.x || 150;
+          const yCoord = locationToShow.y_coord || locationToShow.y || 400;
+          
+          const markerGroup = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'g');
+          markerGroup.setAttribute('transform', `translate(${xCoord}, ${yCoord})`);
+          markerGroup.setAttribute('id', 'current-location-marker');
+          
+          // 펄스 애니메이션 원
+          const pulseCircle = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          pulseCircle.setAttribute('r', '20');
+          pulseCircle.setAttribute('fill', '#dc2626');
+          pulseCircle.setAttribute('opacity', '0.3');
+          
+          const animatePulse = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'animate');
+          animatePulse.setAttribute('attributeName', 'r');
+          animatePulse.setAttribute('from', '10');
+          animatePulse.setAttribute('to', '30');
+          animatePulse.setAttribute('dur', '2s');
+          animatePulse.setAttribute('repeatCount', 'indefinite');
+          
+          const animateOpacity = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'animate');
+          animateOpacity.setAttribute('attributeName', 'opacity');
+          animateOpacity.setAttribute('from', '0.5');
+          animateOpacity.setAttribute('to', '0');
+          animateOpacity.setAttribute('dur', '2s');
+          animateOpacity.setAttribute('repeatCount', 'indefinite');
+          
+          pulseCircle.appendChild(animatePulse);
+          pulseCircle.appendChild(animateOpacity);
+          
+          // 메인 마커
+          const mainCircle = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          mainCircle.setAttribute('r', '12');
+          mainCircle.setAttribute('fill', '#dc2626');
+          mainCircle.setAttribute('stroke', '#ffffff');
+          mainCircle.setAttribute('stroke-width', '3');
+          
+          // 현재 위치 텍스트 - 흰색 배경용 (아래쪽)
+          const textBg = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'text');
+          textBg.setAttribute('y', '-20');
+          textBg.setAttribute('text-anchor', 'middle');
+          textBg.setAttribute('font-size', '16');
+          textBg.setAttribute('font-weight', 'bold');
+          textBg.setAttribute('fill', '#ffffff');
+          textBg.setAttribute('stroke', '#ffffff');
+          textBg.setAttribute('stroke-width', '3');
+          textBg.textContent = '현재 위치';
+          
+          // 현재 위치 텍스트 - 빨간색 (위쪽)
+          const text = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('y', '-20');
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('font-size', '16');
+          text.setAttribute('font-weight', 'bold');
+          text.setAttribute('fill', '#dc2626');
+          text.textContent = '현재 위치';
+          
+          markerGroup.appendChild(pulseCircle);
+          markerGroup.appendChild(mainCircle);
+          markerGroup.appendChild(textBg);  // 흰색 배경 텍스트 먼저
+          markerGroup.appendChild(text);     // 빨간색 텍스트 나중에
+          
+          svgElement.appendChild(markerGroup);
         }
         
         // 컨테이너에 SVG 삽입 (null 체크 추가)
@@ -333,118 +403,11 @@ const MapNavigator = ({
     };
     
     loadSvg();
-  }, [mapSrc, highlightRoom, currentMapIndex, showNodes]); // 지도 자체가 변경될 때만 재렌더링
+  }, [mapSrc, highlightRoom, currentMapIndex, showNodes, corridorNodes, corridorEdges, currentLocation]); // 모든 데이터 변경시 재렌더링
 
-  // 경로만 별도로 업데이트하는 useEffect
-  useEffect(() => {
-    if (!svgContainerRef.current) return;
-    const svgElement = svgContainerRef.current.querySelector('svg');
-    if (!svgElement) return;
-    
-    // 기존 경로 제거
-    const existingPath = svgElement.querySelector('#path-route');
-    if (existingPath) existingPath.remove();
-    
-    // 새 경로 그리기
-    if (corridorNodes.length > 0 && corridorEdges.length > 0) {
-      const pathGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      pathGroup.setAttribute('id', 'path-route');
-      
-      // 엣지를 따라 경로 그리기
-      corridorEdges.forEach(([from, to]) => {
-        const fromNode = corridorNodes.find(n => n.id === from);
-        const toNode = corridorNodes.find(n => n.id === to);
-        
-        if (fromNode && toNode) {
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', fromNode.x);
-          line.setAttribute('y1', fromNode.y);
-          line.setAttribute('x2', toNode.x);
-          line.setAttribute('y2', toNode.y);
-          line.setAttribute('stroke', '#2563eb');
-          line.setAttribute('stroke-width', '3');
-          line.setAttribute('stroke-dasharray', '10,5');
-          pathGroup.appendChild(line);
-        }
-      });
-      
-      svgElement.appendChild(pathGroup);
-      console.log('🎯 경로 업데이트 완료:', corridorNodes.length, '개 노드');
-    }
-  }, [corridorNodes, corridorEdges]); // 경로 데이터 변경시에도 SVG 재렌더링
+  // 경로만 별도로 업데이트하는 useEffect - 제거 (위의 메인 useEffect에서 처리)
 
-  // 별도의 useEffect로 현재 위치 마커만 업데이트
-  useEffect(() => {
-    if (!svgContainerRef.current) return;
-    
-    const svgElement = svgContainerRef.current.querySelector('svg');
-    if (!svgElement) return;
-    
-    console.log('🔴 현재 위치 마커 업데이트:', currentLocation);
-    
-    // 기존 마커 제거
-    const existingMarker = svgElement.querySelector('#current-location-marker');
-    if (existingMarker) existingMarker.remove();
-    
-    // 현재 위치 마커 추가
-    if (currentLocation) {
-      const xCoord = currentLocation.x_coord || currentLocation.x || 150;
-      const yCoord = currentLocation.y_coord || currentLocation.y || 400;
-      
-      console.log(`📍 마커 좌표: (${xCoord}, ${yCoord})`);
-      
-      const markerGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      markerGroup.setAttribute('transform', `translate(${xCoord}, ${yCoord})`);
-      markerGroup.setAttribute('id', 'current-location-marker');
-      
-      // 펄스 애니메이션 원
-      const pulseCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      pulseCircle.setAttribute('r', '20');
-      pulseCircle.setAttribute('fill', '#dc2626');
-      pulseCircle.setAttribute('opacity', '0.3');
-      
-      const animatePulse = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
-      animatePulse.setAttribute('attributeName', 'r');
-      animatePulse.setAttribute('from', '10');
-      animatePulse.setAttribute('to', '30');
-      animatePulse.setAttribute('dur', '2s');
-      animatePulse.setAttribute('repeatCount', 'indefinite');
-      
-      const animateOpacity = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
-      animateOpacity.setAttribute('attributeName', 'opacity');
-      animateOpacity.setAttribute('from', '0.5');
-      animateOpacity.setAttribute('to', '0');
-      animateOpacity.setAttribute('dur', '2s');
-      animateOpacity.setAttribute('repeatCount', 'indefinite');
-      
-      pulseCircle.appendChild(animatePulse);
-      pulseCircle.appendChild(animateOpacity);
-      
-      // 메인 마커
-      const mainCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      mainCircle.setAttribute('r', '12');
-      mainCircle.setAttribute('fill', '#dc2626');
-      mainCircle.setAttribute('stroke', '#ffffff');
-      mainCircle.setAttribute('stroke-width', '3');
-      
-      // 현재 위치 텍스트
-      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.setAttribute('y', '-20');
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('font-size', '16');
-      text.setAttribute('font-weight', 'bold');
-      text.setAttribute('fill', '#dc2626');
-      text.setAttribute('stroke', '#ffffff');
-      text.setAttribute('stroke-width', '0.5');
-      text.textContent = '현재 위치';
-      
-      markerGroup.appendChild(pulseCircle);
-      markerGroup.appendChild(mainCircle);
-      markerGroup.appendChild(text);
-      
-      svgElement.appendChild(markerGroup);
-    }
-  }, [currentLocation, mapSrc]); // 현재 위치나 지도가 변경시 업데이트
+  // 별도의 useEffect 제거 - 메인 useEffect에서 처리
 
   return (
     <div className="relative w-full">
@@ -479,6 +442,18 @@ const MapNavigator = ({
         onClick={handleMapClick}
       >
         <div ref={svgContainerRef} className="w-full h-full flex items-center justify-center" />
+        
+        {/* CSS 애니메이션 스타일 추가 */}
+        <style>{`
+          @keyframes dash {
+            to {
+              stroke-dashoffset: -18;
+            }
+          }
+          .path-line-animated {
+            animation: dash 1.5s linear infinite;
+          }
+        `}</style>
         
         {/* 페이지 인디케이터 - 하단 중앙 */}
         {mapSequence.length > 1 && (

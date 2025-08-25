@@ -39,8 +39,8 @@ import './styles/global.css';
 function AppContent() {
   const [elderlyMode, setElderlyMode] = useState(false);
   const { isAuthenticated } = useAuth();
-  const { isLoading, fetchJourneyData, user } = useJourneyStore();
-  const { updateRouteBasedOnLocation } = useMapStore();
+  const { isLoading, fetchJourneyData, user, patientState, taggedLocationInfo } = useJourneyStore();
+  const { updateRouteBasedOnLocation, updateCurrentLocation, navigationMode } = useMapStore();
 
   // 앱 시작 시 토큰 확인 및 데이터 로딩
   useEffect(() => {
@@ -75,6 +75,34 @@ function AppContent() {
     
     loadUserData();
   }, []); // 의존성 배열을 빈 배열로 변경하여 최초 1회만 실행
+
+  // ✅ Store 간 협업 지휘자 - journeyStore의 위치 변경을 감지하여 mapStore 업데이트
+  useEffect(() => {
+    // taggedLocationInfo가 있고, 여정 모드일 때만 실행
+    if (taggedLocationInfo && navigationMode === 'journey') {
+      console.log('🔄 App 지휘자: 위치 변경 감지, mapStore 업데이트...');
+      
+      // 1. 현재 위치 업데이트
+      updateCurrentLocation({
+        x_coord: taggedLocationInfo.x_coord,
+        y_coord: taggedLocationInfo.y_coord,
+        building: taggedLocationInfo.building,
+        floor: taggedLocationInfo.floor,
+        room: taggedLocationInfo.room,
+        description: taggedLocationInfo.description
+      });
+      
+      // 2. 새로운 위치 기반으로 경로 업데이트
+      updateRouteBasedOnLocation({
+        x_coord: taggedLocationInfo.x_coord,
+        y_coord: taggedLocationInfo.y_coord,
+        building: taggedLocationInfo.building,
+        floor: taggedLocationInfo.floor,
+        room: taggedLocationInfo.room,
+        description: taggedLocationInfo.description
+      });
+    }
+  }, [taggedLocationInfo, navigationMode, updateCurrentLocation, updateRouteBasedOnLocation]);
 
   // 전역 로딩 상태 표시
   if (isLoading) {
