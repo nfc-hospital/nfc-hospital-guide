@@ -28,7 +28,7 @@ const getNextActionText = (patientState, currentExam, taggedLocation, locationIn
       if (destination) {
         // 층 정보가 있으면 포함
         if (building && floor) {
-          return `${building} ${floor}층 ${destination}로 이동하기`;
+          return `${destination}으로 이동하기`;
         }
         return `${destination}실로 이동하기`;
       }
@@ -51,7 +51,7 @@ const getNextActionText = (patientState, currentExam, taggedLocation, locationIn
         // 아직 도착하지 않은 경우
         if (destination) {
           if (building && floor) {
-            return `${building} ${floor}층 ${destination} 대기실로 이동하기`;
+            return `${destination} 대기실로 이동하기`;
           }
           return `${destination} 대기실로 이동하기`;
         }

@@ -18,6 +18,7 @@ export default function ArrivedScreen({
   locationInfo: propsLocationInfo,
   currentStep,
   totalSteps,
+  todaySchedule: propsTodaySchedule, // JourneyContainer에서 계산된 일정 받기
 }) {
   const navigate = useNavigate();
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
@@ -103,8 +104,8 @@ export default function ArrivedScreen({
     setAllRequiredCompleted(isCompleted);
   };
 
-  // 오늘의 일정을 포맷 A에 맞게 변환
-  const todaySchedule =
+  // propsTodaySchedule이 있으면 사용, 없으면 자체 변환
+  const todaySchedule = propsTodaySchedule || 
     todaysAppointments?.map((apt, index) => ({
       id: apt.appointment_id,
       examName: apt.exam?.title || `검사 ${index + 1}`,
@@ -133,7 +134,7 @@ export default function ArrivedScreen({
     mapId: "main_1f",
   };
 
-  // 완료된 검사 수 계산
+  // 완료된 검사 수 계산 (ARRIVED 상태에서는 아직 0)
   const completedCount =
     completionStats?.completedCount ||
     todaySchedule.filter((s) => s.status === "completed" || s.status === "done")
@@ -141,7 +142,10 @@ export default function ArrivedScreen({
     0;
 
   // 전체 검사 수
-  const totalCount = completionStats?.totalCount || todaySchedule.length || 7;
+  const totalCount = completionStats?.totalCount || todaySchedule.length || totalSteps || 7;
+  
+  // ARRIVED 상태에서는 currentStep이 0 (접수 단계)
+  const actualCurrentStep = currentStep || 0;
 
   // 검사별 준비사항을 준비사항 탭 내용으로 포함
   const customPreparationContent = (
@@ -166,15 +170,15 @@ export default function ArrivedScreen({
     <>
       <FormatATemplate
         screenType="arrived"
-        currentStep={currentStep || 1}
+        currentStep={actualCurrentStep}
         totalSteps={totalCount}
-        nextAction="원무과에서 접수하기"
-        waitingInfo={waitingInfo}
+        nextAction={null}  // 자동 생성되도록 null 전달
+        waitingInfo={waitingInfo || null}  // ARRIVED 상태에서는 대기 정보 없음
         locationInfo={locationInfo}
         todaySchedule={todaySchedule}
         taggedLocation={taggedLocation}
         patientState={user?.state || patientState || "ARRIVED"}
-        currentExam={null}
+        currentExam={null}  // ARRIVED 상태에서는 현재 검사 없음
         preparationItems={customPreparationContent}
         completionStats={{
           completedCount: completedCount,

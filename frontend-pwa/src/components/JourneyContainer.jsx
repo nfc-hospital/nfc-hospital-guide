@@ -20,6 +20,10 @@ const JourneyContainer = ({ taggedLocation }) => {
   const isLoading = useJourneyStore(state => state.isLoading);
   const fetchJourneyData = useJourneyStore(state => state.fetchJourneyData);
   
+  // Store에서 중앙화된 계산값 가져오기
+  const storeNextExam = useJourneyStore(state => state.nextExam);
+  const storeLocationInfo = useJourneyStore(state => state.locationInfo);
+  
   // mapStore에서 원본 데이터를 개별적으로 선택 (무한 루프 방지)
   const currentLocation = useMapStore(state => state.currentLocation);
   const destinationLocation = useMapStore(state => state.destinationLocation);
@@ -56,10 +60,12 @@ const JourneyContainer = ({ taggedLocation }) => {
         description: apt.exam?.description,
         purpose: apt.exam?.description || '건강 상태 확인 및 진단',
         preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
-        duration: apt.exam?.average_duration || 30,
+        preparations: apt.exam?.preparations || [], // API에서 받은 준비사항 배열
+        duration: apt.exam?.average_duration || apt.exam?.duration || 30,
         scheduled_at: apt.scheduled_at,
         department: apt.exam?.department,
-        exam: apt.exam // 원본 exam 객체도 포함
+        exam: apt.exam, // 원본 exam 객체도 포함
+        queue_info: apt.queue_info // 큐 정보도 포함
       };
     });
   }, [todaysAppointments]);
@@ -137,133 +143,13 @@ const JourneyContainer = ({ taggedLocation }) => {
   );
   const actualCurrentStep = useMemo(() => currentStep === -1 ? 0 : currentStep, [currentStep]);
   
-  // getNextExam 로직을 직접 구현
-  const nextExam = useMemo(() => {
-    const schedule = todaySchedule;
-    
-    // ✅ PAYMENT 상태: 수납창구를 목적지로
-    if (patientState === 'PAYMENT') {
-      return {
-        exam_id: 'payment_desk',
-        title: '수납창구',
-        building: '본관',
-        floor: '1',
-        room: '원무과',
-        department: '원무과',
-        x_coord: 420,
-        y_coord: 380,
-        description: '수납창구에서 진료비를 수납해주세요'
-      };
-    }
-    
-    // ✅ FINISHED 상태: 정문을 목적지로 (귀가)
-    if (patientState === 'FINISHED') {
-      return {
-        exam_id: 'main_entrance',
-        title: '정문',
-        building: '본관',
-        floor: '1',
-        room: '로비',
-        department: '출입구',
-        x_coord: 150,
-        y_coord: 400,
-        description: '모든 진료가 완료되었습니다. 안녕히 가세요.'
-      };
-    }
-    
-    // ✅ WAITING 상태: 대기 중인 검사를 목적지로
-    if (patientState === 'WAITING') {
-      const waitingExam = schedule.find(s => s.status === 'waiting' || s.status === 'called');
-      if (waitingExam) {
-        return waitingExam.exam;
-      }
-      return todaysAppointments?.[0]?.exam;
-    }
-    
-    // ✅ REGISTERED 상태: 첫 번째 검사를 목적지로
-    if (patientState === 'REGISTERED' || (patientState === 'COMPLETED' && schedule.length === 0)) {
-      return todaysAppointments?.[0]?.exam;
-    }
-    
-    // ✅ COMPLETED 상태: 다음 검사를 목적지로
-    if (patientState === 'COMPLETED') {
-      const completedCount = schedule.filter(s => s.status === 'completed').length;
-      if (completedCount < todaysAppointments.length) {
-        return todaysAppointments[completedCount]?.exam;
-      }
-      // 모든 검사가 완료되면 수납창구로
-      return {
-        exam_id: 'payment_desk',
-        title: '수납창구',
-        building: '본관',
-        floor: '1',
-        room: '원무과',
-        department: '원무과',
-        x_coord: 420,
-        y_coord: 380,
-        description: '검사가 모두 완료되었습니다. 수납창구로 이동해주세요.'
-      };
-    }
-    
-    // ✅ CALLED, ONGOING 상태: 현재 진행 중인 검사를 목적지로
-    if (patientState === 'CALLED' || patientState === 'ONGOING') {
-      const currentExam = schedule.find(s => 
-        s.status === 'called' || s.status === 'ongoing'
-      );
-      if (currentExam) {
-        return currentExam.exam;
-      }
-    }
-    
-    // ✅ ARRIVED 상태: 원무과를 목적지로 (접수)
-    if (patientState === 'ARRIVED') {
-      return {
-        exam_id: 'reception',
-        title: '원무과',
-        building: '본관',
-        floor: '1',
-        room: '접수창구',
-        department: '원무과',
-        x_coord: 500,
-        y_coord: 330,
-        description: '원무과에서 접수를 진행해주세요'
-      };
-    }
-    
-    // ✅ UNREGISTERED 상태: 병원 입구를 목적지로
-    if (patientState === 'UNREGISTERED') {
-      return {
-        exam_id: 'main_entrance',
-        title: '병원 입구',
-        building: '본관',
-        floor: '1',
-        room: '로비',
-        department: '출입구',
-        x_coord: 150,
-        y_coord: 400,
-        description: '병원에 도착하시면 원무과로 이동해주세요'
-      };
-    }
-    
-    return null;
-  }, [patientState, todaysAppointments, todaySchedule]);
+  // Store에서 계산된 nextExam 사용 (중복 계산 제거)
+  const nextExam = storeNextExam;
   
   // facilityManagement에서 시설 정보 찾기 - useMemo로 최적화
   const facilityData = useMemo(() => 
-    nextExam ? getFacilityByName(nextExam.title) : null,
-    [nextExam]
-  );
-  
-  // 첫 번째 검사실 정보가 없으면 기본값 사용 - useMemo로 최적화
-  const targetExam = useMemo(() => 
-    nextExam || currentExam || todaySchedule?.[0]?.exam || {
-      title: '채혈실',
-      building: '본관',
-      floor: '1',
-      room: '채혈실',
-      department: '진단검사의학과'
-    },
-    [nextExam, currentExam, todaySchedule]
+    storeNextExam ? getFacilityByName(storeNextExam?.title) : null,
+    [storeNextExam]
   );
   
   // 컴포넌트 마운트 시 지도 데이터 로드
@@ -272,26 +158,26 @@ const JourneyContainer = ({ taggedLocation }) => {
     loadDepartmentZones({ building: '본관' });
   }, [loadMapMetadata, loadDepartmentZones]); // 함수 의존성 추가
   
-  // 층 지도 로드 (대상 검사가 바뀔 때)
+  // 층 지도 로드 (storeNextExam이 바뀔 때)
   useEffect(() => {
-    if (!targetExam) return;
+    if (!storeNextExam) return;
     
-    const floor = targetExam.floor || '1';
-    const building = targetExam.building || '본관';
+    const floor = storeNextExam.floor || '1';
+    const building = storeNextExam.building || '본관';
     const floorId = `${building.toLowerCase().replace(' ', '_')}_${floor}f`;
     
     loadFloorMap(floorId);
-  }, [targetExam?.exam_id, loadFloorMap]); // 함수 의존성 추가
+  }, [storeNextExam?.exam_id, loadFloorMap]); // storeNextExam 사용으로 변경
   
   
   // 목적지 노드 찾기 (currentFloorNodes에서 직접 검색) - useMemo로 최적화
   const targetNode = useMemo(() => 
     currentFloorNodes?.find(
-      node => node.exam?.exam_id === targetExam.exam_id ||
-              node.name?.includes(targetExam.title) ||
-              node.room === targetExam.room
+      node => node.exam?.exam_id === storeNextExam?.exam_id ||
+              node.name?.includes(storeNextExam?.title) ||
+              node.room === storeNextExam?.room
     ),
-    [currentFloorNodes, targetExam]
+    [currentFloorNodes, storeNextExam]
   );
   
   // 현재 위치 노드 찾기 - useMemo로 최적화
@@ -307,25 +193,12 @@ const JourneyContainer = ({ taggedLocation }) => {
   // SVG 크기 정보 가져오기 (직접 계산으로 변경) - useMemo로 최적화
   const mapInfo = useMemo(() => 
     mapMetadata?.find(
-      m => m.building === targetExam.building && m.floor === parseInt(targetExam.floor)
+      m => m.building === storeNextExam?.building && m.floor === parseInt(storeNextExam?.floor || '1')
     ),
-    [mapMetadata, targetExam.building, targetExam.floor]
+    [mapMetadata, storeNextExam?.building, storeNextExam?.floor]
   );
   const svgWidth = useMemo(() => mapInfo?.width || 900, [mapInfo]);
   const svgHeight = useMemo(() => mapInfo?.height || 600, [mapInfo]);
-  
-  // 실제 목적지 정보 (hospital_navigation 데이터 우선) - useMemo로 최적화
-  const actualDestination = useMemo(() => 
-    destinationLocation || {
-      exam: targetExam,
-      building: targetExam.building,
-      floor: targetExam.floor,
-      room: targetExam.room,
-      x_coord: targetNode?.x_coord || (svgWidth * 0.67),  // 노드 좌표 또는 비율 기반 기본값
-      y_coord: targetNode?.y_coord || (svgHeight * 0.5)   // 노드 좌표 또는 비율 기반 기본값
-    },
-    [destinationLocation, targetExam, targetNode, svgWidth, svgHeight]
-  );
   
   // 실제 hospital_navigation 경로 사용
   const stablePathNodes = useMemo(() => {
@@ -345,9 +218,9 @@ const JourneyContainer = ({ taggedLocation }) => {
         },
         { 
           id: 'target', 
-          x: targetNode.x_coord || actualDestination.x_coord, 
-          y: targetNode.y_coord || actualDestination.y_coord, 
-          name: targetExam.title,
+          x: targetNode.x_coord || storeNextExam?.x_coord || (svgWidth * 0.67), 
+          y: targetNode.y_coord || storeNextExam?.y_coord || (svgHeight * 0.5), 
+          name: storeNextExam?.title,
           node_type: 'exam_room'
         }
       ];
@@ -364,9 +237,11 @@ const JourneyContainer = ({ taggedLocation }) => {
     targetNode?.y_coord,
     currentLocation?.x_coord,
     currentLocation?.y_coord,
-    actualDestination?.x_coord,
-    actualDestination?.y_coord,
-    targetExam?.title
+    storeNextExam?.x_coord,
+    storeNextExam?.y_coord,
+    storeNextExam?.title,
+    svgWidth,
+    svgHeight
   ]);
   
   const stablePathEdges = useMemo(() => {
@@ -384,41 +259,97 @@ const JourneyContainer = ({ taggedLocation }) => {
     targetNode?.node_id
   ]);
 
-  // locationInfo 객체 만들기 (RegisteredScreen, WaitingScreen 공통 로직) - useMemo로 최적화
-  const locationInfo = useMemo(() => ({
-    name: actualDestination.exam?.title || targetExam.title,
-    building: actualDestination.building || targetExam.building || '본관',
-    floor: actualDestination.floor ? `${actualDestination.floor}층` : `${targetExam.floor || '1'}층`,
-    room: actualDestination.room || targetExam.room || '채혈실',
-    department: actualDestination.exam?.department || targetExam.department || '진단검사의학과',
-    directions: activeRoute ? '경로 안내를 따라 이동하세요' : 
-                isCalled ? '검사실로 입장해주세요' : 
-                '엘리베이터를 타고 이동 후 안내 표지판을 따라가세요',
-    mapFile: facilityData?.mapFile || 'main_1f.svg',
-    svgId: targetNode?.node_id || facilityData?.svgId || 'blood-test-room',
-    mapId: `${actualDestination.building?.toLowerCase() || 'main'}_${actualDestination.floor || '1'}f`,
-    // 실제 좌표 데이터 (hospital_navigation 노드 데이터 우선)
-    x_coord: actualDestination.x_coord,
-    y_coord: actualDestination.y_coord,
-    // 현재 위치 (hospital_navigation 노드 또는 store의 currentLocation)
-    currentLocation: currentLocation || {
-      x_coord: currentNode?.x_coord || (svgWidth * 0.28),  // 로비 노드 또는 비율 기반
-      y_coord: currentNode?.y_coord || (svgHeight * 0.67), // 로비 노드 또는 비율 기반
-      building: '본관',
-      floor: '1',
-      room: '로비'
-    },
-    // 안정적인 경로 데이터 사용
-    pathNodes: stablePathNodes,
-    pathEdges: stablePathEdges,
-    // 진료과/시설 존 정보 전달
-    departmentZones: departmentZones,
-    // SVG 크기 정보 전달
-    svgWidth: svgWidth,
-    svgHeight: svgHeight
-  }), [
-    actualDestination,
-    targetExam,
+  // locationInfo: Store에서 계산된 값 우선 사용, 추가 지도 데이터만 보강
+  const locationInfo = useMemo(() => {
+    // Store에서 계산된 locationInfo가 있으면 그것을 우선 사용
+    if (storeLocationInfo) {
+      return {
+        ...storeLocationInfo,
+        // 지도 관련 추가 데이터만 보강
+        currentLocation: currentLocation || storeLocationInfo.currentLocation,
+        pathNodes: stablePathNodes,
+        pathEdges: stablePathEdges,
+        departmentZones: departmentZones,
+        svgWidth: svgWidth,
+        svgHeight: svgHeight,
+        svgId: targetNode?.node_id || facilityData?.svgId || storeLocationInfo.svgId,
+        x_coord: targetNode?.x_coord || storeLocationInfo.x_coord,
+        y_coord: targetNode?.y_coord || storeLocationInfo.y_coord
+      };
+    }
+    
+    // Store값이 없을 때만 fallback 계산
+    if (!nextExam) {
+      // nextExam이 없을 때 기본값
+      return {
+        name: '위치 정보 없음',
+        building: '본관',
+        floor: '1층',
+        room: '',
+        department: '',
+        directions: '안내 데스크로 문의해주세요',
+        mapFile: 'main_1f.svg',
+        svgId: '',
+        mapId: 'main_1f',
+        x_coord: svgWidth * 0.5,
+        y_coord: svgHeight * 0.5,
+        currentLocation: currentLocation || {
+          x_coord: currentNode?.x_coord || (svgWidth * 0.28),
+          y_coord: currentNode?.y_coord || (svgHeight * 0.67),
+          building: '본관',
+          floor: '1',
+          room: '로비'
+        },
+        pathNodes: stablePathNodes,
+        pathEdges: stablePathEdges,
+        departmentZones: departmentZones,
+        svgWidth: svgWidth,
+        svgHeight: svgHeight
+      };
+    }
+    
+    return {
+      // nextExam에서 직접 가져오는 정보들
+      name: nextExam.title,
+      building: nextExam.building || '본관',
+      floor: nextExam.floor ? `${nextExam.floor}층` : '1층',
+      room: nextExam.room || nextExam.title,  // room이 없으면 title을 사용
+      department: nextExam.department || '',
+      description: nextExam.description,  // FormatATemplate에서 사용할 수 있도록 추가
+      
+      // 상태에 따른 안내 메시지
+      directions: activeRoute ? '경로 안내를 따라 이동하세요' : 
+                  isCalled ? '검사실로 입장해주세요' : 
+                  '엘리베이터를 타고 이동 후 안내 표지판을 따라가세요',
+      
+      // 지도 관련 정보
+      mapFile: facilityData?.mapFile || `${nextExam.building?.toLowerCase() || 'main'}_${nextExam.floor || '1'}f.svg`,
+      svgId: targetNode?.node_id || facilityData?.svgId || nextExam.exam_id,
+      mapId: `${nextExam.building?.toLowerCase() || 'main'}_${nextExam.floor || '1'}f`,
+      
+      // 좌표 데이터 (노드 데이터 우선, 없으면 nextExam 데이터, 그것도 없으면 기본값)
+      x_coord: targetNode?.x_coord || nextExam.x_coord || (svgWidth * 0.67),
+      y_coord: targetNode?.y_coord || nextExam.y_coord || (svgHeight * 0.5),
+      
+      // 현재 위치
+      currentLocation: currentLocation || {
+        x_coord: currentNode?.x_coord || (svgWidth * 0.28),
+        y_coord: currentNode?.y_coord || (svgHeight * 0.67),
+        building: '본관',
+        floor: '1',
+        room: '로비'
+      },
+      
+      // 경로 및 추가 데이터
+      pathNodes: stablePathNodes,
+      pathEdges: stablePathEdges,
+      departmentZones: departmentZones,
+      svgWidth: svgWidth,
+      svgHeight: svgHeight
+    };
+  }, [
+    storeLocationInfo,
+    nextExam,
     activeRoute,
     isCalled,
     facilityData,
@@ -469,30 +400,6 @@ const JourneyContainer = ({ taggedLocation }) => {
       progressPercentage: total > 0 ? Math.round((completed.length / total) * 100) : 0
     };
   }, [todaySchedule]);
-  
-  // PaymentScreen용 locationInfo - useMemo로 최적화
-  const paymentLocationInfo = useMemo(() => ({
-    name: '원무과 수납창구',
-    building: '본관',
-    floor: '1층',
-    room: '중앙홀 우측',
-    department: '원무과',
-    directions: '엘리베이터로 1층 이동 후 오른쪽으로 가시면 됩니다',
-    mapFile: 'main_1f.svg',
-    svgId: 'payment-desk',
-    mapId: 'main_1f',
-    x_coord: 280,
-    y_coord: 250,
-    currentLocation: {
-      x_coord: 200,
-      y_coord: 300,
-      building: '본관',
-      floor: '1',
-      room: '엘리베이터 홀'
-    },
-    pathNodes: activeRoute?.path_nodes || navigationRoute?.nodes || [],
-    pathEdges: activeRoute?.path_edges || navigationRoute?.edges || []
-  }), [activeRoute, navigationRoute]);
   
   // 위에서 이미 가져온 데이터들을 사용 (todaysAppointments, fetchJourneyData, completed_tasks, appointments, isLoading)
   
@@ -550,79 +457,6 @@ const JourneyContainer = ({ taggedLocation }) => {
     }
   ], []);
   
-  // 각 화면에 맞는 데이터 준비 (아직 렌더링하지는 않음) - useMemo로 최적화
-  const preparedData = useMemo(() => ({
-    // 공통 데이터
-    user,
-    patientState,
-    todaySchedule,
-    currentTask,
-    waitingInfo,
-    currentExam,
-    isOngoing,
-    isCalled,
-    actualCurrentStep,
-    
-    // RegisteredScreen 데이터
-    registeredData: {
-      locationInfo,
-      nextExam,
-      targetExam
-    },
-    
-    // WaitingScreen 데이터
-    waitingData: {
-      locationInfo,
-      currentExam
-    },
-    
-    // PaymentScreen 데이터
-    paymentData: {
-      locationInfo: paymentLocationInfo,
-      completionStats,
-      paymentInfo: waitingInfo || { peopleAhead: 0, estimatedTime: 5 }
-    },
-    
-    // UnregisteredScreen 데이터
-    unregisteredData: {
-      todaysAppointments,
-      nextSchedule,
-      summaryCards,
-      fetchJourneyData
-    },
-    
-    // FinishedScreen 데이터
-    finishedData: {
-      mockPatientData,
-      mockPostCareInstructions,
-      completedCount: todaysAppointments?.filter(apt => ['completed', 'done'].includes(apt.status)).length || 0
-    },
-    
-    // 함수들
-    getNextAction
-  }), [
-    user,
-    patientState,
-    todaySchedule,
-    currentTask,
-    waitingInfo,
-    currentExam,
-    isOngoing,
-    isCalled,
-    actualCurrentStep,
-    locationInfo,
-    nextExam,
-    targetExam,
-    paymentLocationInfo,
-    completionStats,
-    todaysAppointments,
-    nextSchedule,
-    summaryCards,
-    fetchJourneyData,
-    mockPatientData,
-    mockPostCareInstructions,
-    getNextAction
-  ]);
   
   // Screen 컴포넌트들 import (필요한 것만 먼저)
   const RegisteredScreen = React.lazy(() => import('./screens/RegisteredScreen'));
@@ -634,12 +468,13 @@ const JourneyContainer = ({ taggedLocation }) => {
   
   // taggedLocation은 이제 props로 받음
   
-  // 공통 props 준비 - useMemo로 최적화
+  // 공통 props 준비 - useMemo로 최적화 (targetExam 제거)
   const commonProps = useMemo(() => ({
     // 공통 데이터
     user,
     patientState,
     todaySchedule,
+    todaysAppointments,  // 추가: 원본 예약 데이터
     currentStep: actualCurrentStep,
     totalSteps: todaySchedule.length || 7,
     waitingInfo,
@@ -654,12 +489,13 @@ const JourneyContainer = ({ taggedLocation }) => {
     currentExam,
     currentTask,
     nextExam,
-    targetExam,
-    actualCurrentStep
+    actualCurrentStep,
+    completionStats  // 추가: 완료 통계
   }), [
     user,
     patientState,
     todaySchedule,
+    todaysAppointments,
     actualCurrentStep,
     waitingInfo,
     taggedLocation,
@@ -669,10 +505,10 @@ const JourneyContainer = ({ taggedLocation }) => {
     currentExam,
     currentTask,
     nextExam,
-    targetExam
+    completionStats
   ]);
   
-  // RegisteredScreen용 props - useMemo로 최적화
+  // RegisteredScreen용 props - useMemo로 최적화 (targetExam과 actualDestination 제거)
   const registeredScreenProps = useMemo(() => ({
     ...commonProps,
     locationInfo,
@@ -684,7 +520,7 @@ const JourneyContainer = ({ taggedLocation }) => {
     stablePathEdges,
     currentNode,
     targetNode,
-    actualDestination
+    targetExam: nextExam  // FormatATemplate 호환성을 위해 nextExam을 targetExam으로도 전달
   }), [
     commonProps,
     locationInfo,
@@ -696,7 +532,7 @@ const JourneyContainer = ({ taggedLocation }) => {
     stablePathEdges,
     currentNode,
     targetNode,
-    actualDestination
+    nextExam
   ]);
   
   // 환자 상태에 따른 화면 렌더링 (switch문)
@@ -722,12 +558,8 @@ const JourneyContainer = ({ taggedLocation }) => {
         <React.Suspense fallback={<div>Loading...</div>}>
           <ArrivedScreen 
             {...commonProps}
-            todaysAppointments={todaysAppointments}
-            fetchJourneyData={fetchJourneyData}
             nextSchedule={nextSchedule}
             summaryCards={summaryCards}
-            completionStats={completionStats}
-            waitingInfo={waitingInfo}
             locationInfo={locationInfo}
           />
         </React.Suspense>
@@ -753,7 +585,6 @@ const JourneyContainer = ({ taggedLocation }) => {
             currentTask={currentTask}
             isOngoing={isOngoing}
             isCalled={isCalled}
-            completionStats={completionStats}
           />
         </React.Suspense>
       );
@@ -768,7 +599,6 @@ const JourneyContainer = ({ taggedLocation }) => {
             currentTask={currentTask}
             isOngoing={false}
             isCalled={false}
-            completionStats={completionStats}
           />
         </React.Suspense>
       );
@@ -778,8 +608,8 @@ const JourneyContainer = ({ taggedLocation }) => {
         <React.Suspense fallback={<div>Loading...</div>}>
           <PaymentScreen 
             {...commonProps}
-            paymentLocationInfo={paymentLocationInfo}
-            completionStats={completionStats}
+            locationInfo={locationInfo}  // 통일된 locationInfo 사용
+            paymentLocationInfo={locationInfo}  // 하위 호환성
             paymentInfo={waitingInfo || { peopleAhead: 0, estimatedTime: 5 }}
           />
         </React.Suspense>
