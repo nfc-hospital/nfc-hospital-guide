@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Exam, ExamPreparation, Appointment, ExamResult
+from .models import Exam, ExamPreparation, Appointment, ExamResult, ExamPostCareInstruction
 from p_queue.models import Queue 
 from authentication.serializers import UserSerializer # 사용자 정보를 위해 추가
 
@@ -259,20 +259,22 @@ class TodayScheduleAppointmentSerializer(serializers.Serializer):
     
     def get_queue_info(self, obj):
         """현재 대기열 정보 반환"""
-        # 활성 대기열 찾기
-        active_queue = obj.queues.filter(
-            state__in=['waiting', 'called', 'ongoing']
-        ).first()
-        
-        if active_queue:
-            return {
-                'queue_id': str(active_queue.queue_id),
-                'state': active_queue.state,
-                'queue_number': active_queue.queue_number,
-                'estimated_wait_time': active_queue.estimated_wait_time,
-                'priority': active_queue.priority,
-                'called_at': active_queue.called_at.isoformat() if active_queue.called_at else None
-            }
+        # obj가 Appointment 모델 인스턴스인지 확인
+        if hasattr(obj, 'queues'):
+            # 활성 대기열 찾기
+            active_queue = obj.queues.filter(
+                state__in=['waiting', 'called', 'ongoing']
+            ).first()
+            
+            if active_queue:
+                return {
+                    'queue_id': str(active_queue.queue_id),
+                    'state': active_queue.state,
+                    'queue_number': active_queue.queue_number,
+                    'estimated_wait_time': active_queue.estimated_wait_time,
+                    'priority': active_queue.priority,
+                    'called_at': active_queue.called_at.isoformat() if active_queue.called_at else None
+                }
         return None
 
 
@@ -286,3 +288,15 @@ class TodayScheduleSerializer(serializers.Serializer):
     current_location = serializers.CharField(allow_null=True)
     next_action = serializers.CharField()
     timestamp = serializers.DateTimeField(default=timezone.now)
+
+
+class ExamPostCareInstructionSerializer(serializers.ModelSerializer):
+    """
+    검사 후 주의사항 Serializer
+    """
+    class Meta:
+        model = ExamPostCareInstruction
+        fields = [
+            'instruction_id', 'type', 'title', 'description',
+            'priority', 'duration_hours', 'icon', 'is_critical'
+        ]

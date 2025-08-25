@@ -18,9 +18,10 @@ class ProfileSerializer(serializers.ModelSerializer):
     lastLoginAt = serializers.DateTimeField(source='last_login_at', read_only=True)
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
     state = serializers.CharField(source='patient_state.current_state', read_only=True, allow_null=True)
+    currentLocation = serializers.CharField(source='patient_state.current_location', read_only=True, allow_null=True)
 
     class Meta:
         model = User
         fields = ['id', 'email', 'role', 'name', 'phoneNumber', 'birthDate', 
                   'patientId', 'emergencyContact', 'allergies', 'lastLoginAt', 
-                  'createdAt', 'is_active', 'state']
+                  'createdAt', 'is_active', 'state', 'currentLocation']

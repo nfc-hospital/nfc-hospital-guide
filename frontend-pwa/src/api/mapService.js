@@ -1,0 +1,90 @@
+/**
+ * 지도 및 경로 관련 API 서비스
+ */
+import { api } from './client';
+
+export const mapService = {
+  /**
+   * 모든 지도 정보 조회
+   * @returns {Promise} 지도 데이터 (available_maps, facility_routes, department_zones 등)
+   */
+  async getMaps() {
+    try {
+      const response = await api.get('/integrations/test/maps/');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch maps:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 특정 시설의 경로 정보 조회
+   * @param {string} facilityName - 시설 이름
+   * @returns {Promise} 경로 데이터
+   */
+  async getFacilityRoute(facilityName) {
+    try {
+      const response = await api.get(`/integrations/test/facility-route/${encodeURIComponent(facilityName)}/`);
+      return response.data;
+    } catch (error) {
+      console.error(`Failed to fetch route for ${facilityName}:`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * 시설 경로 저장/업데이트
+   * @param {Object} routeData - 경로 데이터
+   * @returns {Promise} 저장 결과
+   */
+  async saveFacilityRoute(routeData) {
+    try {
+      const response = await api.post('/integrations/test/save-facility-route/', routeData);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to save facility route:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * 지도 SVG 파일 URL 생성
+   * @param {string} mapId - 지도 ID (예: main_1f, cancer_2f)
+   * @returns {string} SVG 파일 URL
+   */
+  getMapSvgUrl(mapId) {
+    return `/images/maps/${mapId}.svg`;
+  },
+
+  /**
+   * Interactive 지도 SVG 파일 URL 생성
+   * @param {string} mapId - 지도 ID
+   * @returns {string} Interactive SVG 파일 URL
+   */
+  getInteractiveMapSvgUrl(mapId) {
+    return `/images/maps/${mapId}.interactive.svg`;
+  },
+
+  /**
+   * 지도 ID로 건물과 층 정보 추출
+   * @param {string} mapId - 지도 ID
+   * @returns {Object} {building, floor}
+   */
+  parseMapId(mapId) {
+    const mapInfo = {
+      'main_1f': { building: '본관', floor: '1층' },
+      'main_2f': { building: '본관', floor: '2층' },
+      'cancer_1f': { building: '암센터', floor: '1층' },
+      'cancer_2f': { building: '암센터', floor: '2층' },
+      'annex_1f': { building: '별관', floor: '1층' },
+      'overview_main_1f': { building: '본관', floor: '1층' },
+      'overview_main_2f': { building: '본관', floor: '2층' },
+      'overview_cancer_2f': { building: '암센터', floor: '2층' }
+    };
+    
+    return mapInfo[mapId] || { building: '알 수 없음', floor: '알 수 없음' };
+  }
+};
+
+export default mapService;

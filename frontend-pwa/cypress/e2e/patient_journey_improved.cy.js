@@ -107,7 +107,7 @@ describe('환자 여정 E2E 테스트 (개선판)', () => {
       cy.setQueueState(firstAppointment.exam_id, 'completed')
       
       cy.simulateNFCScan(`nfc-${firstAppointment.exam_id}-001`)
-      cy.checkUIState('완료', `다음 검사: ${secondAppointment.exam_name}`)
+      cy.checkUIState('완료', `${secondAppointment.exam_name}`)
       
       // 다음 검사실 안내 정보 확인
       cy.get('[data-cy=next-location]').should('contain', secondAppointment.exam_name)
@@ -225,7 +225,7 @@ describe('환자 여정 E2E 테스트 (개선판)', () => {
           // 다음 검사가 있는 경우
           const nextAppointment = testAppointments[index + 1]
           cy.simulateNFCScan(`nfc-${appointment.exam_id}-001`)
-          cy.checkUIState('완료', `다음 검사: ${nextAppointment.exam_name}`)
+          cy.checkUIState('완료', `${nextAppointment.exam_name}`)
         }
       })
 

@@ -4,52 +4,111 @@ import { ChevronDownIcon, MapPinIcon, CalendarIcon, ClipboardDocumentListIcon } 
 import { CheckIcon } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
+import useMapStore from '../../store/mapStore';
 
 // 상태와 NFC 태그 정보를 기반으로 다음 행동 안내 문구 생성
-const getNextActionText = (patientState, currentExam, taggedLocation, nextLocation) => {
-  // 상태별 기본 행동
-  const stateActions = {
-    'ARRIVED': '원무과에서 접수하기',
-    'REGISTERED': '검사실로 이동하기',
-    'WAITING': '대기실에서 순서 기다리기',
-    'CALLED': '검사실로 입장하기',
-    'ONGOING': '검사 진행 중',
-    'COMPLETED': '다음 검사실로 이동하기',
-    'PAYMENT': '원무과에서 수납하기',
-    'FINISHED': '귀가하기'
+const getNextActionText = (patientState, currentExam, taggedLocation, nextLocation, todaySchedule, destinationLocation) => {
+  // 다음 검사 찾기 (todaySchedule에서 첫 번째 미완료 검사)
+  const nextExam = todaySchedule?.find(schedule => 
+    schedule.status === 'scheduled' || schedule.status === 'pending' || schedule.status === 'waiting'
+  );
+  
+  // 위치 정보 생성 헬퍼 함수
+  const getLocationString = (exam) => {
+    if (!exam) return '';
+    
+    // exam 객체에서 위치 정보 추출
+    const building = exam.building || exam.exam?.building || '본관';
+    const floor = exam.floor || exam.exam?.floor || '1';
+    const room = exam.room || exam.exam?.room || '';
+    
+    // 위치 문자열 조합
+    const locationParts = [];
+    if (building) locationParts.push(building);
+    if (floor) locationParts.push(`${floor}층`);
+    if (room) locationParts.push(room);
+    
+    return locationParts.length > 0 ? `(${locationParts.join(' ')})` : '';
   };
-
-  // 목적지가 있는 경우 구체적인 안내
-  if (nextLocation) {
-    const destination = nextLocation.name || nextLocation.room || '목적지';
-    
-    if (patientState === 'REGISTERED' || patientState === 'COMPLETED') {
-      return `${destination}실로 이동하기`;
-    }
-  }
-
-  // 현재 검사 정보가 있는 경우
-  if (currentExam) {
-    const examTitle = currentExam.title || '';
-    
-    if (patientState === 'WAITING') {
-      // 태그 위치가 있으면 이미 도착한 것으로 판단
-      if (taggedLocation) {
-        return `${examTitle} 대기 중`;
-      } else {
-        return `${examTitle} 대기실로 이동하기`;
+  
+  // 상태별 구체적인 안내
+  switch(patientState) {
+    case 'ARRIVED':
+      return '원무과에서 접수하기';
+      
+    case 'REGISTERED':
+      if (nextExam) {
+        const examName = nextExam.examName || nextExam.exam?.title || nextExam.title;
+        const location = getLocationString(nextExam);
+        return `${examName} ${location}로 이동하기`;
       }
-    }
-    if (patientState === 'CALLED') {
-      return `${currentExam.room}으로 입장하기`;
-    }
-    if (patientState === 'ONGOING') {
-      return `${examTitle} 진행 중`;
-    }
+      // destinationLocation이 있으면 활용
+      if (destinationLocation?.exam) {
+        const examName = destinationLocation.exam.title || '검사실';
+        const location = getLocationString(destinationLocation.exam);
+        return `${examName} ${location}로 이동하기`;
+      }
+      return '첫 번째 검사실로 이동하기';
+      
+    case 'WAITING':
+      if (currentExam) {
+        const examName = currentExam.title || currentExam.examName || '검사';
+        const room = currentExam.room || '대기실';
+        return `${examName} ${room}에서 대기`;
+      }
+      return '검사 대기실에서 대기';
+      
+    case 'CALLED':
+      if (currentExam) {
+        const room = currentExam.room || currentExam.exam?.room || '검사실';
+        return `${room}으로 입장해주세요`;
+      }
+      return '검사실로 입장하기';
+      
+    case 'ONGOING':
+      if (currentExam) {
+        const examName = currentExam.title || currentExam.examName || '검사';
+        const room = currentExam.room || '검사실';
+        return `${examName} ${room}에서 검사 진행`;
+      }
+      return '검사실에서 검사 진행';
+      
+    case 'COMPLETED':
+      // 완료된 검사 수 계산
+      const completedCount = todaySchedule?.filter(s => 
+        s.status === 'completed' || s.status === 'done'
+      ).length || 0;
+      
+      const totalCount = todaySchedule?.length || 0;
+      
+      if (completedCount < totalCount && nextExam) {
+        const examName = nextExam.examName || nextExam.exam?.title || nextExam.title;
+        const location = getLocationString(nextExam);
+        return `다음 검사: ${examName} ${location}로 이동`;
+      } else if (completedCount === totalCount) {
+        return '모든 검사 완료! 원무과에서 수납하기';
+      }
+      return '다음 검사실로 이동하기';
+      
+    case 'PAYMENT':
+      return '원무과 수납창구에서 수납 진행하기';
+      
+    case 'FINISHED':
+      return '모든 일정이 완료되었습니다. 안전하게 귀가하세요';
+      
+    default:
+      // 기본값 - destinationLocation 활용
+      if (destinationLocation) {
+        const name = destinationLocation.name || destinationLocation.exam?.title || destinationLocation.room || '목적지';
+        const location = getLocationString(destinationLocation);
+        return `${name} ${location}로 이동하기`;
+      }
+      if (nextLocation) {
+        const destination = nextLocation.name || nextLocation.room || '목적지';
+        return `${destination}로 이동하기`;
+      }
+      return '다음 단계로 진행하기';
   }
-
-  // 기본 상태별 행동
-  return stateActions[patientState] || '다음 단계로 진행하기';
 };
 
 const FormatATemplate = ({ 
@@ -73,14 +132,28 @@ const FormatATemplate = ({
   const [showDemoMap, setShowDemoMap] = useState(true);
   const [isDemoExpanded, setIsDemoExpanded] = useState(true);
   
-  // journeyStore에서 현재 위치 정보 가져오기
-  const { currentLocation, taggedLocationInfo } = useJourneyStore();
+  // journeyStore에서 환자 여정 정보 가져오기
+  const { 
+    taggedLocationInfo
+  } = useJourneyStore();
+  
+  // mapStore에서 위치 및 지도 정보 가져오기
+  const {
+    currentLocation, 
+    destinationLocation,
+    navigationRoute,
+    activeRoute,
+    departmentZones
+  } = useMapStore();
   
   // 실제 현재 위치 정보 우선 사용
   const actualCurrentLocation = taggedLocationInfo || taggedLocation || currentLocation;
   
-  // nextAction이 없으면 자동 생성
-  const displayNextAction = nextAction || getNextActionText(patientState, currentExam, actualCurrentLocation, locationInfo);
+  // 실제 목적지 정보
+  const actualDestination = destinationLocation || locationInfo;
+  
+  // nextAction이 없으면 자동 생성 (todaySchedule과 destinationLocation 전달)
+  const displayNextAction = nextAction || getNextActionText(patientState, currentExam, actualCurrentLocation, locationInfo, todaySchedule, destinationLocation || actualDestination);
 
   const toggleExpanded = (index) => {
     setExpandedItems(prev => 
@@ -196,24 +269,15 @@ const FormatATemplate = ({
     const allSteps = buildFullJourneySteps();
     const currentIdx = getCurrentStepIndex(allSteps);
     
-    // 디버깅을 위한 로그 (개발 환경에서만)
-    if (import.meta.env.DEV) {
-      console.log('📊 진행 상태 디버그:', {
-        patientState,
-        currentExam,
-        todaySchedule: todaySchedule?.map(s => ({ name: s.examName, status: s.status })),
-        allSteps: allSteps.map((s, i) => ({ 
-          index: i, 
-          label: s.label, 
-          state: s.state, 
-          status: s.status, 
-          isFixed: s.isFixed 
-        })),
-        currentIdx,
-        currentStep: allSteps[currentIdx],
-        visibleRange: `${Math.max(0, currentIdx - 1)} to ${Math.min(allSteps.length - 1, currentIdx + 1)}`
-      });
-    }
+    // 디버깅을 위한 로그 (필요시 주석 해제)
+    // if (import.meta.env.DEV) {
+    //   console.log('📊 진행 상태:', {
+    //     patientState,
+    //     currentExam,
+    //     currentIdx,
+    //     currentStep: allSteps[currentIdx]
+    //   });
+    // }
     
     // 이전, 현재, 다음 단계 선택
     const visibleSteps = [];
@@ -472,12 +536,20 @@ const FormatATemplate = ({
                           <span className="text-gray-600">현재:</span>
                           <span className="font-medium text-gray-800">
                             {(() => {
+                              // store의 currentLocation.name 우선 사용 (TestDataManager에서 설정한 위치)
+                              if (currentLocation?.name) {
+                                return currentLocation.name;
+                              }
                               if (actualCurrentLocation?.description) {
                                 return actualCurrentLocation.description;
                               }
                               if (actualCurrentLocation?.building && actualCurrentLocation?.floor) {
                                 const room = actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : '';
                                 return `${actualCurrentLocation.building} ${actualCurrentLocation.floor}층${room}`;
+                              }
+                              // locationInfo의 currentLocation 정보 사용
+                              if (locationInfo?.currentLocation?.room) {
+                                return locationInfo.currentLocation.room;
                               }
                               return '현재 위치';
                             })()}
@@ -512,16 +584,31 @@ const FormatATemplate = ({
                       </button>
                     </div>
 
-                    {/* 실제 지도 (데이터 연동) */}
+                    {/* 실제 지도 (hospital_navigation 데이터 연동) */}
                     <div className={showDemoMap ? 'opacity-30' : ''}>
                       <div className="p-6">
                         <MapNavigator 
-                          mapId={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
-                          highlightRoom={locationInfo?.name || ''}
-                          facilityName={locationInfo?.name || ''}
-                          multiFloor={false} // 실제 데이터는 단일 층만
-                          startFloor="main_1f"
-                          endFloor={locationInfo?.mapFile?.replace('.svg', '') || 'main_2f'}
+                          mapId={actualDestination?.mapId || actualDestination?.mapFile?.replace('.svg', '') || 'main_1f'}
+                          highlightRoom={actualDestination?.name || ''}
+                          multiFloor={activeRoute?.path_nodes?.length > 1} // 경로가 여러 노드면 다층
+                          startFloor={actualCurrentLocation?.building ? `${actualCurrentLocation.building.toLowerCase()}_${actualCurrentLocation.floor}f` : 'main_1f'}
+                          endFloor={actualDestination?.building ? `${actualDestination.building.toLowerCase()}_${actualDestination.floor}f` : 'main_2f'}
+                          // hospital_navigation 경로 데이터 전달
+                          pathNodes={activeRoute?.path_nodes || navigationRoute?.nodes || locationInfo?.pathNodes}
+                          pathEdges={activeRoute?.path_edges || navigationRoute?.edges || locationInfo?.pathEdges}
+                          currentLocation={actualCurrentLocation || locationInfo?.currentLocation}
+                          svgWidth={locationInfo?.svgWidth || 900}
+                          svgHeight={locationInfo?.svgHeight || 600}
+                          targetLocation={{
+                            x_coord: actualDestination?.x_coord || locationInfo?.x_coord,
+                            y_coord: actualDestination?.y_coord || locationInfo?.y_coord,
+                            name: actualDestination?.name || locationInfo?.name,
+                            building: actualDestination?.building,
+                            floor: actualDestination?.floor,
+                            room: actualDestination?.room
+                          }}
+                          // 진료과/시설 존 정보 전달
+                          departmentZones={departmentZones}
                         />
                       </div>
                     </div>
@@ -534,7 +621,6 @@ const FormatATemplate = ({
                           <MapNavigator 
                             mapId="main_1f"
                             highlightRoom="내과 대기실"
-                            facilityName="시연_1층_로비에서_엘리베이터" // 시연용 경로 사용
                             multiFloor={true} // 시연용은 다중 층 활성화
                             startFloor="main_1f"
                             endFloor="main_2f"
@@ -625,7 +711,23 @@ const FormatATemplate = ({
                         <div className="flex-1 text-left">
                           <h4 className="font-semibold text-gray-900">{schedule.examName}</h4>
                           <p className="text-sm text-gray-600">
-                            {schedule.location}
+                            {(() => {
+                              // 위치 정보 조합
+                              if (schedule.location) {
+                                return schedule.location;
+                              }
+                              // exam 객체에서 위치 정보 추출
+                              const building = schedule.exam?.building || schedule.building || '본관';
+                              const floor = schedule.exam?.floor || schedule.floor || '1';
+                              const room = schedule.exam?.room || schedule.room || '';
+                              
+                              const locationParts = [];
+                              if (building) locationParts.push(building);
+                              if (floor) locationParts.push(`${floor}층`);
+                              if (room) locationParts.push(room);
+                              
+                              return locationParts.join(' ') || '위치 정보 없음';
+                            })()}
                             {isCurrentStep && waitingInfo && (
                               <span className="ml-2 text-amber-600">
                                 • 내 앞에 {waitingInfo.peopleAhead}명

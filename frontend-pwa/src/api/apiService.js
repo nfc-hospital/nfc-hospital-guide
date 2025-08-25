@@ -1,4 +1,5 @@
 import { api, authAPI, appointmentAPI, queueAPI, chatbotAPI, nfcAPI } from './client';
+import mapService from './mapService';
 
 // API 서비스 - 환자 상태별 동적 UI를 위한 중앙화된 API 호출
 const apiService = {
@@ -161,13 +162,54 @@ const apiService = {
     getVoiceGuide: (locationId) => api.get(`/hospital/voice-guide/${locationId}`),
   },
 
-  // 네비게이션 API
+  // 네비게이션 API (hospital_navigation 앱 연동)
   navigation: {
+    // 기존 API
     calculateRoute: (data) => api.post('/navigation/route', data),
     getAccessibleRoute: (data) => api.post('/navigation/accessible-route', data),
     refreshRoute: (data) => api.post('/navigation/route-refresh', data),
     getVoiceGuide: (routeId) => api.get(`/navigation/voice-guide/${routeId}`),
     getCongestionAwareRoute: () => api.get('/navigation/congestion-aware-route'),
+    
+    // hospital_navigation 앱 API 추가
+    // NFC 스캔 기반 경로 안내 - ✅ 수정: /api/nfc/scan/navigate/ (v1 없음)
+    nfcScanNavigate: (data) => api.post('/api/nfc/scan/navigate/', data),
+    
+    // 경로 완료/취소 - ✅ 수정: /api/navigation/complete/
+    completeRoute: (data) => api.post('/api/navigation/complete/', data),
+    
+    // 지도 정보 조회 - ✅ 수정: /api/hospital/map/
+    getHospitalMap: (floorId) => api.get(`/api/hospital/map/${floorId}/`),
+    
+    // 경로 검색 - ✅ 수정: /api/routes/search/
+    searchRoutes: (params) => api.get('/api/routes/search/', { params }),
+    
+    // 지도 메타데이터 (개선된 버전) - ✅ 수정: /api/v1/navigation/maps/
+    getMapsMetadata: () => api.get('/api/v1/navigation/maps/'),
+    
+    // 진료과/시설 존 목록 - ✅ 수정: /api/v1/navigation/zones/
+    getDepartmentZones: (params = {}) => api.get('/api/v1/navigation/zones/', { params }),
+    
+    // 특정 진료과/시설 존 상세 - ✅ 수정: /api/v1/navigation/zones/{id}/
+    getDepartmentZoneDetail: (zoneId) => api.get(`/api/v1/navigation/zones/${zoneId}/`),
+    
+    // 현재 위치에서 목적지까지 경로 계산
+    calculateRouteFromLocation: async (currentLocation, destination) => {
+      try {
+        // 현재 위치와 목적지 정보로 경로 계산
+        const response = await api.post('/navigation/calculate-route/', {
+          from_location: currentLocation,
+          to_location: destination,
+          is_accessible: false,
+          avoid_stairs: false,
+          avoid_crowded: false
+        });
+        return response;
+      } catch (error) {
+        console.error('경로 계산 실패:', error);
+        throw error;
+      }
+    }
   },
 
   // NFC 관련 API (공개 정보)
@@ -397,6 +439,14 @@ const apiService = {
       throw error;
     }
   },
+
+  // 지도 및 경로 관리 API
+  maps: mapService,
+  
+  // 지도 관련 단축 메서드
+  getMaps: () => mapService.getMaps(),
+  getFacilityRoute: (facilityName) => mapService.getFacilityRoute(facilityName),
+  saveFacilityRoute: (routeData) => mapService.saveFacilityRoute(routeData),
 };
 
 export default apiService;

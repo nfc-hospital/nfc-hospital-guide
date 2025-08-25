@@ -1,10 +1,11 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import VoiceInput from '../components/VoiceInput';
 import DepartmentDirections from '../components/DepartmentDirections';
 import MapNavigator from '../components/MapNavigator'; // 경로 표시를 위해 MapNavigator 사용
 import AppHeader from '../components/common/AppHeader';
 import { useAuth } from '../context/AuthContext';
+import useMapStore from '../store/mapStore'; // mapStore import
 import { 
   MapPinIcon,
   MapIcon,
@@ -25,6 +26,10 @@ import {
   getFacilityByName
 } from '../data/facilityManagement';
 
+// 무한 렌더링 방지를 위한 안정적인 상수 (컴포넌트 외부에 선언)
+const EMPTY_NODES = [];
+const EMPTY_EDGES = [];
+
 export default function PublicHome() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
@@ -33,6 +38,14 @@ export default function PublicHome() {
   const [selectedDepartment, setSelectedDepartment] = useState(null);
   const [selectedFacility, setSelectedFacility] = useState(null); // 선택된 시설 상태 추가
   const [isSpeaking, setIsSpeaking] = useState(false); // 음성 재생 상태 추가
+  
+  // mapStore에서 필요한 상태와 함수 가져오기
+  const { 
+    navigateToFacility,
+    activeRoute,
+    navigationRoute,
+    currentMapId
+  } = useMapStore();
   
   // facilityManagement.js에서 가져온 실제 부서들 사용
   const commonDepartments = DEFAULT_DISPLAY_DEPARTMENTS;
@@ -179,11 +192,23 @@ export default function PublicHome() {
   }, []);
 
   // 시설 선택 핸들러
-  const handleFacilitySelect = useCallback((facility) => {
+  const handleFacilitySelect = useCallback(async (facility) => {
     console.log('Selected facility:', facility);
     setSelectedFacility(facility);
     setError(''); // 에러 메시지 초기화
-  }, []);
+    
+    // mapStore의 탐색 모드로 전환하고 경로 계산
+    await navigateToFacility({
+      name: facility.name,
+      title: facility.name,
+      building: facility.building,
+      floor: facility.floor,
+      room: facility.room,
+      x_coord: facility.x_coord || 500,
+      y_coord: facility.y_coord || 300,
+      description: facility.description
+    });
+  }, [navigateToFacility]);
 
   // 음성 안내 기능 (TTS)
   const handleVoiceGuide = useCallback((facility) => {
@@ -253,6 +278,9 @@ export default function PublicHome() {
   }
 
   if (selectedFacility) {
+    // mapStore에서 경로 데이터 가져오기
+    const routeData = navigationRoute || activeRoute;
+    
     // 응급실이나 다른 주요 시설인 경우 MapNavigator로 경로 표시
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
@@ -304,9 +332,11 @@ export default function PublicHome() {
             </div>
             <div className="p-4">
               <MapNavigator 
-                mapId={selectedFacility.mapFile?.replace('.svg', '') || 'main_1f'}
+                mapId={currentMapId || selectedFacility.mapFile?.replace('.svg', '') || 'main_1f'}
                 highlightRoom={selectedFacility.name}
                 facilityName={selectedFacility.name}
+                pathNodes={routeData?.nodes || EMPTY_NODES}  // ✅ mapStore에서 경로 데이터 사용
+                pathEdges={routeData?.edges || EMPTY_EDGES}  // ✅ mapStore에서 경로 데이터 사용
               />
             </div>
             

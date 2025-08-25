@@ -472,6 +472,24 @@ CREATE TABLE `tag_logs` (
   CONSTRAINT `tag_logs_user_id_3457a980_fk_users_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`)
 )
 
+-- nfc_hospital_db_facility_routes.txt
+CREATE TABLE `facility_routes` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `facility_name` varchar(100) NOT NULL,
+  `nodes` json NOT NULL,
+  `edges` json NOT NULL,
+  `map_id` varchar(50) NOT NULL,
+  `svg_element_id` varchar(100) DEFAULT NULL,
+  `metadata` json DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `facility_name` (`facility_name`),
+  KEY `facility_routes_facility_name_idx` (`facility_name`),
+  KEY `facility_routes_map_id_idx` (`map_id`),
+  KEY `facility_routes_facility_name_map_id_idx` (`facility_name`,`map_id`)
+)
+
 -- nfc_hospital_db_users.txt
 CREATE TABLE `users` (
   `last_login` datetime(6) DEFAULT NULL,

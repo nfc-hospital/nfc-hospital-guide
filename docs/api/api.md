@@ -698,6 +698,90 @@ NFC 태그는 EMR 시스템을 직접 변경하지 않으며, 가상 DB의 정�
 | 모든 환자 초기화 | POST | `/api/v1/test/reset` | 모든 테스트 환자 상태를 REGISTERED로 초기화 | Public |
 | 사용 가능한 검사 목록 | GET | `/api/v1/test/available-exams` | 환자에게 추가 가능한 검사/진료 목록 조회 | Public |
 | 환자에게 검사 추가 | POST | `/api/v1/test/add-exam` | 특정 환자에게 검사/진료 추가 (오늘/내일/어제) | Public |
+| 위치 목록 조회 | GET | `/api/v1/test/locations` | 병원 내 모든 위치 목록 조회 | Public |
+| 환자 위치 업데이트 | PUT | `/api/v1/test/patient-location` | 환자의 현재 위치 업데이트 | Public |
+
+## 🗺️ 지도 및 경로 관리 API (Map & Route Management)
+
+병원 지도 데이터와 시설까지의 경로를 관리하는 API입니다.
+
+| 이름 | 메서드 | URL | 설명 | 인증 |
+| --- | --- | --- | --- | --- |
+| 지도 정보 조회 | GET | `/api/v1/integrations/test/maps/` | 모든 지도 정보와 SVG 파일 목록 반환 | Public |
+| 시설 경로 조회 | GET | `/api/v1/integrations/test/facility-route/{facility_name}/` | 특정 시설의 경로 정보 반환 | Public |
+| 시설 경로 저장 | POST | `/api/v1/integrations/test/save-facility-route/` | MapEditor에서 그린 경로 저장/업데이트 | Public |
+
+### 지도 정보 조회 응답 예시
+```json
+{
+  "success": true,
+  "data": {
+    "available_maps": [
+      {
+        "id": "main_1f",
+        "name": "본관 1층",
+        "building": "본관",
+        "floor": "1층",
+        "svg_url": "/images/maps/main_1f.svg",
+        "interactive_svg_url": "/images/maps/main_1f.interactive.svg",
+        "type": "floor_map"
+      }
+    ],
+    "hospital_maps": [
+      {
+        "map_id": "uuid",
+        "building": "본관",
+        "floor": 1,
+        "width": 800,
+        "height": 600,
+        "scale": 1.0
+      }
+    ],
+    "facility_routes": [
+      {
+        "facility_name": "채혈실",
+        "map_id": "main_1f",
+        "nodes": [...],
+        "edges": [...],
+        "updated_at": "2025-08-24T10:30:00Z"
+      }
+    ],
+    "department_zones": [
+      {
+        "name": "내과",
+        "svg_id": "zone-internal-medicine",
+        "building": "본관",
+        "floor": "2F",
+        "zone_type": "DEPARTMENT",
+        "icon": "🏥",
+        "description": "본관 2층 엘리베이터 옆"
+      }
+    ],
+    "map_editor_url": "/map-editor"
+  }
+}
+```
+
+### 시설 경로 저장 요청 예시
+```json
+POST /api/v1/integrations/test/save-facility-route/
+{
+  "facility_name": "채혈실",
+  "nodes": [
+    {"id": "node-1", "x": 150, "y": 300, "name": "로비"},
+    {"id": "node-2", "x": 350, "y": 200, "name": "채혈실"}
+  ],
+  "edges": [
+    ["node-1", "node-2"]
+  ],
+  "map_id": "main_1f",
+  "svg_element_id": "blood-test-room",
+  "metadata": {
+    "created_by": "MapEditor",
+    "version": "1.0"
+  }
+}
+```
 
 ### 테스트 API 사용 예시
 

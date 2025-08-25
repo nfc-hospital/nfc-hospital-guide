@@ -18,4 +18,13 @@ urlpatterns = [
     # 시연용 검사/진료 관리 API
     path('test/available-exams/', views.test_get_available_exams, name='test-available-exams'),
     path('test/add-exam/', views.test_add_exam_to_patient, name='test-add-exam'),
+    
+    # 시연용 위치 관리 API
+    path('test/locations/', views.test_get_locations, name='test-locations'),
+    path('test/patient-location/', views.test_update_patient_location, name='test-update-location'),
+    
+    # 지도 및 경로 관리 API
+    path('test/maps/', views.test_get_maps, name='test-maps'),
+    path('test/facility-route/<str:facility_name>/', views.test_get_facility_route, name='test-facility-route'),
+    path('test/save-facility-route/', views.test_save_facility_route, name='test-save-facility-route'),
 ]

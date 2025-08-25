@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "Bash(npx eslint:*)",
+      "Bash(node:*)",
+      "Bash(pnpm dev:frontend:*)"
     ],
     "deny": []
   }

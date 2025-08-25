@@ -1,6 +1,9 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ExamViewSet, TodaysAppointmentsView, PatientExamViewSet, TodayScheduleView, AppointmentPreparationView
+from .views import (
+    ExamViewSet, TodaysAppointmentsView, PatientExamViewSet, 
+    TodayScheduleView, AppointmentPreparationView, ExamPostCareInstructionView
+)
  
 router = DefaultRouter()
 router.register(r'appointments/exams', ExamViewSet)
@@ -18,4 +21,7 @@ urlpatterns = [
     
     # 예약별 준비사항 조회 API
     path('appointments/<str:appointment_id>/preparation/', AppointmentPreparationView.as_view(), name='appointment-preparation'),
+    
+    # 검사별 검사 후 주의사항 조회 API
+    path('appointments/exams/<str:exam_id>/post-care-instructions/', ExamPostCareInstructionView.as_view(), name='exam-post-care-instructions'),
 ] 

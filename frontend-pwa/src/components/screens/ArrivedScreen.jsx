@@ -1,13 +1,39 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useJourneyStore from '../../store/journeyStore';
+import useMapStore from '../../store/mapStore';
 import FormatATemplate from '../templates/FormatATemplate';
 import ExamPreparationChecklist from '../ExamPreparationChecklist';
 import { MapPinIcon, PhoneIcon, ChevronDownIcon, ChevronUpIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
 
+// 컴포넌트 외부에 상수 선언 (무한 렌더링 방지)
+const EMPTY_NODES = [];
+const EMPTY_EDGES = [];
+
 export default function ArrivedScreen({ taggedLocation }) {
   const navigate = useNavigate();
-  const { user, todaysAppointments = [], fetchJourneyData, patientState } = useJourneyStore();
+  
+  // Store에서 필요한 데이터 가져오기 (구조 분해 사용)
+  const { 
+    user, 
+    todaysAppointments = [], 
+    fetchJourneyData, 
+    patientState
+  } = useJourneyStore();
+  
+  // mapStore에서 지도/네비게이션 데이터
+  const {
+    currentLocation,
+    departmentZones,
+    mapMetadata,
+    currentFloorMap,
+    currentFloorNodes,
+    activeRoute,
+    navigationRoute,
+    loadDepartmentZones,
+    loadMapMetadata,
+    loadFloorMap
+  } = useMapStore();
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
@@ -118,15 +144,134 @@ export default function ArrivedScreen({ taggedLocation }) {
   // 현재 단계 계산 - ARRIVED 상태는 도착 완료, 접수 대기 중이므로 1
   const currentStep = 1;
   
-  // 위치 정보 설정
+  // 컴포넌트 마운트 시 지도 메타데이터 로드 (한 번만)
+  React.useEffect(() => {
+    if (!mapMetadata) {
+      loadMapMetadata();
+    }
+    if (!departmentZones || departmentZones.length === 0) {
+      loadDepartmentZones({ building: '본관', floor: '1' });
+    }
+  }, []); // 빈 배열로 한 번만 실행
+  
+  // 층 지도 로드 (필요할 때만)
+  React.useEffect(() => {
+    const floorId = 'main_1f'; // 원무과는 주로 1층에 위치
+    if (!currentFloorMap || currentFloorMap?.building !== '본관' || currentFloorMap?.floor !== 1) {
+      loadFloorMap(floorId);
+    }
+  }, []);
+
+  
+  // 원무과 존 정보 및 노드 찾기
+  const receptionZone = departmentZones?.find(
+    zone => zone.name?.includes('원무과') || zone.zone_type === 'FACILITY'
+  );
+  
+  // 원무과 노드 찾기 (hospital_navigation 데이터에서)
+  const receptionNode = currentFloorNodes?.find(
+    node => node.name?.includes('원무과') || 
+            node.node_type === 'reception' ||
+            node.room?.includes('원무과')
+  );
+  
+  // 현재 위치 노드 찾기
+  const currentNode = currentFloorNodes?.find(
+    node => node.name?.includes('정문') || 
+            node.name?.includes('로비') ||
+            node.node_type === 'entrance'
+  );
+  
+  // SVG 크기 정보 가져오기
+  const mapInfo = mapMetadata?.find(
+    m => m.building === '본관' && m.floor === 1
+  );
+  const svgWidth = mapInfo?.width || 900;
+  const svgHeight = mapInfo?.height || 600;
+  
+  // 실제 hospital_navigation 경로 사용
+  const stablePathNodes = React.useMemo(() => {
+    // activeRoute가 있으면 백엔드 경로 사용
+    if (activeRoute?.path_nodes) return activeRoute.path_nodes;
+    if (navigationRoute?.nodes) return navigationRoute.nodes;
+    
+    // 백엔드 경로가 없으면 동적 생성
+    if (currentNode && receptionNode) {
+      return [
+        { 
+          id: 'current', 
+          x: currentNode.x_coord || currentLocation?.x_coord, 
+          y: currentNode.y_coord || currentLocation?.y_coord, 
+          name: '현재 위치', 
+          node_type: 'current_location'
+        },
+        { 
+          id: 'reception', 
+          x: receptionNode.x_coord, 
+          y: receptionNode.y_coord, 
+          name: '원무과 접수처',
+          node_type: 'reception'
+        }
+      ];
+    }
+    return EMPTY_NODES;
+  }, [
+    activeRoute?.route_id,
+    navigationRoute?.route_id,
+    currentNode?.node_id, 
+    currentNode?.x_coord, 
+    currentNode?.y_coord, 
+    receptionNode?.node_id,
+    receptionNode?.x_coord, 
+    receptionNode?.y_coord,
+    currentLocation?.x_coord,
+    currentLocation?.y_coord
+  ]);
+  
+  const stablePathEdges = React.useMemo(() => {
+    // activeRoute가 있으면 백엔드 경로 사용
+    if (activeRoute?.path_edges) return activeRoute.path_edges;
+    if (navigationRoute?.edges) return navigationRoute.edges;
+    
+    // 백엔드 경로가 없으면 동적 생성
+    if (currentNode && receptionNode) return [['current', 'reception']];
+    return EMPTY_EDGES;
+  }, [
+    activeRoute?.route_id,
+    navigationRoute?.route_id,
+    currentNode?.node_id,
+    receptionNode?.node_id
+  ]);
+  
   const locationInfo = {
-    name: '원무과 접수처',
-    building: '본관',
-    floor: '1층',
-    room: '중앙홀 좌측',
+    name: receptionZone?.name || '원무과 접수처',
+    building: receptionZone?.building || '본관',
+    floor: receptionZone?.floor ? `${receptionZone.floor}층` : '1층',
+    room: receptionZone?.room || '중앙홀 좌측',
     department: '원무과',
-    directions: '정문으로 들어오셔서 왼쪽으로 가시면 됩니다',
-    mapFile: 'main_1f.svg'
+    directions: receptionZone?.directions || '정문으로 들어오셔서 왼쪽으로 가시면 됩니다',
+    mapFile: 'main_1f.svg',
+    svgId: receptionNode?.node_id || receptionZone?.svg_id || 'reception-desk',
+    mapId: 'main_1f',
+    // 실제 좌표 데이터 (hospital_navigation 노드 데이터 우선)
+    x_coord: receptionNode?.x_coord || receptionZone?.x_coord || (svgWidth * 0.42),  // 비율 기반 기본값
+    y_coord: receptionNode?.y_coord || receptionZone?.y_coord || (svgHeight * 0.83), // 비율 기반 기본값
+    // 현재 위치 (hospital_navigation 노드 또는 store의 currentLocation)
+    currentLocation: currentLocation || {
+      x_coord: currentNode?.x_coord || (svgWidth * 0.5),  // 정문 노드 또는 중앙
+      y_coord: currentNode?.y_coord || (svgHeight * 0.08), // 정문 노드 또는 상단
+      building: '본관',
+      floor: '1',
+      room: taggedLocation?.room || '정문 로비'
+    },
+    // 안정적인 경로 데이터 사용
+    pathNodes: stablePathNodes,
+    pathEdges: stablePathEdges,
+    // 진료과/시설 존 정보 전달
+    departmentZones: departmentZones,
+    // SVG 크기 정보 전달
+    svgWidth: svgWidth,
+    svgHeight: svgHeight
   };
 
   // 검사별 준비사항을 준비사항 탭 내용으로 포함

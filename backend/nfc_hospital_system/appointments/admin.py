@@ -34,19 +34,28 @@ class ExamAdmin(admin.ModelAdmin):
     Django 관리자 페이지에서 Exam 모델을 관리합니다.
     """
     list_display = (
-        'exam_id', 'title', 'department', 'average_duration', 'buffer_time', 'is_active',
+        'exam_id', 'title', 'department', 'building', 'floor', 'room',
+        'average_duration', 'buffer_time', 'is_active',
         'created_at', 'updated_at'
     )
     list_filter = (
-        'is_active', 'department', 'created_at'
+        'is_active', 'department', 'building', 'floor', 'created_at'
     )
     search_fields = (
-        'exam_id', 'title', 'description', 'department'
+        'exam_id', 'title', 'description', 'department', 'building', 'room'
     )
     # 폼에서 필드 그룹화 및 정리
     fieldsets = (
         (None, {
-            'fields': ('exam_id', 'title', 'description', 'department', 'average_duration', 'buffer_time')
+            'fields': ('exam_id', 'title', 'description', 'department', 'category')
+        }),
+        ('위치 정보', {
+            'fields': ('building', 'floor', 'room', 'x_coord', 'y_coord'),
+            'description': '검사실의 위치 정보를 설정합니다.'
+        }),
+        ('시간 설정', {
+            'fields': ('average_duration', 'buffer_time'),
+            'description': '평균 검사 시간과 버퍼 시간을 분 단위로 설정합니다.'
         }),
         ('상태', {
             'fields': ('is_active',),

@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { TrashIcon, ArrowPathIcon, WrenchScrewdriverIcon } from '@heroicons/react/24/outline';
-import { facilityRoutes } from '../data/facilityRoutes';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { TrashIcon, ArrowPathIcon, WrenchScrewdriverIcon, MapIcon } from '@heroicons/react/24/outline';
+import { facilityRoutes, availableMaps } from '../data/facilityRoutes';
 import { saveRoute, getFacilityRoute } from '../api/facilityRoutes';
 
-const MapNodeEditor = () => {
+const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
   const svgContainerRef = useRef(null);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -11,9 +11,29 @@ const MapNodeEditor = () => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectingFrom, setConnectingFrom] = useState(null);
   const [svgLoaded, setSvgLoaded] = useState(false);
-  const [nodeIdCounter, setNodeIdCounter] = useState(1);
-  const [selectedFacility, setSelectedFacility] = useState('');  // 초기값을 빈 문자열로
-  const [mapId, setMapId] = useState('main_1f');
+  const [selectedFacility, setSelectedFacility] = useState(facilityName);  // facilityName으로 초기화
+  const [mapId, setMapId] = useState(propMapId);
+  const [manualMapSelection, setManualMapSelection] = useState(false); // 수동 지도 선택 모드
+
+  // ✅ state와 동기화될 ref를 생성
+  const stateRef = useRef({
+    nodes,
+    edges,
+    isConnecting,
+    connectingFrom,
+    nodeIdCounter: 1,
+  });
+
+  // ✅ state가 변경될 때마다 ref 업데이트
+  useEffect(() => {
+    stateRef.current = {
+      nodes,
+      edges,
+      isConnecting,
+      connectingFrom,
+      nodeIdCounter: nodes.length > 0 ? Math.max(...nodes.map(n => parseInt(n.id.replace('node-', '') || 0)), 0) + 1 : 1,
+    };
+  }, [nodes, edges, isConnecting, connectingFrom]);
 
   // 시설 선택시 지도 변경 및 데이터 초기화
   useEffect(() => {
@@ -22,7 +42,6 @@ const MapNodeEditor = () => {
     // 먼저 모든 상태 초기화
     setNodes([]);
     setEdges([]);
-    setNodeIdCounter(1);
     setSelectedNode(null);
     setIsConnecting(false);
     setConnectingFrom(null);
@@ -30,8 +49,12 @@ const MapNodeEditor = () => {
     if (selectedFacility && facilityRoutes[selectedFacility]) {
       const facility = facilityRoutes[selectedFacility];
       console.log('선택된 시설 정보:', facility);
-      console.log('지도 ID 변경:', facility.mapId);
-      setMapId(facility.mapId);
+      
+      // 수동 지도 선택이 아닌 경우에만 자동으로 지도 변경
+      if (!manualMapSelection) {
+        console.log('지도 ID 변경:', facility.mapId);
+        setMapId(facility.mapId);
+      }
       
       // 저장된 경로가 있으면 불러오기 (비동기)
       const loadSavedRoute = async () => {
@@ -53,8 +76,7 @@ const MapNodeEditor = () => {
           setNodes(uniqueNodes);
           setEdges(savedRoute.edges || []);
           
-          const maxId = Math.max(...uniqueNodes.map(n => parseInt(n.id.replace('node-', '')) || 0), 0);
-          setNodeIdCounter(maxId + 1);
+          // nodeIdCounter는 stateRef에서 자동 계산됨
         }
       };
       
@@ -69,57 +91,136 @@ const MapNodeEditor = () => {
     loadSvg();
   }, [mapId]);
   
-  // SVG 로드 완료 후 이벤트 리스너 등록
-  useEffect(() => {
-    if (!svgLoaded || !svgContainerRef.current) return;
-    
-    const svg = svgContainerRef.current.querySelector('svg');
-    if (!svg) {
-      console.log('SVG 요소가 아직 준비되지 않음');
-      return;
-    }
-    
-    const clickHandler = (e) => handleSvgClick(e);
-    
-    // 기존 리스너 제거
-    svg.removeEventListener('click', clickHandler);
-    // 새 리스너 등록
-    svg.addEventListener('click', clickHandler);
-    console.log('이벤트 리스너 등록 완료, 맵:', mapId);
-    
-    return () => {
-      svg.removeEventListener('click', clickHandler);
-    };
-  }, [svgLoaded, mapId, nodeIdCounter]); // mapId 추가, nodes 제거
+  // SVG 로드 완료 후 - 이벤트 리스너는 제거하고 onClick만 사용
 
-  const loadSvg = async () => {
+  const loadSvg = useCallback(async () => {
     if (!svgContainerRef.current) return;
+    
+    // SVG 로드 전에 로드 상태를 false로 설정
+    setSvgLoaded(false);
     
     try {
       const response = await fetch(mapSrc);
+      if (!response.ok) {
+        throw new Error(`Failed to load SVG: ${response.statusText}`);
+      }
+      
       const svgText = await response.text();
       
+      // XML 파싱 에러 체크
       const parser = new DOMParser();
       const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+      
+      // 파싱 에러 확인
+      const parserError = svgDoc.querySelector('parsererror');
+      if (parserError) {
+        console.error('SVG 파싱 에러:', parserError.textContent);
+        // 대체 방법: innerHTML로 직접 삽입
+        svgContainerRef.current.innerHTML = svgText;
+        const svgElement = svgContainerRef.current.querySelector('svg');
+        if (svgElement) {
+          svgElement.setAttribute('width', '100%');
+          svgElement.setAttribute('height', '100%');
+          svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+          svgElement.style.pointerEvents = 'all'; // 클릭 이벤트 활성화
+          
+          setSvgLoaded(true);
+        }
+        return;
+      }
+      
       const svgElement = svgDoc.documentElement;
+      
+      // SVG가 아닌 경우 처리
+      if (svgElement.tagName.toLowerCase() !== 'svg') {
+        console.error('로드된 파일이 SVG가 아닙니다:', svgElement.tagName);
+        return;
+      }
       
       svgElement.setAttribute('width', '100%');
       svgElement.setAttribute('height', '100%');
       svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-      
-      // 클릭 이벤트는 useEffect에서만 관리하므로 여기서는 추가하지 않음
-      // svgElement.addEventListener('click', handleSvgClick); // 제거!
+      svgElement.style.pointerEvents = 'all'; // 클릭 이벤트 활성화
       
       svgContainerRef.current.innerHTML = '';
       svgContainerRef.current.appendChild(svgElement);
+      
       setSvgLoaded(true);
     } catch (error) {
       console.error('SVG 로드 오류:', error);
+      // 에러 발생 시 기본 이미지 표시
+      svgContainerRef.current.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-full text-gray-500">
+          <svg class="w-20 h-20 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+          </svg>
+          <p class="text-lg font-medium">지도를 불러올 수 없습니다</p>
+          <p class="text-sm mt-2">${mapId}</p>
+        </div>
+      `;
     }
-  };
+  }, [mapId]);
+
+  // ✅ 모든 클릭을 처리하는 단일 핸들러
+  const handleContainerClick = useCallback((e) => {
+    const svg = svgContainerRef.current?.querySelector('svg');
+    if (!svg) return;
+
+    // ref에서 항상 최신 상태를 가져옴
+    const { nodes, isConnecting, connectingFrom, nodeIdCounter } = stateRef.current;
+
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+
+    // 클릭된 노드가 있는지 확인
+    let clickedNode = null;
+    for (const node of nodes) {
+      const dist = Math.sqrt(Math.pow(node.x - svgP.x, 2) + Math.pow(node.y - svgP.y, 2));
+      if (dist < 15) {
+        clickedNode = node;
+        break;
+      }
+    }
+
+    if (clickedNode) {
+      // 노드 클릭 시
+      if (isConnecting && connectingFrom) {
+        if (connectingFrom.id !== clickedNode.id) {
+          const newEdge = [connectingFrom.id, clickedNode.id];
+          const edgeExists = stateRef.current.edges.some(edge =>
+            (edge[0] === newEdge[0] && edge[1] === newEdge[1]) ||
+            (edge[0] === newEdge[1] && edge[1] === newEdge[0])
+          );
+          if (!edgeExists) {
+            setEdges(prev => [...prev, newEdge]);
+          }
+        }
+        setIsConnecting(false);
+        setConnectingFrom(null);
+      } else {
+        setSelectedNode(clickedNode);
+      }
+    } else if (!isConnecting) {
+      // 빈 공간 클릭 시 (노드 추가)
+      const newNode = {
+        id: `node-${nodeIdCounter}`,
+        x: Math.round(svgP.x),
+        y: Math.round(svgP.y),
+        name: `노드 ${nodeIdCounter}`
+      };
+      setNodes(prev => [...prev, newNode]);
+    }
+  }, []);
 
   const handleSvgClick = (e) => {
-    if (!svgContainerRef.current) return;
+    console.log('🖱️ SVG 클릭 이벤트 발생!', e.target);
+    
+    if (!svgContainerRef.current) {
+      console.error('svgContainerRef.current가 없습니다');
+      return;
+    }
     
     const svg = svgContainerRef.current.querySelector('svg');
     if (!svg) {
@@ -127,31 +228,39 @@ const MapNodeEditor = () => {
       return;
     }
     
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
-    
-    // 스크린 좌표를 SVG 좌표로 변환
-    const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
-    console.log('클릭 좌표:', { x: svgP.x, y: svgP.y }, '현재 맵:', mapId);
-    
-    // 기존 노드 클릭 확인
-    const clickedNode = nodes.find(node => {
-      const dist = Math.sqrt(Math.pow(node.x - svgP.x, 2) + Math.pow(node.y - svgP.y, 2));
-      return dist < 15;
-    });
-    
-    if (clickedNode) {
-      handleNodeClick(clickedNode);
-    } else if (!isConnecting) {
-      // 빈 공간 클릭시 노드 추가
-      console.log('노드 추가 시도:', { x: svgP.x, y: svgP.y });
-      addNode(svgP.x, svgP.y);
+    try {
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX;
+      pt.y = e.clientY;
+      
+      // 스크린 좌표를 SVG 좌표로 변환
+      const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+      console.log('📍 클릭 좌표:', { x: Math.round(svgP.x), y: Math.round(svgP.y) }, '현재 맵:', mapId);
+      
+      // 기존 노드 클릭 확인
+      const clickedNode = nodes.find(node => {
+        const dist = Math.sqrt(Math.pow(node.x - svgP.x, 2) + Math.pow(node.y - svgP.y, 2));
+        return dist < 15;
+      });
+      
+      if (clickedNode) {
+        console.log('🔵 기존 노드 클릭:', clickedNode.id);
+        handleNodeClick(clickedNode);
+      } else if (!isConnecting) {
+        // 빈 공간 클릭시 노드 추가
+        console.log('➕ 새 노드 추가 시도:', { x: Math.round(svgP.x), y: Math.round(svgP.y) });
+        addNode(svgP.x, svgP.y);
+      } else {
+        console.log('🔗 연결 모드 중 - 다른 노드를 클릭하세요');
+      }
+    } catch (error) {
+      console.error('❌ 클릭 처리 중 오류:', error);
     }
   };
 
   const addNode = (x, y) => {
-    const currentId = nodeIdCounter;
+    // stateRef에서 현재 nodeIdCounter 가져오기
+    const currentId = stateRef.current.nodeIdCounter;
     const newNode = {
       id: `node-${currentId}`,
       x: Math.round(x),
@@ -159,16 +268,15 @@ const MapNodeEditor = () => {
       name: `노드 ${currentId}`
     };
     
-    console.log('노드 추가:', newNode.id);
+    console.log('노드 추가:', newNode.id, '현재 카운터:', currentId);
     
     // 중복 체크
-    if (nodes.some(n => n.id === newNode.id)) {
+    if (stateRef.current.nodes.some(n => n.id === newNode.id)) {
       console.error('중복된 노드 ID 발견:', newNode.id);
       return;
     }
     
     setNodes(prevNodes => [...prevNodes, newNode]);
-    setNodeIdCounter(currentId + 1);
   };
 
   const handleNodeClick = (node) => {
@@ -338,7 +446,7 @@ const MapNodeEditor = () => {
     }
     
     // 저장 및 코드 생성 시 정렬된 'sortedEdges'를 사용
-    const success = await saveRoute(selectedFacility, nodes, sortedEdges.length > 0 ? sortedEdges : edges);
+    const success = await saveRoute(selectedFacility, nodes, sortedEdges.length > 0 ? sortedEdges : edges, mapId);
     
     if (success) {
       // MapNavigator 컴포넌트용 코드 생성
@@ -387,7 +495,6 @@ const MapNodeEditor = () => {
       setNodes([]);
       setEdges([]);
       setSelectedNode(null);
-      setNodeIdCounter(1);
     }
   };
 
@@ -404,6 +511,8 @@ const MapNodeEditor = () => {
     
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('id', 'editor-nodes');
+    // pointer-events를 none으로 설정하여 클릭 이벤트가 SVG로 전달되도록 함
+    g.style.pointerEvents = 'none';
     
     edges.forEach(([fromId, toId]) => {
       const fromNode = nodes.find(n => n.id === fromId);
@@ -424,6 +533,10 @@ const MapNodeEditor = () => {
     });
     
     nodes.forEach(node => {
+      const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      nodeGroup.setAttribute('class', 'node-group');
+      nodeGroup.style.cursor = 'pointer';
+      
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', node.x);
       circle.setAttribute('cy', node.y);
@@ -431,7 +544,23 @@ const MapNodeEditor = () => {
       circle.setAttribute('fill', selectedNode?.id === node.id ? '#ef4444' : '#3b82f6');
       circle.setAttribute('stroke', '#ffffff');
       circle.setAttribute('stroke-width', '3');
-      circle.setAttribute('cursor', 'pointer');
+      circle.style.pointerEvents = 'auto'; // 노드는 클릭 가능하도록 설정
+      circle.style.cursor = 'pointer';
+      
+      // 노드 클릭 이벤트 직접 등록
+      circle.addEventListener('click', (e) => {
+        e.stopPropagation(); // SVG 클릭 이벤트 전파 방지
+        handleNodeClick(node);
+      });
+      
+      // 노드 우클릭으로 삭제
+      circle.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (confirm(`노드 ${node.id}를 삭제하시겠습니까?`)) {
+          deleteNode(node.id);
+        }
+      });
       
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.setAttribute('x', node.x);
@@ -440,10 +569,12 @@ const MapNodeEditor = () => {
       text.setAttribute('font-size', '12');
       text.setAttribute('font-weight', 'bold');
       text.setAttribute('fill', '#1e40af');
+      text.setAttribute('pointer-events', 'none'); // 텍스트는 클릭 이벤트 무시
       text.textContent = node.id.replace('node-', '');
       
-      g.appendChild(circle);
-      g.appendChild(text);
+      nodeGroup.appendChild(circle);
+      nodeGroup.appendChild(text);
+      g.appendChild(nodeGroup);
     });
     
     svg.appendChild(g);
@@ -455,26 +586,106 @@ const MapNodeEditor = () => {
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-4">
             <h2 className="text-xl font-bold">맵 경로 편집기</h2>
-            <select 
-              value={selectedFacility}
-              onChange={(e) => setSelectedFacility(e.target.value)}
-              className="px-4 py-2 border-2 rounded-lg text-sm font-medium bg-white"
-            >
-              <option value="">시설을 선택하세요</option>
-              <optgroup label="일반 시설">
-                {Object.keys(facilityRoutes).filter(name => !name.startsWith('시연_')).map(name => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </optgroup>
-              <optgroup label="🎬 시연용 경로">
-                {Object.keys(facilityRoutes).filter(name => name.startsWith('시연_')).map(name => (
-                  <option key={name} value={name}>
-                    {facilityRoutes[name].description || name.replace('시연_', '')}
+            {!facilityName ? (
+              <select 
+                value={selectedFacility}
+                onChange={(e) => {
+                  setSelectedFacility(e.target.value);
+                  setManualMapSelection(false); // 시설 선택시 수동 지도 선택 모드 해제
+                }}
+                className="px-4 py-2 border-2 rounded-lg text-sm font-medium bg-white"
+              >
+                <option value="">시설을 선택하세요</option>
+                <optgroup label="🏥 진료과">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => !name.startsWith('시연_') && !name.startsWith('진료과_구역_') && 
+                            !name.startsWith('네비게이션_노드_') && !name.startsWith('검사_') && 
+                            !name.startsWith('편의_') && name.includes('과'))
+                    .map(name => (
+                      <option key={name} value={name}>{facilityRoutes[name].description || name}</option>
+                    ))}
+                </optgroup>
+                <optgroup label="🔬 검사실">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('검사_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('검사_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="🏪 편의시설">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('편의_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('편의_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="🏢 일반 시설">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => !name.startsWith('시연_') && !name.startsWith('진료과_구역_') && 
+                            !name.startsWith('네비게이션_노드_') && !name.startsWith('검사_') && 
+                            !name.startsWith('편의_') && !name.includes('과'))
+                    .map(name => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                </optgroup>
+                <optgroup label="📍 진료과/시설 구역">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('진료과_구역_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('진료과_구역_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="🔗 네비게이션 노드">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('네비게이션_노드_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('네비게이션_노드_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="🎬 시연용 경로">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('시연_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('시연_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+              </select>
+            ) : (
+              <div className="flex items-center gap-3">
+                <span className="font-semibold text-gray-700">
+                  {facilityRoutes[selectedFacility]?.description || selectedFacility}
+                </span>
+              </div>
+            )}
+            
+            {/* 지도 선택 드롭다운 */}
+            <div className="flex items-center gap-2">
+              <MapIcon className="w-5 h-5 text-gray-600" />
+              <select
+                value={mapId}
+                onChange={(e) => {
+                  setMapId(e.target.value);
+                  setManualMapSelection(true); // 수동으로 지도를 선택했음을 표시
+                }}
+                className="px-3 py-1.5 border rounded-lg text-sm font-medium bg-white hover:bg-gray-50"
+              >
+                {availableMaps.map(map => (
+                  <option key={map.id} value={map.id}>
+                    {map.name}
                   </option>
                 ))}
-              </optgroup>
-            </select>
-            <span className="text-sm text-gray-600">현재 맵: {mapId}</span>
+              </select>
+            </div>
             {selectedFacility && selectedFacility.startsWith('시연_') && (
               <span className="text-sm font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
                 🎬 시연 모드
@@ -519,7 +730,6 @@ const MapNodeEditor = () => {
                     // 현재 화면도 초기화
                     setNodes([]);
                     setEdges([]);
-                    setNodeIdCounter(1);
                     
                     alert(`${selectedFacility}의 저장된 경로가 삭제되었습니다!`);
                   }
@@ -606,6 +816,8 @@ const MapNodeEditor = () => {
         <div 
           ref={svgContainerRef} 
           className="w-full h-full flex items-center justify-center bg-gray-50"
+          style={{ cursor: isConnecting ? 'crosshair' : 'default' }}
+          onClick={handleContainerClick}
         />
       </div>
     </div>

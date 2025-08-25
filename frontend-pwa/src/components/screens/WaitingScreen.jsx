@@ -1,41 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import useJourneyStore from '../../store/journeyStore';
+import useMapStore from '../../store/mapStore';
 import FormatATemplate from '../templates/FormatATemplate';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { getFacilityByName } from '../../data/facilityManagement';
 import { ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
 
-export default function WaitingScreen({ taggedLocation, current_task, upcoming_tasks }) {
-  const { user, currentQueues = [], todaysAppointments = [], patientState } = useJourneyStore();
+// 무한 렌더링 방지를 위한 안정적인 상수 (컴포넌트 외부에 선언)
+const EMPTY_NODES = [];
+const EMPTY_EDGES = [];
+
+export default function WaitingScreen({ taggedLocation }) {
+  // Store에서 필요한 데이터 가져오기 (구조 분해 사용)
+  const { 
+    user, 
+    patientState,
+    getTodaysScheduleForUI,
+    getCurrentTask,
+    getWaitingInfo
+  } = useJourneyStore();
   
-  // 현재 대기 중인 큐 찾기
-  const activeQueue = currentQueues.find(
-    q => q.state === 'waiting' || q.state === 'called' || q.state === 'ongoing'
-  );
-
-  // 진행 중인 검사 찾기 - waiting, called, ongoing 상태 모두 포함
-  const currentAppointment = todaysAppointments.find(
-    apt => ['waiting', 'called', 'ongoing'].includes(apt.status)
-  );
-
-  const currentExam = currentAppointment?.exam || activeQueue?.exam;
-  const isOngoing = patientState === 'ONGOING' || activeQueue?.state === 'ongoing';
-  const isCalled = patientState === 'CALLED' || activeQueue?.state === 'called';
-
-  // 오늘의 일정 준비 - exam의 description 필드 활용
-  const todaySchedule = todaysAppointments?.map((apt, index) => ({
-    id: apt.appointment_id,
-    examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor ? apt.exam.floor + '층' : ''} ${apt.exam?.room || ''}`.trim(),
-    status: apt.status,
-    description: apt.exam?.description,
-    purpose: apt.exam?.description || '건강 상태 확인 및 진단',
-    preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
-    duration: apt.exam?.average_duration || 30,
-    scheduled_at: apt.scheduled_at,
-    department: apt.exam?.department
-  })) || [];
+  // mapStore에서 경로 정보 가져오기
+  const {
+    activeRoute,
+    navigationRoute,
+    currentLocation,
+    updateRouteBasedOnLocation
+  } = useMapStore();
+  
+  // 계산된 상태들을 store에서 직접 가져오기
+  const todaySchedule = getTodaysScheduleForUI();
+  const currentTask = getCurrentTask();
+  const waitingInfo = getWaitingInfo();
+  
+  const currentExam = currentTask?.exam;
+  const isOngoing = patientState === 'ONGOING';
+  const isCalled = patientState === 'CALLED';
   
   // 현재 단계 계산
   const currentStep = todaySchedule.findIndex(s => 
@@ -43,26 +44,44 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
   );
   const actualCurrentStep = currentStep === -1 ? 0 : currentStep;
   
-  // 대기 정보 - 실제 큐 데이터 사용
-  const waitingInfo = activeQueue ? {
-    peopleAhead: Math.max(0, (activeQueue.queue_number || 1) - 1),
-    estimatedTime: activeQueue.estimated_wait_time || 15
-  } : null;
   
-  // 위치 정보
   // facilityManagement에서 시설 정보 찾기
   const facilityData = currentExam ? getFacilityByName(currentExam.title) : null;
   
-  const locationInfo = currentExam ? {
-    name: currentExam.title,
-    building: currentExam.building || '본관',
-    floor: `${currentExam.floor || '2'}층`,
-    room: currentExam.room,
-    department: currentExam.department,
+  // 검사 정보가 없으면 기본값 사용
+  const targetExam = currentExam || todaySchedule?.[0]?.exam || {
+    title: '채혈실',
+    building: '본관',
+    floor: '1',
+    room: '채함실 대기실',
+    department: '진단검사의학과'
+  };
+  
+  const locationInfo = {
+    name: targetExam.title,
+    building: targetExam.building || '본관',
+    floor: `${targetExam.floor || '1'}층`,
+    room: targetExam.room || '채혈실 대기실',
+    department: targetExam.department || '진단검사의학과',
     directions: isCalled ? '검사실로 입장해주세요' : '대기실에서 잠시 기다려주세요. 곧 호출해드리겠습니다.',
-    mapFile: facilityData?.mapFile || 'main_1f.svg', // 지도 파일 추가
-    svgId: facilityData?.svgId // SVG 요소 ID 추가
-  } : null;
+    mapFile: facilityData?.mapFile || 'main_1f.svg',
+    svgId: facilityData?.svgId || 'blood-test-waiting',
+    mapId: 'main_1f',
+    // 실제 백엔드 데이터 사용
+    x_coord: targetExam.x_coord || 340,
+    y_coord: targetExam.y_coord || 210,
+    // mapStore의 현재 위치 사용
+    currentLocation: currentLocation || {
+      x_coord: targetExam.x_coord || 340,
+      y_coord: targetExam.y_coord || 210,
+      building: targetExam.building || '본관',
+      floor: targetExam.floor || '1',
+      room: targetExam.room || '대기실'
+    },
+    // mapStore에서 pre-drawn 경로 데이터 사용
+    pathNodes: navigationRoute?.nodes || activeRoute?.nodes || EMPTY_NODES,  // ✅ 안정적인 상수 사용
+    pathEdges: navigationRoute?.edges || activeRoute?.edges || EMPTY_EDGES   // ✅ 안정적인 상수 사용
+  };
   
   // 다음 행동 결정 - 환자가 waiting 상태인데 다음 검사실 근처에서 NFC를 찍었을 때
   const getNextAction = () => {
@@ -93,7 +112,7 @@ export default function WaitingScreen({ taggedLocation, current_task, upcoming_t
       waitingInfo={waitingInfo}
       locationInfo={locationInfo}
       todaySchedule={todaySchedule}
-      queueData={activeQueue}
+      queueData={currentTask}
       taggedLocation={taggedLocation}
       patientState={user?.state || patientState || (isOngoing ? 'ONGOING' : isCalled ? 'CALLED' : 'WAITING')}
       currentExam={currentExam}

@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { initializeCSRFToken } from './api/client';
 import useJourneyStore from './store/journeyStore';
+import useMapStore from './store/mapStore';
 import { initializeDefaultRoutes } from './data/defaultRoutes';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import LoadingSpinner from './components/common/LoadingSpinner';
@@ -24,6 +25,7 @@ import CSRFStatus from './components/dev/CSRFStatus';
 // Admin pages - AdminHomeScreen으로 통합
 import AdminHomeScreen from './components/screens/AdminHomeScreen';
 import TestDataManager from './pages/admin/TestDataManager';
+import MapManager from './pages/admin/MapManager';
 import ChatbotTest from './pages/ChatbotTest';
 import MapTest from './pages/MapTest';
 import MapEditor from './pages/MapEditor';
@@ -38,6 +40,7 @@ function AppContent() {
   const [elderlyMode, setElderlyMode] = useState(false);
   const { isAuthenticated } = useAuth();
   const { isLoading, fetchJourneyData, user } = useJourneyStore();
+  const { updateRouteBasedOnLocation } = useMapStore();
 
   // 앱 시작 시 토큰 확인 및 데이터 로딩
   useEffect(() => {
@@ -54,6 +57,10 @@ function AppContent() {
         try {
           await fetchJourneyData();
           console.log('✅ 환자 데이터 로드 완료');
+          
+          // 초기 경로 설정 (NFC 태깅 없이도 기본 위치에서 목적지까지 경로 표시)
+          updateRouteBasedOnLocation(null); // null이면 기본 위치(정문 로비) 사용
+          console.log('🗺️ 초기 경로 설정 완료');
         } catch (error) {
           console.error('❌ 환자 데이터 로드 실패:', error);
           // 401 에러인 경우에만 토큰 제거
@@ -154,6 +161,16 @@ function AppContent() {
             <Route path="/test" element={
               <PrivateRoute>
                 <TestDataManager />
+              </PrivateRoute>
+            } />
+            <Route path="/admin/test-data" element={
+              <PrivateRoute>
+                <TestDataManager />
+              </PrivateRoute>
+            } />
+            <Route path="/admin/map-manager" element={
+              <PrivateRoute>
+                <MapManager />
               </PrivateRoute>
             } />
             

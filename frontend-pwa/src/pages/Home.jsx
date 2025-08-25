@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import useJourneyStore from '../store/journeyStore';
+import useMapStore from '../store/mapStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import AdminHomeScreen from '../components/screens/AdminHomeScreen';
 import { api } from '../api/client';
@@ -23,31 +24,20 @@ import CalledModal from '../components/modals/CalledModal';
 
 // ONGOING과 COMPLETED는 WaitingScreen을 재사용 (유사한 UI)
 const OngoingScreen = WaitingScreen;
-const CompletedScreen = ({ taggedLocation, upcoming_tasks, completed_tasks }) => {
-  const { user, todaysAppointments = [], patientState } = useJourneyStore();
+const CompletedScreen = ({ taggedLocation }) => {
+  const { 
+    user, 
+    patientState,
+    getTodaysScheduleForUI,
+    getNextExam,
+    getCompletionStats
+  } = useJourneyStore();
   
-  // 오늘의 일정 준비
-  const todaySchedule = todaysAppointments?.map((apt, index) => ({
-    id: apt.appointment_id,
-    examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor ? apt.exam.floor + '층' : ''} ${apt.exam?.room || ''}`.trim(),
-    status: apt.status,
-    description: apt.exam?.description,
-    purpose: apt.exam?.description || '건강 상태 확인 및 진단',
-    preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
-    duration: apt.exam?.average_duration || 30,
-    scheduled_at: apt.scheduled_at,
-    department: apt.exam?.department
-  })) || [];
-  
-  // 현재 단계 계산 - 완료된 검사들 중 최신
-  const currentStep = todaySchedule.findIndex(s => s.status === 'completed');
-  const actualCurrentStep = currentStep === -1 ? 0 : currentStep;
-  
-  // 다음 검사실 정보 찾기
-  const completedCount = todaySchedule.filter(s => s.status === 'completed').length;
-  const nextExam = completedCount < todaysAppointments.length ? 
-    todaysAppointments[completedCount]?.exam : null;
+  // Store에서 계산된 상태 사용
+  const todaySchedule = getTodaysScheduleForUI();
+  const nextExam = getNextExam();
+  const completionStats = getCompletionStats();
+  const actualCurrentStep = completionStats.completedCount - 1;
   
   // facilityManagement에서 시설 정보 찾기
   const facilityData = nextExam ? getFacilityByName(nextExam.title) : null;
@@ -119,80 +109,49 @@ const ErrorScreen = ({ message }) => (
 const Home = () => {
   const { tagId } = useParams(); // URL에서 NFC 태그 ID 가져오기
   
-  // 기존 store 데이터 (점진적 마이그레이션을 위해 유지)
+  // Store에서 직접 데이터 가져오기 (로컬 state 제거)
   const {
     user,
-    patientState: storePatientState,
-    taggedLocationInfo: storeTaggedLocation,
-    todaysAppointments: storeTodaysAppointments,
-    isLoading: storeIsLoading,
-    error: storeError,
+    patientState,
+    taggedLocationInfo,
+    isLoading,
+    error,
     fetchJourneyData,
-    clearTagInfo
+    clearTagInfo,
+    // 계산된 상태들을 직접 가져오기
+    getTodaysScheduleForUI,
+    getCurrentTask,
+    getWaitingInfo,
+    getCompletionStats
   } = useJourneyStore();
   
-  // 기존 시스템 사용 (최적화 Hook 비활성화)
-  const patientState = storePatientState;
-  const taggedLocationInfo = storeTaggedLocation;
-  const todaysAppointments = storeTodaysAppointments;
-  const isLoading = storeIsLoading;
-  const error = storeError;
+  // 로컬 state 대신 store의 selector 함수 사용
+  const todaySchedule = getTodaysScheduleForUI();
+  const currentTask = getCurrentTask();
+  const waitingInfo = getWaitingInfo();
+  const completionStats = getCompletionStats();
 
-  // 일정 데이터 상태 관리
-  const [scheduleData, setScheduleData] = useState({
-    state: null,
-    currentTask: null,
-    upcomingTasks: [],
-    completedTasks: [],
-    isLoading: false,
-    error: null
-  });
-
-  // 당일 일정 데이터 가져오기
-  // journeyStore의 데이터를 사용하므로 별도 fetchTodaySchedule 함수 불필요
-  // todaysAppointments 데이터를 직접 활용하여 scheduleData 업데이트
-  useEffect(() => {
-    if (todaysAppointments && todaysAppointments.length > 0) {
-      // 현재 진행 중인 작업 찾기 (WAITING, CALLED, ONGOING 상태)
-      const currentTask = todaysAppointments.find(apt => 
-        ['waiting', 'called', 'ongoing'].includes(apt.status)
-      );
-      
-      // 예정된 작업들 (scheduled 상태)
-      const upcomingTasks = todaysAppointments.filter(apt => 
-        apt.status === 'scheduled' || apt.status === 'pending'
-      );
-      
-      // 완료된 작업들 (done, completed 상태)
-      const completedTasks = todaysAppointments.filter(apt => 
-        apt.status === 'done' || apt.status === 'completed'
-      );
-      
-      setScheduleData({
-        state: patientState,
-        currentTask,
-        upcomingTasks,
-        completedTasks,
-        isLoading: false,
-        error: null
-      });
-    }
-  }, [todaysAppointments, patientState]);
+  // 로컬 state 계산 로직 제거 - 이제 store에서 직접 계산된 값 사용
 
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
-    // 태그 ID가 변경된 경우에만 데이터 재로드
-    if (tagId) {
-      fetchJourneyData(tagId);
-    }
+    let isMounted = true; // 컴포넌트 마운트 상태 추적
     
-    // 컴포넌트 언마운트 시 태그 정보 초기화
-    return () => {
-      if (tagId) {
-        clearTagInfo();
+    const loadData = async () => {
+      if (tagId && isMounted) {
+        await fetchJourneyData(tagId);
       }
     };
-  }, [tagId]); // user를 dependency에서 제거하여 무한 루프 방지
+    
+    loadData();
+    
+    // StrictMode의 이중 호출로 인한 불필요한 cleanup 방지
+    return () => {
+      isMounted = false;
+      // clearTagInfo() 호출 제거 - StrictMode 문제 해결
+      // 실제로 페이지를 떠날 때만 정리되도록 함
+    };
+  }, [tagId, fetchJourneyData]); // fetchJourneyData 추가 (Zustand는 안정적)
 
   // 로딩 상태
   if (isLoading) {
@@ -286,8 +245,8 @@ const Home = () => {
         patientState,
         userState: user?.state,
         locationType,
-        todaysAppointments: todaysAppointments?.length || 0,
-        completedCount: todaysAppointments?.filter(apt => ['completed', 'done'].includes(apt.status)).length || 0
+        todaysAppointments: todaySchedule?.length || 0,
+        completedCount: completionStats.completedCount
       });
     }
     
@@ -299,8 +258,6 @@ const Home = () => {
       // 올바른 검사실에 왔는지 확인하는 로직을 추가할 수 있습니다.
       return <WaitingScreen 
         taggedLocation={taggedLocationInfo} 
-        current_task={scheduleData.currentTask}
-        upcoming_tasks={scheduleData.upcomingTasks}
       />;
     }
     
@@ -320,16 +277,12 @@ const Home = () => {
         // 접수 완료 상태에서 검사실 태그 -> 2순위에서 처리됨
         currentScreen = <RegisteredScreen 
           taggedLocation={taggedLocationInfo} 
-          current_task={scheduleData.currentTask}
-          upcoming_tasks={scheduleData.upcomingTasks}
         />;
         break;
       
       case 'WAITING': // 검사실 태그 없이 대기 상태일 경우 (예: 앱 재시작)
         currentScreen = <WaitingScreen 
           taggedLocation={taggedLocationInfo} 
-          current_task={scheduleData.currentTask}
-          upcoming_tasks={scheduleData.upcomingTasks}
         />;
         break;
 
@@ -337,24 +290,18 @@ const Home = () => {
         // CALLED 상태는 대기 화면을 보여주되, 모달로 호출 알림 표시
         currentScreen = <WaitingScreen 
           taggedLocation={taggedLocationInfo} 
-          current_task={scheduleData.currentTask}
-          upcoming_tasks={scheduleData.upcomingTasks}
         />;
         break;
       
       case 'ONGOING':
         currentScreen = <WaitingScreen 
           taggedLocation={taggedLocationInfo} 
-          current_task={scheduleData.currentTask}
-          upcoming_tasks={scheduleData.upcomingTasks}
         />; // ONGOING도 WaitingScreen 재사용
         break;
       
       case 'COMPLETED':
         currentScreen = <CompletedScreen 
           taggedLocation={taggedLocationInfo} 
-          upcoming_tasks={scheduleData.upcomingTasks}
-          completed_tasks={scheduleData.completedTasks}
         />;
         break;
       
@@ -365,7 +312,6 @@ const Home = () => {
       case 'FINISHED':
         currentScreen = <FinishedScreen 
           taggedLocation={taggedLocationInfo} 
-          completed_tasks={scheduleData.completedTasks}
         />;
         break;
       
@@ -373,8 +319,6 @@ const Home = () => {
         console.warn('Unknown patient state:', currentState);
         currentScreen = <RegisteredScreen 
           taggedLocation={taggedLocationInfo} 
-          current_task={scheduleData.currentTask}
-          upcoming_tasks={scheduleData.upcomingTasks}
         />; // 기본값으로 등록 완료 화면 표시
         break;
     }

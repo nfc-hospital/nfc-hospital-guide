@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import useJourneyStore from '../../store/journeyStore';
+import useMapStore from '../../store/mapStore';
 import { useNavigate } from 'react-router-dom';
 import FormatBTemplate from '../templates/FormatBTemplate';
 import apiService from '../../api/apiService';
@@ -319,6 +320,36 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
       (apt.cost || apt.exam?.cost || '25,000') : null
   })) || [];
 
+  // P-7 마무리: 퇴원 안내 위치 정보 (시연용)
+  const locationInfo = {
+    name: '정문 출구',
+    building: '본관',
+    floor: '1층',
+    room: '정문',
+    department: '',
+    directions: '안전하게 귀가하세요. 택시 승강장은 정문 앞에 있습니다.',
+    mapFile: 'main_1f.svg',
+    svgId: 'main-exit',
+    // 시연용 좌표 데이터
+    x_coord: 100,
+    y_coord: 450,
+    // 현재 위치 (수납창구에서 출발)
+    currentLocation: {
+      x_coord: 280,
+      y_coord: 250,
+      building: '본관',
+      floor: '1',
+      room: '수납창구'
+    },
+    // 경로 노드 (시연용)
+    pathNodes: [
+      { x: 280, y: 250, label: '현재 위치 (수납창구)' },
+      { x: 200, y: 300, label: '중앙 홀' },
+      { x: 100, y: 400, label: '로비' },
+      { x: 100, y: 450, label: '정문 출구' }
+    ]
+  };
+
   return (
     <>
       <style>{animationStyles}</style>
@@ -334,6 +365,9 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
       totalDuration={totalDuration}
       completedCount={completedCount}
       precautions={precautions}
+      locationInfo={locationInfo}
+      taggedLocation={taggedLocation}
+      patientState="FINISHED"
     >
       {/* 처방전 안내 */}
       {hasPrescription && (

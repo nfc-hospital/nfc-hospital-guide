@@ -1,63 +1,63 @@
 import React, { useEffect } from 'react';
 import useJourneyStore from '../../store/journeyStore';
+import useMapStore from '../../store/mapStore';
 import FormatATemplate from '../templates/FormatATemplate';
 
 export default function PaymentScreen({ taggedLocation }) {
-  const { user, todaysAppointments = [], patientState, currentQueues = [] } = useJourneyStore();
+  // Store에서 필요한 데이터 가져오기 (구조 분해 사용)
+  const { 
+    user, 
+    patientState,
+    getTodaysScheduleForUI,
+    getCompletionStats,
+    getWaitingInfo
+  } = useJourneyStore();
   
-  // 개발 환경에서 데이터 확인
-  if (import.meta.env.DEV) {
-    console.log('💳 PaymentScreen 데이터:', {
-      todaysAppointments,
-      appointmentCount: todaysAppointments?.length || 0,
-      patientState
-    });
-  }
+  // mapStore에서 경로 정보 가져오기
+  const {
+    activeRoute,
+    navigationRoute
+  } = useMapStore();
   
-  // 완료된 검사 목록
-  const completedExams = todaysAppointments?.filter(
-    apt => apt.status === 'completed'
-  ) || [];
+  // Store에서 계산된 상태 사용
+  const todaySchedule = getTodaysScheduleForUI();
+  const completionStats = getCompletionStats();
+  const waitingInfo = getWaitingInfo();
   
-  // 오늘의 일정을 포맷 A에 맞게 변환 - exam의 description 필드 활용
-  const todaySchedule = todaysAppointments?.map((apt, index) => ({
-    id: apt.appointment_id,
-    examName: apt.exam?.title || `검사 ${index + 1}`,
-    location: `${apt.exam?.building || '본관'} ${apt.exam?.floor ? apt.exam.floor + '층' : ''} ${apt.exam?.room || ''}`.trim(),
-    status: apt.status,
-    description: apt.exam?.description,
-    purpose: apt.exam?.description || '건강 상태 확인 및 진단',
-    preparation: null,
-    duration: apt.exam?.average_duration || 30,
-    scheduled_at: apt.scheduled_at,
-    department: apt.exam?.department
-  })) || [];
-  
-  // 현재 단계 계산 - 수납 단계는 모든 검사 완료 후이므로 전체 길이
+  // 현재 단계 계산 - 수납 단계는 모든 검사 완료 후
   const currentStep = todaySchedule.length;
   
-  // 수납 대기 큐 찾기
-  const paymentQueue = currentQueues.find(q => 
-    q.exam?.department === '원무과' || q.exam?.title?.includes('수납')
-  );
   
-  // 위치 정보 - 원무과
   const locationInfo = {
-    name: '원무과',
+    name: '원무과 수납창구',
     building: '본관',
     floor: '1층',
     room: '중앙홀 우측',
     department: '원무과',
-    directions: '엘리베이터로 1층 이동 후 오른쪽으로 가시면 됩니다'
+    directions: '엘리베이터로 1층 이동 후 오른쪽으로 가시면 됩니다',
+    mapFile: 'main_1f.svg',
+    svgId: 'payment-desk',
+    mapId: 'main_1f',
+    // 실제 백엔드 데이터 사용 (hospital_navigation)
+    x_coord: 280, // 백엔드에서 원무과 수납창구 좌표 사용
+    y_coord: 250,
+    // 현재 위치
+    currentLocation: {
+      x_coord: 200,
+      y_coord: 300,
+      building: '본관',
+      floor: '1',
+      room: '엘리베이터 홀'
+    },
+    // 실제 hospital_navigation 경로 데이터 사용
+    pathNodes: activeRoute?.path_nodes || navigationRoute?.nodes || [],
+    pathEdges: activeRoute?.path_edges || navigationRoute?.edges || []
   };
   
-  // 수납 대기 정보 - 실제 큐 데이터가 있으면 사용
-  const paymentInfo = paymentQueue ? {
-    peopleAhead: Math.max(0, (paymentQueue.queue_number || 1) - 1),
-    estimatedTime: paymentQueue.estimated_wait_time || 15
-  } : {
-    peopleAhead: 5,
-    estimatedTime: 15
+  // 수납 대기 정보 - store에서 계산된 값 사용
+  const paymentInfo = waitingInfo || {
+    peopleAhead: 0,
+    estimatedTime: 5
   };
 
   return (

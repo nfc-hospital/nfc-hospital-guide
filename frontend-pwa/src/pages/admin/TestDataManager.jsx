@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import apiService from '../../api/apiService';
 
@@ -13,6 +14,9 @@ const TestDataManager = () => {
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [showAllExamsModal, setShowAllExamsModal] = useState(false);
   const [selectedPatientForAllExams, setSelectedPatientForAllExams] = useState(null);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [selectedPatientForLocation, setSelectedPatientForLocation] = useState(null);
+  const [availableLocations, setAvailableLocations] = useState([]);
 
   // 환자 상태 색상 매핑
   const stateColors = {
@@ -59,6 +63,7 @@ const TestDataManager = () => {
   useEffect(() => {
     fetchPatients();
     fetchAvailableExams();
+    fetchAvailableLocations();
   }, []);
 
   // 사용 가능한 검사 목록 조회
@@ -68,6 +73,16 @@ const TestDataManager = () => {
       setAvailableExams(response.data.exams);
     } catch (error) {
       console.error('Failed to fetch available exams:', error);
+    }
+  };
+
+  // 사용 가능한 위치 목록 조회
+  const fetchAvailableLocations = async () => {
+    try {
+      const response = await apiService.api.get('/test/locations/');
+      setAvailableLocations(response.data.locations);
+    } catch (error) {
+      console.error('Failed to fetch available locations:', error);
     }
   };
 
@@ -166,6 +181,27 @@ const TestDataManager = () => {
     }
   };
 
+  // 환자 위치 업데이트
+  const updatePatientLocation = async (userId, locationKey) => {
+    try {
+      const response = await apiService.api.put('/test/patient-location/', {
+        user_id: userId,
+        location_key: locationKey
+      });
+      
+      if (response.data && response.data.message) {
+        alert(`위치 변경 완료: ${response.data.message}`);
+      }
+      
+      await fetchPatients(); // 목록 새로고침
+      setShowLocationModal(false);
+      setSelectedPatientForLocation(null);
+    } catch (error) {
+      console.error('Failed to update patient location:', error);
+      alert('위치 업데이트에 실패했습니다.');
+    }
+  };
+
   // 모든 환자 초기화
   const resetAllPatients = async () => {
     if (!window.confirm('모든 환자 상태를 REGISTERED로 초기화하시겠습니까?')) {
@@ -199,17 +235,41 @@ const TestDataManager = () => {
                 <h1 className="text-4xl font-bold mb-3 tracking-tight">시연용 테스트 데이터 관리</h1>
                 <p className="text-indigo-100 text-lg">가상 EMR 환경에서 환자 상태와 검사를 쉽게 관리하세요</p>
               </div>
-              <button
-                onClick={resetAllPatients}
-                className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 hover:shadow-2xl hover:scale-105 border border-white/30"
-              >
-                <span className="flex items-center gap-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  모든 환자 초기화
-                </span>
-              </button>
+              <div className="flex gap-3">
+                <Link
+                  to="/admin/map-manager"
+                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 hover:shadow-2xl hover:scale-105 border border-white/30"
+                >
+                  <span className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                    지도 관리
+                  </span>
+                </Link>
+                <Link
+                  to="/map-editor"
+                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 hover:shadow-2xl hover:scale-105 border border-white/30"
+                >
+                  <span className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    경로 편집기
+                  </span>
+                </Link>
+                <button
+                  onClick={resetAllPatients}
+                  className="bg-white/20 backdrop-blur-sm hover:bg-white/30 text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 hover:shadow-2xl hover:scale-105 border border-white/30"
+                >
+                  <span className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    모든 환자 초기화
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
           
@@ -254,6 +314,11 @@ const TestDataManager = () => {
                           {patient.name}
                         </div>
                         <div className="text-xs text-gray-500">{patient.email}</div>
+                        {patient.current_location && (
+                          <div className="text-xs text-indigo-600 font-medium mt-0.5">
+                            📍 {patient.current_location}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -427,6 +492,21 @@ const TestDataManager = () => {
                         검사 추가
                       </button>
                       
+                      {/* 위치 변경 버튼 */}
+                      <button
+                        onClick={() => {
+                          setSelectedPatientForLocation(patient);
+                          setShowLocationModal(true);
+                        }}
+                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200 flex items-center gap-1 whitespace-nowrap"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        위치
+                      </button>
+                      
                       {/* 상태 선택 드롭다운 */}
                       <select
                         value={patient.current_state}
@@ -549,6 +629,117 @@ const TestDataManager = () => {
                   className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
                 >
                   닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 위치 선택 모달 */}
+      {showLocationModal && selectedPatientForLocation && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden">
+            {/* 모달 헤더 */}
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4">
+              <div className="flex justify-between items-center">
+                <div className="text-white">
+                  <h3 className="text-xl font-bold">환자 위치 변경</h3>
+                  <p className="text-purple-100 text-sm">
+                    {selectedPatientForLocation.name}님의 현재 위치를 선택하세요
+                    {selectedPatientForLocation.current_location && (
+                      <span className="ml-2 font-medium">
+                        (현재: {selectedPatientForLocation.current_location})
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowLocationModal(false);
+                    setSelectedPatientForLocation(null);
+                  }}
+                  className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* 모달 바디 - 위치 버튼 그리드 */}
+            <div className="p-6 overflow-y-auto max-h-[calc(85vh-140px)]">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                {availableLocations.map((location) => {
+                  const isCurrentLocation = selectedPatientForLocation.current_location === location.key;
+                  return (
+                    <button
+                      key={location.key}
+                      onClick={() => updatePatientLocation(selectedPatientForLocation.user_id, location.key)}
+                      className={`relative p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-lg ${
+                        isCurrentLocation
+                          ? 'bg-purple-50 border-purple-500 shadow-md'
+                          : 'bg-white border-gray-200 hover:border-purple-300 hover:bg-purple-50'
+                      }`}
+                    >
+                      {/* 현재 위치 표시 */}
+                      {isCurrentLocation && (
+                        <div className="absolute top-2 right-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500 text-white">
+                            현재 위치
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 위치 아이콘 */}
+                      <div className={`text-3xl mb-3 ${isCurrentLocation ? 'animate-pulse' : ''}`}>
+                        {location.icon || '📍'}
+                      </div>
+                      
+                      {/* 위치 이름 */}
+                      <div className="text-base font-semibold text-gray-900 mb-1">
+                        {location.key}
+                      </div>
+                      
+                      {/* 위치 상세 정보 */}
+                      <div className="text-xs text-gray-600 space-y-0.5">
+                        <div>{location.building} {location.floor}</div>
+                        <div className="text-gray-500">{location.room}</div>
+                      </div>
+                      
+                      {/* 좌표 정보 (개발용) */}
+                      <div className="text-xs text-gray-400 mt-2">
+                        좌표: ({location.x}, {location.y})
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 위치 정보가 없을 때 */}
+              {availableLocations.length === 0 && (
+                <div className="text-center py-12">
+                  <div className="text-6xl mb-4">🗺️</div>
+                  <p className="text-gray-500 text-lg">사용 가능한 위치가 없습니다.</p>
+                </div>
+              )}
+            </div>
+
+            {/* 모달 푸터 */}
+            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">
+                  총 {availableLocations.length}개의 위치
+                </span>
+                <button
+                  onClick={() => {
+                    setShowLocationModal(false);
+                    setSelectedPatientForLocation(null);
+                  }}
+                  className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                >
+                  취소
                 </button>
               </div>
             </div>

@@ -6,6 +6,8 @@ from datetime import timedelta
 from .models import EmrSyncStatus
 from p_queue.models import PatientState
 from authentication.models import User
+from nfc.models import NFCTag, FacilityRoute
+from hospital_navigation.models import HospitalMap, NavigationNode, DepartmentZone
 from nfc_hospital_system.utils import APIResponse
 import logging
 
@@ -47,6 +49,43 @@ def emr_mapping_rules(request):
         'message': 'EMR 매핑 규칙 (임시)',
         'data': {}
     })
+
+# 병원 내 주요 위치 정의
+HOSPITAL_LOCATIONS = {
+    # 주요 시설
+    '정문': {'building': '본관', 'floor': '1층', 'room': '정문 로비', 'x': 100, 'y': 400, 'icon': '🏥'},
+    '원무과': {'building': '본관', 'floor': '1층', 'room': '원무과 접수처', 'x': 450, 'y': 240, 'icon': '💳'},
+    '로비': {'building': '본관', 'floor': '1층', 'room': '중앙 로비', 'x': 250, 'y': 400, 'icon': '🏛️'},
+    '안내데스크': {'building': '본관', 'floor': '1층', 'room': '안내데스크', 'x': 450, 'y': 200, 'icon': '💁‍♀️'},
+    '응급실': {'building': '본관', 'floor': '1층', 'room': '응급의료센터', 'x': 220, 'y': 280, 'icon': '🚨'},
+    '약국': {'building': '본관', 'floor': '1층', 'room': '원내약국', 'x': 780, 'y': 280, 'icon': '💊'},
+    '수납창구': {'building': '본관', 'floor': '1층', 'room': '수납처', 'x': 200, 'y': 450, 'icon': '💳'},
+    
+    # 검사실
+    '채혈실': {'building': '본관', 'floor': '1층', 'room': '채혈실', 'x': 675, 'y': 160, 'icon': '🩸'},
+    '채혈실 대기실': {'building': '본관', 'floor': '1층', 'room': '채혈실 대기실', 'x': 340, 'y': 210, 'icon': '🪑'},
+    '소변검사실': {'building': '본관', 'floor': '1층', 'room': '소변검사실', 'x': 400, 'y': 200, 'icon': '🧪'},
+    '진단검사의학과': {'building': '본관', 'floor': '1층', 'room': '진단검사의학과', 'x': 480, 'y': 160, 'icon': '🧪'},
+    
+    # X-ray/CT/MRI
+    'X-ray실': {'building': '암센터', 'floor': '2층', 'room': 'X-ray실', 'x': 145, 'y': 435, 'icon': '📷'},
+    'CT실': {'building': '암센터', 'floor': '2층', 'room': 'CT실', 'x': 360, 'y': 270, 'icon': '🔍'},
+    'MRI실': {'building': '암센터', 'floor': '2층', 'room': 'MRI실', 'x': 560, 'y': 270, 'icon': '🧲'},
+    '초음파실': {'building': '암센터', 'floor': '2층', 'room': '초음파실', 'x': 335, 'y': 430, 'icon': '📡'},
+    '영상의학과': {'building': '암센터', 'floor': '2층', 'room': '영상의학과', 'x': 150, 'y': 110, 'icon': '📷'},
+    
+    # 진료과
+    '내과': {'building': '본관', 'floor': '2층', 'room': '내과 진료실', 'x': 215, 'y': 290, 'icon': '🏥'},
+    '내과 대기실': {'building': '본관', 'floor': '2층', 'room': '내과 대기실', 'x': 250, 'y': 200, 'icon': '🏥'},
+    '정형외과': {'building': '별관', 'floor': '1층', 'room': '정형외과', 'x': 300, 'y': 200, 'icon': '🦴'},
+    '재활의학과': {'building': '별관', 'floor': '1층', 'room': '재활의학과', 'x': 500, 'y': 200, 'icon': '🏃‍♂️'},
+    '이비인후과': {'building': '본관', 'floor': '2층', 'room': '이비인후과', 'x': 735, 'y': 175, 'icon': '👂'},
+    
+    # 편의시설
+    '편의점': {'building': '본관', 'floor': '1층', 'room': '편의점', 'x': 570, 'y': 280, 'icon': '🏪'},
+    '카페': {'building': '본관', 'floor': '1층', 'room': '카페', 'x': 570, 'y': 360, 'icon': '☕'},
+    '은행': {'building': '본관', 'floor': '1층', 'room': '은행', 'x': 680, 'y': 280, 'icon': '🏦'},
+}
 
 # 환자별 시나리오 정의 함수
 def get_patient_scenario(patient_name, current_state):
@@ -608,5 +647,309 @@ def test_get_available_exams(request):
         return APIResponse.error(
             message=f"검사 목록 조회 중 오류가 발생했습니다: {str(e)}",
             code="FETCH_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def test_get_locations(request):
+    """
+    시연용 병원 내 위치 목록 조회
+    GET /api/v1/test/locations
+    """
+    try:
+        locations = []
+        for name, data in HOSPITAL_LOCATIONS.items():
+            locations.append({
+                'key': name,  # 프론트엔드에서 key로 사용
+                'name': name,
+                'building': data['building'],
+                'floor': data['floor'],
+                'room': data['room'],
+                'x': data['x'],
+                'y': data['y'],
+                'icon': data.get('icon', '📍')  # icon 추가, 기본값 📍
+            })
+        
+        return APIResponse.success(
+            data={'locations': locations},
+            message=f"{len(locations)}개의 위치를 조회했습니다."
+        )
+        
+    except Exception as e:
+        return APIResponse.error(
+            message=f"위치 목록 조회 중 오류가 발생했습니다: {str(e)}",
+            code="FETCH_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['PUT'])
+@permission_classes([permissions.AllowAny])
+def test_update_patient_location(request):
+    """
+    시연용 환자 위치 업데이트
+    PUT /api/v1/test/patient-location
+    """
+    try:
+        user_id = request.data.get('user_id')
+        location_key = request.data.get('location_key')  # 프론트엔드에서 location_key로 변경
+        custom_location = request.data.get('custom_location')  # 커스텀 위치 정보
+        
+        if not user_id:
+            return APIResponse.error(message="user_id가 필요합니다.", code="INVALID_INPUT", status_code=status.HTTP_400_BAD_REQUEST)
+        
+        # 환자 상태 조회
+        patient_state = PatientState.objects.select_related('user').get(user__user_id=user_id)
+        
+        # 위치 정보 설정
+        if location_key and location_key in HOSPITAL_LOCATIONS:
+            # 사전 정의된 위치 사용
+            location_data = HOSPITAL_LOCATIONS[location_key]
+            location_str = location_key  # 키 자체를 저장하여 나중에 참조하기 쉽게 함
+        elif custom_location:
+            # 커스텀 위치 사용
+            location_str = custom_location
+        else:
+            location_str = patient_state.current_location  # 기존 위치 유지
+        
+        # 위치 업데이트
+        patient_state.current_location = location_str
+        patient_state.save()
+        
+        logger.info(f"Patient {patient_state.user.name} location updated to: {location_str}")
+        
+        return APIResponse.success(
+            data={
+                'user_id': str(user_id),
+                'name': patient_state.user.name,
+                'current_location': location_str,
+                'updated_at': patient_state.updated_at.isoformat()
+            },
+            message=f"{patient_state.user.name}님의 위치를 업데이트했습니다."
+        )
+        
+    except PatientState.DoesNotExist:
+        return APIResponse.error(message="환자 상태를 찾을 수 없습니다.", code="NOT_FOUND", status_code=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"Update patient location error: {str(e)}")
+        return APIResponse.error(
+            message=f"위치 업데이트 중 오류가 발생했습니다: {str(e)}",
+            code="UPDATE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# 지도 및 경로 관리 API
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def test_get_maps(request):
+    """
+    모든 지도 정보와 SVG 파일 목록 반환
+    GET /api/v1/test/maps
+    """
+    try:
+        # SVG 파일 목록 (frontend에서 사용 가능한)
+        available_maps = [
+            {
+                'id': 'main_1f',
+                'name': '본관 1층',
+                'building': '본관',
+                'floor': '1층',
+                'svg_url': '/images/maps/main_1f.svg',
+                'interactive_svg_url': '/images/maps/main_1f.interactive.svg',
+                'type': 'floor_map'
+            },
+            {
+                'id': 'main_2f',
+                'name': '본관 2층',
+                'building': '본관',
+                'floor': '2층',
+                'svg_url': '/images/maps/main_2f.svg',
+                'interactive_svg_url': '/images/maps/main_2f.interactive.svg',
+                'type': 'floor_map'
+            },
+            {
+                'id': 'cancer_1f',
+                'name': '암센터 1층',
+                'building': '암센터',
+                'floor': '1층',
+                'svg_url': '/images/maps/cancer_1f.svg',
+                'interactive_svg_url': '/images/maps/cancer_1f.interactive.svg',
+                'type': 'floor_map'
+            },
+            {
+                'id': 'cancer_2f',
+                'name': '암센터 2층',
+                'building': '암센터',
+                'floor': '2층',
+                'svg_url': '/images/maps/cancer_2f.svg',
+                'interactive_svg_url': '/images/maps/cancer_2f.interactive.svg',
+                'type': 'floor_map'
+            },
+            {
+                'id': 'annex_1f',
+                'name': '별관 1층',
+                'building': '별관',
+                'floor': '1층',
+                'svg_url': '/images/maps/annex_1f.svg',
+                'type': 'floor_map'
+            },
+            {
+                'id': 'overview_main_1f',
+                'name': '본관 1층 개요도',
+                'building': '본관',
+                'floor': '1층',
+                'svg_url': '/images/maps/overview_main_1f.svg',
+                'type': 'overview'
+            },
+            {
+                'id': 'overview_main_2f',
+                'name': '본관 2층 개요도',
+                'building': '본관',
+                'floor': '2층',
+                'svg_url': '/images/maps/overview_main_2f.svg',
+                'type': 'overview'
+            },
+            {
+                'id': 'overview_cancer_2f',
+                'name': '암센터 2층 개요도',
+                'building': '암센터',
+                'floor': '2층',
+                'svg_url': '/images/maps/overview_cancer_2f.svg',
+                'type': 'overview'
+            }
+        ]
+        
+        # DB에 저장된 HospitalMap 정보
+        hospital_maps = HospitalMap.objects.filter(is_active=True).values(
+            'map_id', 'building', 'floor', 'width', 'height', 'scale'
+        )
+        
+        # DB에 저장된 FacilityRoute 정보 (MapEditor로 그린 경로)
+        facility_routes = FacilityRoute.objects.all().values(
+            'facility_name', 'map_id', 'nodes', 'edges', 'updated_at'
+        )
+        
+        # DepartmentZone 정보 (진료과/시설 위치)
+        department_zones = DepartmentZone.objects.filter(is_active=True).values(
+            'name', 'svg_id', 'building', 'floor', 'zone_type', 'icon', 'description'
+        )
+        
+        return APIResponse.success(
+            data={
+                'available_maps': available_maps,
+                'hospital_maps': list(hospital_maps),
+                'facility_routes': list(facility_routes),
+                'department_zones': list(department_zones),
+                'map_editor_url': '/map-editor'  # Frontend MapEditor 경로
+            },
+            message="지도 정보를 조회했습니다."
+        )
+    except Exception as e:
+        logger.error(f"Get maps error: {str(e)}")
+        return APIResponse.error(
+            message=f"지도 정보 조회 중 오류가 발생했습니다: {str(e)}",
+            code="FETCH_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def test_get_facility_route(request, facility_name):
+    """
+    특정 시설의 경로 정보 반환
+    GET /api/v1/test/facility-route/{facility_name}
+    """
+    try:
+        route = FacilityRoute.objects.get(facility_name=facility_name)
+        
+        # 시설의 위치 정보 (HOSPITAL_LOCATIONS에서)
+        location_info = HOSPITAL_LOCATIONS.get(facility_name, {})
+        
+        return APIResponse.success(
+            data={
+                'facility_name': route.facility_name,
+                'map_id': route.map_id,
+                'nodes': route.nodes,
+                'edges': route.edges,
+                'svg_element_id': route.svg_element_id,
+                'metadata': route.metadata,
+                'location_info': location_info,
+                'updated_at': route.updated_at.isoformat()
+            },
+            message=f"{facility_name} 경로 정보를 조회했습니다."
+        )
+    except FacilityRoute.DoesNotExist:
+        return APIResponse.error(
+            message=f"시설 경로를 찾을 수 없습니다: {facility_name}",
+            code="NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Get facility route error: {str(e)}")
+        return APIResponse.error(
+            message=f"경로 조회 중 오류가 발생했습니다: {str(e)}",
+            code="FETCH_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def test_save_facility_route(request):
+    """
+    시설 경로 저장/업데이트 (MapEditor에서 호출)
+    POST /api/v1/test/save-facility-route
+    
+    Body:
+    {
+        "facility_name": "채혈실",
+        "nodes": [...],
+        "edges": [...],
+        "map_id": "main_1f",
+        "svg_element_id": "blood-test-room",
+        "metadata": {...}
+    }
+    """
+    try:
+        facility_name = request.data.get('facility_name')
+        nodes = request.data.get('nodes', [])
+        edges = request.data.get('edges', [])
+        map_id = request.data.get('map_id')
+        svg_element_id = request.data.get('svg_element_id')
+        metadata = request.data.get('metadata', {})
+        
+        if not facility_name or not map_id:
+            return APIResponse.error(
+                message="facility_name과 map_id는 필수입니다",
+                code="MISSING_FIELDS",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        route, created = FacilityRoute.objects.update_or_create(
+            facility_name=facility_name,
+            defaults={
+                'nodes': nodes,
+                'edges': edges,
+                'map_id': map_id,
+                'svg_element_id': svg_element_id,
+                'metadata': metadata
+            }
+        )
+        
+        return APIResponse.success(
+            data={
+                'facility_name': route.facility_name,
+                'created': created,
+                'message': f"{'생성' if created else '업데이트'}되었습니다: {facility_name}"
+            },
+            message=f"경로가 {'생성' if created else '업데이트'}되었습니다."
+        )
+    except Exception as e:
+        logger.error(f"Save facility route error: {str(e)}")
+        return APIResponse.error(
+            message=f"경로 저장 중 오류가 발생했습니다: {str(e)}",
+            code="SAVE_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

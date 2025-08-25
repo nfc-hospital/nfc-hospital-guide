@@ -14,10 +14,11 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from rest_framework.pagination import PageNumberPagination
 
-from .models import Exam, ExamPreparation, Appointment, ExamResult
+from .models import Exam, ExamPreparation, Appointment, ExamResult, ExamPostCareInstruction
 from .serializers import (
     ExamSerializer, ExamPreparationSerializer, AppointmentSerializer,
-    ExamListSerializer, ExamResultSerializer, TodayScheduleSerializer
+    ExamListSerializer, ExamResultSerializer, TodayScheduleSerializer,
+    ExamPostCareInstructionSerializer
 )
 from .permissions import IsPatientOwner, IsPatientOrStaff
 from p_queue.models import PatientState
@@ -278,20 +279,23 @@ class TodayScheduleView(APIView):
         # 5. 현재 위치 정보 (NFC 태그 기반)
         current_location = patient_state.current_location
         
-        # 6. 응답 데이터 구성
+        # 6. 응답 데이터 구성 - appointments를 직접 전달 (Model 객체로)
         response_data = {
             'state': current_state,
-            'appointments': appointments,
+            'appointments': appointments,  # QuerySet 그대로 전달
             'current_location': current_location,
             'next_action': next_action,
             'timestamp': timezone.now()
         }
         
-        serializer = TodayScheduleSerializer(response_data)
+        serializer = TodayScheduleSerializer(response_data, context={'request': request})
+        
+        # API 명세서에 맞게 직접 응답 구성
         return Response({
-            'success': True,
-            'data': serializer.data,
-            'message': '당일 일정을 조회했습니다.',
+            'appointments': serializer.data.get('appointments', []),
+            'state': serializer.data.get('state'),
+            'current_location': serializer.data.get('current_location'),
+            'next_action': serializer.data.get('next_action'),
             'timestamp': timezone.now().isoformat()
         })
     
@@ -359,9 +363,44 @@ class TodayScheduleView(APIView):
             if next_appointment:
                 time_str = next_appointment.scheduled_at.strftime('%H:%M')
                 location = f"{next_appointment.exam.building} {next_appointment.exam.floor}층 {next_appointment.exam.room}"
-                base_action = f"{base_action} 다음 검사: {time_str} {next_appointment.exam.title} ({location})"
+                base_action = f"{base_action} {time_str} {next_appointment.exam.title}"
         
         return base_action
+
+
+class ExamPostCareInstructionView(APIView):
+    """
+    특정 검사의 검사 후 주의사항 조회
+    GET /api/v1/appointments/exams/{exam_id}/post-care-instructions/
+    """
+    permission_classes = []  # 누구나 접근 가능
+    
+    def get(self, request, exam_id):
+        """검사의 주의사항 반환"""
+        try:
+            # 검사 확인
+            exam = Exam.objects.get(exam_id=exam_id, is_active=True)
+        except Exam.DoesNotExist:
+            return Response(
+                {"error": "검사를 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 검사 후 주의사항 조회
+        instructions = exam.post_care_instructions.all().order_by('-priority', 'type', 'title')
+        serializer = ExamPostCareInstructionSerializer(instructions, many=True)
+        
+        return Response({
+            "success": True,
+            "data": {
+                "exam_id": exam_id,
+                "exam_title": exam.title,
+                "post_care_instructions": serializer.data,
+                "total_instructions": instructions.count(),
+                "critical_instructions": instructions.filter(is_critical=True).count()
+            },
+            "message": "검사 후 주의사항을 조회했습니다."
+        })
 
 
 class AppointmentPreparationView(APIView):

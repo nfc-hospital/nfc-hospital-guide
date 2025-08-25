@@ -4,6 +4,7 @@ import { ChevronDownIcon, ChevronUpIcon, CheckIcon, ClipboardDocumentListIcon, C
 import { CheckIcon as CheckIconSolid } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
+import useMapStore from '../../store/mapStore';
 
 const FormatBTemplate = ({ 
   screenType, // 'unregistered' | 'completed'
