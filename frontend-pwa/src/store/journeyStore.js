@@ -482,10 +482,46 @@ const useJourneyStore = create(
                 
                 console.log('🔍 최종 currentQueues:', currentQueues);
                 
+                // ✅ --- 큐 상태를 확인하여 patientState 업데이트 ---
+                let finalPatientState = userData.state || 'UNREGISTERED';
+                
+                // 가장 정확한 '큐'의 상태를 확인하여 덮어쓰기
+                const activeQueue = currentQueues.find(q => 
+                  ['waiting', 'called', 'ongoing'].includes(q.state)
+                );
+                
+                if (activeQueue && activeQueue.state) {
+                  // 큐 상태를 대문자로 변환 (e.g., 'called' -> 'CALLED')
+                  finalPatientState = activeQueue.state.toUpperCase();
+                  console.log(`💡 큐 상태로 patientState 업데이트: ${activeQueue.state} -> ${finalPatientState}`);
+                } 
+                // 활성 큐가 없다면, 스케줄 API의 상태를 확인
+                else if (scheduleData?.state) {
+                  finalPatientState = scheduleData.state;
+                  console.log(`💡 스케줄 상태로 patientState 업데이트: ${finalPatientState}`);
+                }
+                
+                console.log(`✅ 최종 환자 상태 결정: ${finalPatientState}`);
+                // ----------------------------------------------------
+                
                 // 백엔드에서 exam 정보가 완전히 포함되어 오므로 추가 처리 불필요
 
                 // appointments가 비어있으면 queue 데이터를 appointment 형태로 변환
                 let finalAppointments = appointments;
+                
+                // ✨ 큐 상태와 appointments 상태 동기화
+                // activeQueue가 있으면 해당하는 appointment의 status도 업데이트
+                if (activeQueue && activeQueue.state && finalAppointments.length > 0) {
+                  const appointmentToUpdate = finalAppointments.find(
+                    apt => apt.appointment_id === activeQueue.appointment || 
+                           apt.exam?.exam_id === activeQueue.exam?.exam_id
+                  );
+                  
+                  if (appointmentToUpdate) {
+                    console.log(`🔄 [동기화] 예약 '${appointmentToUpdate.exam?.title}'의 상태를 '${activeQueue.state}'(으)로 업데이트합니다.`);
+                    appointmentToUpdate.status = activeQueue.state; // 큐의 최신 상태로 동기화
+                  }
+                }
                 if (appointments.length === 0 && currentQueues.length > 0) {
                   finalAppointments = currentQueues.map(queue => ({
                     appointment_id: queue.appointment || `QUEUE_${queue.queue_id}`,
@@ -506,10 +542,34 @@ const useJourneyStore = create(
                   todaysAppointments: finalAppointments,
                   currentQueues: currentQueues,
                   appointments: finalAppointments,
-                  queues: currentQueues
+                  queues: currentQueues,
+                  patientState: finalPatientState  // ✅ 최종 결정된 상태로 업데이트
                 });
                 
                 console.log('✅ 환자 여정 데이터 로드 완료');
+                
+                // ✅ 모든 데이터와 상태가 준비된 후, mapStore에 경로 계산을 명령
+                // Race condition 방지를 위해 여기서 직접 호출
+                try {
+                  const { default: useMapStore } = await import('./mapStore');
+                  const mapStore = useMapStore.getState();
+                  
+                  // navigationMode가 'explore'가 아닐 때만 자동 경로 계산
+                  if (mapStore.navigationMode !== 'explore') {
+                    const currentLocation = get().taggedLocationInfo || {
+                      x_coord: 150,
+                      y_coord: 400,
+                      building: '본관',
+                      floor: '1',
+                      room: '정문 로비'
+                    };
+                    
+                    console.log('🗺️ journeyStore에서 mapStore 경로 업데이트 요청');
+                    await mapStore.updateRouteBasedOnLocation(currentLocation);
+                  }
+                } catch (mapError) {
+                  console.warn('⚠️ mapStore 경로 업데이트 실패 (정상적일 수 있음):', mapError);
+                }
               } catch (patientError) {
                 console.warn('⚠️ 환자 데이터 로드 실패 (정상적일 수 있음):', patientError);
                 // 환자 데이터 로드 실패는 에러로 처리하지 않음
@@ -725,8 +785,75 @@ const useJourneyStore = create(
   )
 );
 
-// ✅ Store 간 협업은 App.jsx에서 처리하도록 변경됨
-// journeyStore는 오직 환자의 여정 데이터만 관리하고,
-// mapStore와의 연결은 App.jsx에서 지휘합니다.
+// ✅ 위치 변경 감시자 설정 (Store 간 협업)
+// 이전 위치를 저장할 변수
+let previousLocationInfo = null;
+let previousMapLocation = null; // 지도 변경 감지용
+
+// journeyStore의 taggedLocationInfo 변경 감시
+useJourneyStore.subscribe(
+  (state) => state.taggedLocationInfo,
+  (taggedLocationInfo) => {
+    // 위치가 변경되었을 때만 실행
+    if (taggedLocationInfo && taggedLocationInfo !== previousLocationInfo) {
+      console.log('📍 위치 변경 감지:', {
+        이전: previousLocationInfo,
+        현재: taggedLocationInfo
+      });
+      
+      // mapStore의 현재 위치 업데이트 및 경로 재계산
+      import('./mapStore').then(({ default: useMapStore }) => {
+        const mapStore = useMapStore.getState();
+        
+        // ✅ 안전장치: '탐색 모드'일 때는 자동 경로 업데이트 스킵
+        if (mapStore.navigationMode === 'explore') {
+          console.log('🚫 탐색 모드 중이므로 자동 경로 업데이트 스킵');
+          return;
+        }
+        
+        // 1. 현재 위치 업데이트
+        mapStore.updateCurrentLocation({
+          x_coord: taggedLocationInfo.x_coord,
+          y_coord: taggedLocationInfo.y_coord,
+          building: taggedLocationInfo.building,
+          floor: taggedLocationInfo.floor,
+          room: taggedLocationInfo.room,
+          description: taggedLocationInfo.description
+        });
+        
+        // 2. 새로운 위치 기반으로 경로 자동 업데이트
+        mapStore.updateRouteBasedOnLocation({
+          x_coord: taggedLocationInfo.x_coord,
+          y_coord: taggedLocationInfo.y_coord,
+          building: taggedLocationInfo.building,
+          floor: taggedLocationInfo.floor,
+          room: taggedLocationInfo.room,
+          description: taggedLocationInfo.description
+        });
+        
+        // 3. 건물/층이 변경되었으면 새로운 지도 로드
+        if (!previousMapLocation || 
+            previousMapLocation.building !== taggedLocationInfo.building ||
+            previousMapLocation.floor !== taggedLocationInfo.floor) {
+          console.log('🗺️ 지도 변경 필요:', {
+            이전: previousMapLocation,
+            현재: { 
+              building: taggedLocationInfo.building, 
+              floor: taggedLocationInfo.floor 
+            }
+          });
+          mapStore.loadMapForLocation(taggedLocationInfo);
+          previousMapLocation = {
+            building: taggedLocationInfo.building,
+            floor: taggedLocationInfo.floor
+          };
+        }
+      });
+      
+      // 이전 위치 업데이트
+      previousLocationInfo = taggedLocationInfo;
+    }
+  }
+);
 
 export default useJourneyStore;

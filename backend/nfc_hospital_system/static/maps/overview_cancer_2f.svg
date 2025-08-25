@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&amp;display=swap');
+            .bg { fill: #ffffff; }
+            .treatment-zone { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; cursor: pointer; }
+            .treatment-zone:hover { fill: #bfdbfe; }
+            .support-zone { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 2; cursor: pointer; }
+            .support-zone:hover { fill: #d1d5db; }
+            .text-base { font-family: "Noto Sans KR", sans-serif; text-anchor: middle; fill: #1e293b; font-weight: 600; stroke: none; }
+            .text-large { font-size: 24px; }
+            .text-medium { font-size: 20px; }
+            .icon-text { font-size: 12px; fill: #475569; }
+        </style>
+    </defs>
+    <rect width="900" height="600" class="bg"/>
+    <g id="floor-layout">
+        <g id="dept-chemotherapy" class="treatment-zone">
+            <rect x="80" y="80" width="450" height="250"/>
+            <text x="305" y="210" class="text-base text-large">항암치료센터</text>
+        </g>
+        <g id="dept-blood-collection" class="treatment-zone">
+            <rect x="550" y="80" width="280" height="110"/>
+            <text x="690" y="140" class="text-base text-large">채혈실</text>
+        </g>
+        <g id="dept-counseling" class="support-zone">
+            <rect x="550" y="210" width="280" height="120"/>
+            <text x="690" y="275" class="text-base text-large">상담/교육실</text>
+        </g>
+        <g id="dept-clinical-trial" class="support-zone">
+             <rect x="80" y="350" width="270" height="150"/>
+             <text x="215" y="430" class="text-base text-medium">임상시험센터</text>
+        </g>
+        <g id="dept-cancer-lab" class="support-zone">
+            <rect x="370" y="350" width="270" height="150"/>
+            <text x="505" y="430" class="text-base text-medium">암 연구소</text>
+        </g>
+    </g>
+    <g id="facilities">
+        <g transform="translate(750, 480)">
+            <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+            <path d="M-10 -8 L0 -15 L10 -8 M-10 8 L0 15 L10 8" stroke="#475569" stroke-width="2" fill="none"/>
+        </g>
+        <text x="750" y="520" class="text-base icon-text">엘리베이터</text>
+    </g>
+</svg>

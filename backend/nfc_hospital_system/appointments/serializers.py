@@ -279,6 +279,23 @@ class TodayScheduleAppointmentSerializer(serializers.Serializer):
                     'called_at': active_queue.called_at.isoformat() if active_queue.called_at else None
                 }
         return None
+    
+    def to_representation(self, instance):
+        """
+        데이터를 최종적으로 보내기 전에 가공합니다.
+        실시간 큐 상태가 있다면, 예약의 status를 덮어씁니다.
+        """
+        # 기본 representation 데이터를 생성합니다.
+        data = super().to_representation(instance)
+        
+        # queue_info에 'state' 필드가 있고, 그 값이 존재한다면
+        if data.get('queue_info') and data['queue_info'].get('state'):
+            # appointment의 status 값을 queue의 state 값으로 덮어씁니다.
+            # 이렇게 하면 프론트엔드에서 일관된 상태를 받게 됩니다.
+            data['status'] = data['queue_info']['state']
+            print(f"✅ [TodayScheduleSerializer] Appointment {instance.appointment_id}의 status를 queue state '{data['queue_info']['state']}'로 동기화")
+        
+        return data
 
 
 class TodayScheduleSerializer(serializers.Serializer):

@@ -57,8 +57,8 @@ const MapNavigator = ({
   const storeCurrentLocation = useMapStore(state => state.currentLocation);
   const currentMapId = useMapStore(state => state.currentMapId);
   
-  // Store의 mapId가 있으면 사용, 없으면 props 사용
-  const mapId = currentMapId || propMapId || 'main_1f';
+  // Props의 mapId를 우선 사용, 없으면 Store 사용
+  const mapId = propMapId || currentMapId || 'main_1f';
   
   // Store에서 경로 데이터 가져오기 (navigationRoute 우선)
   const routeData = navigationRoute || activeRoute || {};
@@ -68,8 +68,8 @@ const MapNavigator = ({
   const corridorEdges = routeData.edges?.length > 0 ? routeData.edges : propPathEdges;
   
   // 현재 위치 설정 - 첫 번째 노드를 현재 위치로 사용
-  const currentLocation = storeCurrentLocation || propCurrentLocation || 
-    (corridorNodes.length > 0 ? corridorNodes[0] : null);
+  const currentLocation = corridorNodes.length > 0 ? corridorNodes[0] : 
+    (storeCurrentLocation || propCurrentLocation || null);
   
   // 디버깅용 로그
   console.log('🗺️ MapNavigator 경로 데이터:', {
@@ -88,11 +88,13 @@ const MapNavigator = ({
     'main-1f': '/images/maps/main_1f.svg',
     'main_2f': '/images/maps/main_2f.svg',
     'main-2f': '/images/maps/main_2f.svg',
-    'main-3f': '/images/maps/main-3f.svg',
+    'main_3f': '/images/maps/main_2f.svg',  // main_3f가 없으므로 main_2f 사용
+    'main-3f': '/images/maps/main_2f.svg',  // main-3f도 main_2f로 폴백
     'overview_main_2f': '/images/maps/overview_main_2f.svg',
     'annex_1f': '/images/maps/annex_1f.svg',
     'annex-1f': '/images/maps/annex_1f.svg',
-    'annex-2f': '/images/maps/annex-2f.svg',
+    'annex_2f': '/images/maps/annex_1f.svg',  // annex_2f가 없으므로 annex_1f 사용
+    'annex-2f': '/images/maps/annex_1f.svg',  // annex-2f도 annex_1f로 폴백
     'cancer_1f': '/images/maps/cancer_1f.svg',
     'cancer_2f': '/images/maps/cancer_2f.svg',
     'default': '/images/maps/default.svg'
@@ -106,9 +108,9 @@ const MapNavigator = ({
       mapSequence.push({ 
         id: 'main_1f', 
         label: '1층', 
-        fullLabel: '본관 1층 - 출발지',
+        fullLabel: ' ',
         highlight: '현재 위치',
-        description: '엘리베이터로 이동' 
+        description: ' ' 
       });
       mapSequence.push({ 
         id: 'main_2f', 
@@ -171,14 +173,46 @@ const MapNavigator = ({
     }
   };
 
+  // 지도 SVG 로드 (지도 변경 시에만)
   useEffect(() => {
-    if (!svgContainerRef.current || !mapSrc) return;
+    if (!svgContainerRef.current) return;
     
-    // SVG 로드
+    // SVG 로드 (백엔드 또는 로컬)
     const loadSvg = async () => {
       try {
-        const response = await fetch(mapSrc);
-        const svgText = await response.text();
+        let svgText = '';
+        
+        // mapStore에서 SVG 내용 확인
+        const currentFloorMap = useMapStore.getState().currentFloorMap;
+        
+        if (currentFloorMap?.svg_content && currentFloorMap.floor_id === mapId) {
+          // 백엔드에서 로드한 SVG 사용
+          svgText = currentFloorMap.svg_content;
+        } else if (mapSrc) {
+          // 로컬 파일 폴백
+          try {
+            const response = await fetch(mapSrc);
+            if (!response.ok) {
+              throw new Error(`Failed to load map: ${response.status}`);
+            }
+            svgText = await response.text();
+          } catch (fetchError) {
+            console.error('지도 파일 로드 실패:', mapSrc, fetchError);
+            // default.svg로 폴백
+            const defaultResponse = await fetch(mapImages.default);
+            svgText = await defaultResponse.text();
+          }
+        } else {
+          // 백엔드에서 지도 로드 시도
+          const loadFloorMap = useMapStore.getState().loadFloorMap;
+          const mapData = await loadFloorMap(mapId);
+          if (mapData?.svg_content) {
+            svgText = mapData.svg_content;
+          } else {
+            console.error('지도를 로드할 수 없습니다');
+            return;
+          }
+        }
         
         // SVG 파싱
         const parser = new DOMParser();
@@ -394,8 +428,13 @@ const MapNavigator = ({
         
         // 컨테이너에 SVG 삽입 (null 체크 추가)
         if (svgContainerRef.current) {
-          svgContainerRef.current.innerHTML = '';
-          svgContainerRef.current.appendChild(svgElement);
+          // 기존 SVG가 있으면 교체, 없으면 추가
+          const existingSvg = svgContainerRef.current.querySelector('svg');
+          if (existingSvg) {
+            svgContainerRef.current.replaceChild(svgElement, existingSvg);
+          } else {
+            svgContainerRef.current.appendChild(svgElement);
+          }
         }
       } catch (error) {
         console.error('SVG 로드 오류:', error);
@@ -403,11 +442,207 @@ const MapNavigator = ({
     };
     
     loadSvg();
-  }, [mapSrc, highlightRoom, currentMapIndex, showNodes, corridorNodes, corridorEdges, currentLocation]); // 모든 데이터 변경시 재렌더링
+  }, [mapSrc, highlightRoom, currentMapIndex]); // 지도 변경 시에만 재로드
 
-  // 경로만 별도로 업데이트하는 useEffect - 제거 (위의 메인 useEffect에서 처리)
-
-  // 별도의 useEffect 제거 - 메인 useEffect에서 처리
+  // 경로와 현재 위치만 업데이트하는 useEffect
+  useEffect(() => {
+    if (!svgContainerRef.current) return;
+    
+    const svgElement = svgContainerRef.current.querySelector('svg');
+    if (!svgElement) {
+      // SVG가 아직 로드되지 않았으면 기다림
+      return;
+    }
+    
+    // 기존 경로와 마커 제거
+    const existingPath = svgElement.querySelector('#path-route');
+    const existingMarker = svgElement.querySelector('#current-location-marker');
+    const existingNodes = svgElement.querySelector('#debug-nodes');
+    
+    if (existingPath) existingPath.remove();
+    if (existingMarker) existingMarker.remove();
+    if (existingNodes) existingNodes.remove();
+    
+    // 노드 표시 모드 (showNodes가 true일 때만 노드 표시)
+    if (showNodes && corridorNodes.length > 0) {
+      const nodesGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      nodesGroup.setAttribute('id', 'debug-nodes');
+      
+      // 디버그용 엣지 표시
+      corridorEdges.forEach(([from, to]) => {
+        const fromNode = corridorNodes.find(n => n.id === from);
+        const toNode = corridorNodes.find(n => n.id === to);
+        
+        if (fromNode && toNode) {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', fromNode.x);
+          line.setAttribute('y1', fromNode.y);
+          line.setAttribute('x2', toNode.x);
+          line.setAttribute('y2', toNode.y);
+          line.setAttribute('stroke', '#10b981');
+          line.setAttribute('stroke-width', '1');
+          line.setAttribute('opacity', '0.3');
+          nodesGroup.appendChild(line);
+        }
+      });
+      
+      // 노드 점 표시
+      corridorNodes.forEach(node => {
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', node.x);
+        circle.setAttribute('cy', node.y);
+        circle.setAttribute('r', '5');
+        circle.setAttribute('fill', '#10b981');
+        circle.setAttribute('stroke', '#ffffff');
+        circle.setAttribute('stroke-width', '2');
+        
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', node.x);
+        text.setAttribute('y', node.y - 8);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '10');
+        text.setAttribute('fill', '#065f46');
+        text.textContent = node.id.replace('node-', '');
+        
+        nodesGroup.appendChild(circle);
+        nodesGroup.appendChild(text);
+      });
+      
+      svgElement.appendChild(nodesGroup);
+    }
+    
+    // 1. 먼저 경로 표시 (경로 데이터가 있으면 항상 표시)
+    if (corridorNodes.length > 0 && corridorEdges.length > 0) {
+      const pathGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      pathGroup.setAttribute('id', 'path-route');
+      
+      // 화살표 마커 정의 (작고 부드러운 화살표)
+      let defs = svgElement.querySelector('defs');
+      if (!defs) {
+        defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        svgElement.appendChild(defs);
+      }
+      
+      if (!defs.querySelector('#arrowhead')) {
+        const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+        marker.setAttribute('id', 'arrowhead');
+        marker.setAttribute('markerWidth', '8');
+        marker.setAttribute('markerHeight', '8');
+        marker.setAttribute('refX', '7');
+        marker.setAttribute('refY', '4');
+        marker.setAttribute('orient', 'auto');
+        marker.setAttribute('fill', '#2563eb');
+        
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', 'M 0 1 L 7 4 L 0 7 L 2 4 z');
+        marker.appendChild(path);
+        defs.appendChild(marker);
+      }
+      
+      // 엣지를 따라 경로 구성
+      corridorEdges.forEach(([from, to], index) => {
+        const fromNode = corridorNodes.find(n => n.id === from);
+        const toNode = corridorNodes.find(n => n.id === to);
+        
+        if (fromNode && toNode) {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', fromNode.x);
+          line.setAttribute('y1', fromNode.y);
+          line.setAttribute('x2', toNode.x);
+          line.setAttribute('y2', toNode.y);
+          line.setAttribute('stroke', '#2563eb'); // bg-blue-600과 동일
+          line.setAttribute('stroke-width', '3');
+          line.setAttribute('stroke-dasharray', '12,6');
+          line.setAttribute('opacity', '0.8');
+          
+          // 마지막 선분에 화살표 추가
+          if (index === corridorEdges.length - 1) {
+            line.setAttribute('marker-end', 'url(#arrowhead)');
+          }
+          
+          // 애니메이션 추가 (점선이 움직이는 효과)
+          const animate = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
+          animate.setAttribute('attributeName', 'stroke-dashoffset');
+          animate.setAttribute('from', '0');
+          animate.setAttribute('to', '-18');  // 음수로 설정하여 정방향 이동
+          animate.setAttribute('dur', '1.5s');
+          animate.setAttribute('repeatCount', 'indefinite');
+          line.appendChild(animate);
+          
+          pathGroup.appendChild(line);
+        }
+      });
+      
+      svgElement.appendChild(pathGroup);
+    }
+    
+    // 2. 그 다음에 현재 위치 마커 추가 (경로보다 위에 그려짐)
+    const locationToShow = currentLocation || (corridorNodes.length > 0 ? corridorNodes[0] : null);
+    if (locationToShow) {
+      const markerGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      markerGroup.setAttribute('id', 'current-location-marker');
+      markerGroup.setAttribute('transform', `translate(${locationToShow.x || locationToShow.x_coord}, ${locationToShow.y || locationToShow.y_coord})`);
+      
+      // 펍스 효과를 위한 큰 원
+      const pulseCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      pulseCircle.setAttribute('r', '20');
+      pulseCircle.setAttribute('fill', 'none');
+      pulseCircle.setAttribute('stroke', '#dc2626');
+      pulseCircle.setAttribute('stroke-width', '2');
+      pulseCircle.setAttribute('opacity', '0.5');
+      
+      // 펍스 애니메이션
+      const pulseAnimate = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
+      pulseAnimate.setAttribute('attributeName', 'r');
+      pulseAnimate.setAttribute('from', '12');
+      pulseAnimate.setAttribute('to', '25');
+      pulseAnimate.setAttribute('dur', '2s');
+      pulseAnimate.setAttribute('repeatCount', 'indefinite');
+      pulseCircle.appendChild(pulseAnimate);
+      
+      const pulseOpacity = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
+      pulseOpacity.setAttribute('attributeName', 'opacity');
+      pulseOpacity.setAttribute('from', '0.8');
+      pulseOpacity.setAttribute('to', '0');
+      pulseOpacity.setAttribute('dur', '2s');
+      pulseOpacity.setAttribute('repeatCount', 'indefinite');
+      pulseCircle.appendChild(pulseOpacity);
+      
+      // 메인 마커
+      const mainCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      mainCircle.setAttribute('r', '12');
+      mainCircle.setAttribute('fill', '#dc2626');
+      mainCircle.setAttribute('stroke', '#ffffff');
+      mainCircle.setAttribute('stroke-width', '3');
+      
+      // 현재 위치 텍스트 - 흰색 배경용 (아래쪽)
+      const textBg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      textBg.setAttribute('y', '-20');
+      textBg.setAttribute('text-anchor', 'middle');
+      textBg.setAttribute('font-size', '16');
+      textBg.setAttribute('font-weight', 'bold');
+      textBg.setAttribute('fill', '#ffffff');
+      textBg.setAttribute('stroke', '#ffffff');
+      textBg.setAttribute('stroke-width', '3');
+      textBg.textContent = '현재 위치';
+      
+      // 현재 위치 텍스트 - 빨간색 (위쪽)
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('y', '-20');
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('font-size', '16');
+      text.setAttribute('font-weight', 'bold');
+      text.setAttribute('fill', '#dc2626');
+      text.textContent = '현재 위치';
+      
+      markerGroup.appendChild(pulseCircle);
+      markerGroup.appendChild(mainCircle);
+      markerGroup.appendChild(textBg);  // 흰색 배경 텍스트 먼저
+      markerGroup.appendChild(text);     // 빨간색 텍스트 나중에
+      
+      svgElement.appendChild(markerGroup);
+    }
+  }, [showNodes, corridorNodes, corridorEdges, currentLocation]); // 경로 데이터 변경 시에만 업데이트
 
   return (
     <div className="relative w-full">

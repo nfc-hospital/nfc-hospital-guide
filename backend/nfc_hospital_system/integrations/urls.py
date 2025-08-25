@@ -9,22 +9,22 @@ urlpatterns = [
     # path('emr/mapping-rules/', views.emr_mapping_rules, name='emr-mapping-rules'),
     
     # 시연용 가상 EMR 테스트 API
-    path('test/patients/', views.test_patient_list, name='test-patient-list'),
-    path('test/patient-state/', views.test_update_patient_state, name='test-update-state'),
-    path('test/queue-state/', views.test_update_queue_state, name='test-update-queue-state'),
-    path('test/simulate/', views.test_simulate_patient_flow, name='test-simulate'),
-    path('test/reset/', views.test_reset_all_states, name='test-reset'),
+    path('patients/', views.test_patient_list, name='test-patient-list'),
+    path('patient-state/', views.test_update_patient_state, name='test-update-state'),
+    path('queue-state/', views.test_update_queue_state, name='test-update-queue-state'),
+    path('simulate/', views.test_simulate_patient_flow, name='test-simulate'),
+    path('reset/', views.test_reset_all_states, name='test-reset'),
     
     # 시연용 검사/진료 관리 API
-    path('test/available-exams/', views.test_get_available_exams, name='test-available-exams'),
-    path('test/add-exam/', views.test_add_exam_to_patient, name='test-add-exam'),
+    path('available-exams/', views.test_get_available_exams, name='test-available-exams'),
+    path('add-exam/', views.test_add_exam_to_patient, name='test-add-exam'),
     
     # 시연용 위치 관리 API
-    path('test/locations/', views.test_get_locations, name='test-locations'),
-    path('test/patient-location/', views.test_update_patient_location, name='test-update-location'),
+    path('locations/', views.test_get_locations, name='test-locations'),
+    path('patient-location/', views.test_update_patient_location, name='test-update-location'),
     
     # 지도 및 경로 관리 API
-    path('test/maps/', views.test_get_maps, name='test-maps'),
-    path('test/facility-route/<str:facility_name>/', views.test_get_facility_route, name='test-facility-route'),
-    path('test/save-facility-route/', views.test_save_facility_route, name='test-save-facility-route'),
+    path('maps/', views.test_get_maps, name='test-maps'),
+    path('facility-route/<str:facility_name>/', views.test_get_facility_route, name='test-facility-route'),
+    path('save-facility-route/', views.test_save_facility_route, name='test-save-facility-route'),
 ]

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&amp;display=swap');
+            
+            /* 기본 스타일 */
+            .bg { fill: #ffffff; }
+            .room { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 2; }
+            .clinic-room { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; }
+            .doorway { stroke: #ffffff; stroke-width: 8; }
+
+            /* 텍스트 스타일 */
+            .text-base { font-family: "Noto Sans KR", sans-serif; text-anchor: middle; fill: #1e293b; font-weight: 600; }
+            .text-large { font-size: 16px; }
+            .text-medium { font-size: 14px; }
+            .icon-text { font-size: 12px; fill: #475569; }
+        </style>
+    </defs>
+
+    <!-- 배경 -->
+    <rect width="900" height="600" class="bg"/>
+
+    <!-- 공간 배치 -->
+    <g id="floor-layout">
+        
+        <!-- 상단 - 대기실 -->
+        <rect x="300" y="80" width="300" height="120" class="room"/>
+        <line x1="420" y1="200" x2="480" y2="200" class="doorway"/>
+        <text x="450" y="145" class="text-base text-large">내과 대기실</text>
+
+        <!-- 중앙 - 진료실들 (일렬 배치) -->
+        <g id="clinic-rooms">
+            <!-- 내과 진료실 1 -->
+            <rect x="150" y="240" width="130" height="100" class="clinic-room"/>
+            <line x1="215" y1="240" x2="215" y2="220" class="doorway"/>
+            <text x="215" y="295" class="text-base text-large">내과 진료실 1</text>
+
+            <!-- 내과 진료실 2 -->
+            <rect x="300" y="240" width="130" height="100" class="clinic-room"/>
+            <line x1="365" y1="240" x2="365" y2="220" class="doorway"/>
+            <text x="365" y="295" class="text-base text-large">내과 진료실 2</text>
+
+            <!-- 내과 진료실 3 -->
+            <rect x="450" y="240" width="130" height="100" class="clinic-room"/>
+            <line x1="515" y1="240" x2="515" y2="220" class="doorway"/>
+            <text x="515" y="295" class="text-base text-large">내과 진료실 3</text>
+        </g>
+
+        <!-- 중앙 - 간호사실 -->
+        <rect x="350" y="370" width="200" height="80" class="room"/>
+        <line x1="420" y1="370" x2="480" y2="370" class="doorway"/>
+        <text x="450" y="415" class="text-base text-large">간호사실</text>
+
+        <!-- 좌측 하단 - 처치실 -->
+        <rect x="150" y="380" width="130" height="100" class="clinic-room"/>
+        <line x1="215" y1="380" x2="215" y2="360" class="doorway"/>
+        <text x="215" y="435" class="text-base text-large">처치실</text>
+
+        <!-- 우측 하단 - 상담실 -->
+        <rect x="620" y="380" width="130" height="100" class="clinic-room"/>
+        <line x1="685" y1="380" x2="685" y2="360" class="doorway"/>
+        <text x="685" y="435" class="text-base text-large">상담실</text>
+
+        <!-- 시설들 -->
+        <g id="facilities">
+            <!-- 엘리베이터 -->
+            <g transform="translate(450, 520)">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-10 -8 L0 -15 L10 -8 M-10 8 L0 15 L10 8" stroke="#475569" stroke-width="2" fill="none"/>
+            </g>
+            <text x="450" y="560" class="text-base icon-text">엘리베이터</text>
+
+            <!-- 계단 -->
+            <g transform="translate(780, 280)">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-12 -10 L-12 -6 L-6 -6 L-6 -2 L0 -2 L0 2 L6 2 L6 6 L12 6 L12 10" stroke="#475569" stroke-width="2" fill="none"/>
+            </g>
+            <text x="780" y="320" class="text-base icon-text">계단</text>
+
+            <!-- 화장실 -->
+            <g transform="translate(80, 280)">
+                <circle cx="-8" cy="-8" r="4" fill="#475569"/>
+                <rect x="-10" y="-2" width="4" height="10" fill="#475569"/>
+                <circle cx="8" cy="-8" r="4" fill="#475569"/>
+                <path d="M 6 -2 L 10 -2 L 10 8 L 8 8 L 8 3 L 6 3 Z" fill="#475569"/>
+            </g>
+            <text x="80" y="320" class="text-base icon-text">화장실</text>
+        </g>
+    </g>
+</svg>

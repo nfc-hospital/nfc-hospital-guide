@@ -65,7 +65,7 @@ const useMapStore = create(
         }
       },
 
-      // 특정 층 지도 로드
+      // 특정 층 지도 로드 (백엔드에서 SVG + 메타데이터)
       loadFloorMap: async (floorId) => {
         const currentMap = get().currentFloorMap;
         
@@ -80,9 +80,20 @@ const useMapStore = create(
           const data = response?.data || response;
           
           if (data) {
+            // SVG 내용과 메타데이터 저장
             set({ 
-              currentFloorMap: { ...data.map, floor_id: floorId },
-              currentFloorNodes: data.nodes || []
+              currentFloorMap: { 
+                floor_id: floorId,
+                building: data.building,
+                floor: data.floor,
+                svg_content: data.svg_content,
+                svg_url: data.svg_url,
+                width: data.metadata?.width || 900,
+                height: data.metadata?.height || 600,
+                ...data.metadata?.map
+              },
+              currentFloorNodes: data.metadata?.nodes || [],
+              currentMapId: floorId
             });
             return data;
           }
@@ -181,6 +192,11 @@ const useMapStore = create(
             timestamp: new Date().toISOString()
           }
         });
+      },
+      
+      // 현재 위치 설정 (단순 설정)
+      setCurrentLocation: (location) => {
+        set({ currentLocation: location });
       },
       
       // ✅ 위치 변경 시 자동으로 경로 업데이트 (hospital_navigation API 사용)

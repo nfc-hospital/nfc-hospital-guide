@@ -21,17 +21,22 @@ router.register(
     basename='navigation-nodes'
 )
 router.register(
+    r'edges',
+    views.NavigationManagementViewSet,
+    basename='navigation-edges'
+)
+router.register(
     r'routes',
     views.NavigationManagementViewSet,
     basename='patient-routes'
 )
 
 urlpatterns = [
-    # 환자용 경로 안내 API
-    path('api/nfc/scan/navigate/', views.nfc_scan_navigate, name='nfc-scan-navigate'),
-    path('api/navigation/complete/', views.navigation_complete, name='navigation-complete'),
-    path('api/hospital/map/<str:floor_id>/', views.get_hospital_map, name='hospital-map'),
-    path('api/routes/search/', views.search_routes, name='routes-search'),
+    # 환자용 경로 안내 API - /api/v1 prefix를 따라가도록 수정
+    path('api/v1/nfc/scan/navigate/', views.nfc_scan_navigate, name='nfc-scan-navigate'),
+    path('api/v1/navigation/complete/', views.navigation_complete, name='navigation-complete'),
+    path('api/v1/hospital/map/<str:floor_id>/', views.get_hospital_map, name='hospital-map'),
+    path('api/v1/routes/search/', views.search_routes, name='routes-search'),
     
     # 개선된 지도 메타데이터 API
     path('api/v1/navigation/maps/', views.get_maps_metadata, name='maps-metadata'),

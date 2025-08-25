@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import useJourneyStore from '../../store/journeyStore';
 import FormatBTemplate from '../templates/FormatBTemplate';
 import ExamPreparationChecklist from '../ExamPreparationChecklist';
 import { MapPinIcon, PhoneIcon } from '@heroicons/react/24/outline';
 
-export default function UnregisteredScreen({ taggedLocation }) {
+export default function UnregisteredScreen({ 
+  // props로 받은 데이터들
+  taggedLocation,
+  user,
+  todaysAppointments = [],
+  fetchJourneyData,
+  nextSchedule,
+  summaryCards
+}) {
   const navigate = useNavigate();
-  const { user, todaysAppointments = [], fetchJourneyData } = useJourneyStore();
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(false);
@@ -17,18 +23,7 @@ export default function UnregisteredScreen({ taggedLocation }) {
   React.useEffect(() => {
     console.log('🔍 UnregisteredScreen - todaysAppointments:', todaysAppointments);
     console.log('🔍 UnregisteredScreen - user:', user);
-  }, [todaysAppointments]);
-
-  // 다음 일정 정보 (첫 번째 예약)
-  const nextSchedule = todaysAppointments.length > 0 
-    ? `${new Date(todaysAppointments[0].scheduled_at).toLocaleDateString('ko-KR')} ${new Date(todaysAppointments[0].scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
-    : '예정된 일정 없음';
-
-  // 상단 요약 카드
-  const summaryCards = [
-    { label: '병원 전화번호', value: '02-1234-5678' },
-    { label: '접수 시간', value: '08:00~17:00' }
-  ];
+  }, [todaysAppointments, user]);
 
   // 오늘의 일정 준비
   const todaySchedule = todaysAppointments?.map((apt, index) => ({
@@ -149,9 +144,23 @@ export default function UnregisteredScreen({ taggedLocation }) {
         nextSchedule={nextSchedule}
         summaryCards={summaryCards}
         todaySchedule={todaySchedule}
+        actionButtons={[
+          {
+            text: '병원 찾아오기',
+            icon: '🗺️',
+            variant: 'primary',
+            onClick: () => navigate('/public', { state: { showMap: true } })
+          },
+          {
+            text: '전화 문의',
+            icon: '📞',
+            variant: 'secondary',
+            onClick: () => window.location.href = 'tel:02-1234-5678'
+          }
+        ]}
+        taggedLocation={taggedLocation}
         preparationItems={preparationItems}
         customPreparationContent={customPreparationContent}
-        showQuickNavigation={false}
       />
       <RescheduleModal />
     </>

@@ -41,28 +41,28 @@ const DepartmentDirections = ({ department, onClose }) => {
         floor: 3,
         roomNumber: '304',
         directions: '엘리베이터에서 우측으로 30m',
-        mapId: 'main-3f'
+        mapId: 'main_3f'
       },
       안과: {
         building: '본관',
         floor: 3,
         roomNumber: '303',
         directions: '엘리베이터에서 우측으로 20m',
-        mapId: 'main-3f'
+        mapId: 'main_3f'
       },
       정형외과: {
         building: '신관',
         floor: 2,
         roomNumber: '201',
         directions: '엘리베이터에서 좌측으로 10m',
-        mapId: 'annex-2f'
+        mapId: 'annex_2f'
       },
       내과: {
         building: '본관',
         floor: 2,
         roomNumber: '202',
         directions: '엘리베이터에서 직진 후 좌측',
-        mapId: 'main-2f'
+        mapId: 'main_2f'
       },
       // 다른 진료과 정보 추가...
     };

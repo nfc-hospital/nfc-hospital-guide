@@ -172,26 +172,43 @@ const apiService = {
     getCongestionAwareRoute: () => api.get('/navigation/congestion-aware-route'),
     
     // hospital_navigation 앱 API 추가
-    // NFC 스캔 기반 경로 안내 - ✅ 수정: /api/nfc/scan/navigate/ (v1 없음)
-    nfcScanNavigate: (data) => api.post('/api/nfc/scan/navigate/', data),
+    // NFC 스캔 기반 경로 안내 - baseURL이 /api/v1이므로 /api 제거
+    nfcScanNavigate: (data) => api.post('/nfc/scan/navigate/', data),
     
-    // 경로 완료/취소 - ✅ 수정: /api/navigation/complete/
-    completeRoute: (data) => api.post('/api/navigation/complete/', data),
+    // 경로 완료/취소 - baseURL이 /api/v1이므로 /api 제거
+    completeRoute: (data) => api.post('/navigation/complete/', data),
     
-    // 지도 정보 조회 - ✅ 수정: /api/hospital/map/
-    getHospitalMap: (floorId) => api.get(`/api/hospital/map/${floorId}/`),
+    // 지도 정보 조회 - baseURL이 /api/v1이므로 /api 제거
+    getHospitalMap: (floorId) => api.get(`/hospital/map/${floorId}/`),
     
-    // 경로 검색 - ✅ 수정: /api/routes/search/
-    searchRoutes: (params) => api.get('/api/routes/search/', { params }),
+    // 경로 검색 - baseURL이 /api/v1이므로 /api 제거
+    searchRoutes: (params) => api.get('/routes/search/', { params }),
     
-    // 지도 메타데이터 (개선된 버전) - ✅ 수정: /api/v1/navigation/maps/
-    getMapsMetadata: () => api.get('/api/v1/navigation/maps/'),
+    // 지도 메타데이터 (개선된 버전) - baseURL이 /api/v1이므로 /api/v1 제거
+    getMapsMetadata: () => api.get('/navigation/maps/'),
     
-    // 진료과/시설 존 목록 - ✅ 수정: /api/v1/navigation/zones/
-    getDepartmentZones: (params = {}) => api.get('/api/v1/navigation/zones/', { params }),
+    // 진료과/시설 존 목록 - baseURL이 /api/v1이므로 /api/v1 제거
+    getDepartmentZones: (params = {}) => api.get('/navigation/zones/', { params }),
     
-    // 특정 진료과/시설 존 상세 - ✅ 수정: /api/v1/navigation/zones/{id}/
-    getDepartmentZoneDetail: (zoneId) => api.get(`/api/v1/navigation/zones/${zoneId}/`),
+    // 특정 진료과/시설 존 상세 - baseURL이 /api/v1이므로 /api/v1 제거
+    getDepartmentZoneDetail: (zoneId) => api.get(`/navigation/zones/${zoneId}/`),
+    
+    // 노드 관리 API
+    getNodes: (mapId) => api.get('/navigation/nodes/', { params: { map_id: mapId } }),
+    createNode: (data) => api.post('/navigation/nodes/', data),
+    updateNode: (nodeId, data) => api.put(`/navigation/nodes/${nodeId}/`, data),
+    deleteNode: (nodeId) => api.delete(`/navigation/nodes/${nodeId}/`),
+    
+    // 엣지 관리 API
+    getEdges: (mapId) => api.get('/navigation/edges/', { params: { map_id: mapId } }),
+    createEdge: (data) => api.post('/navigation/edges/', data),
+    updateEdge: (edgeId, data) => api.put(`/navigation/edges/${edgeId}/`, data),
+    deleteEdge: (edgeId) => api.delete(`/navigation/edges/${edgeId}/`),
+    
+    // 경로 관리 API
+    getRoutes: (mapId) => api.get('/navigation/routes/', { params: { map_id: mapId } }),
+    calculateRoutes: (data) => api.post('/navigation/routes/calculate/', data),
+    deleteRoute: (routeId) => api.delete(`/navigation/routes/${routeId}/`),
     
     // 현재 위치에서 목적지까지 경로 계산
     calculateRouteFromLocation: async (currentLocation, destination) => {

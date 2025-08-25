@@ -1,73 +1,32 @@
-import React, { useEffect } from 'react';
-import useJourneyStore from '../../store/journeyStore';
-import useMapStore from '../../store/mapStore';
+import React from 'react';
 import FormatATemplate from '../templates/FormatATemplate';
 
-export default function PaymentScreen({ taggedLocation }) {
-  // Store에서 필요한 데이터 가져오기 (구조 분해 사용)
-  const { 
-    user, 
-    patientState,
-    getTodaysScheduleForUI,
-    getCompletionStats,
-    getWaitingInfo
-  } = useJourneyStore();
-  
-  // mapStore에서 경로 정보 가져오기
-  const {
-    activeRoute,
-    navigationRoute
-  } = useMapStore();
-  
-  // Store에서 계산된 상태 사용
-  const todaySchedule = getTodaysScheduleForUI();
-  const completionStats = getCompletionStats();
-  const waitingInfo = getWaitingInfo();
+export default function PaymentScreen({ 
+  // props로 받은 데이터들
+  taggedLocation,
+  user,
+  patientState,
+  todaySchedule,
+  totalSteps,
+  waitingInfo,
+  paymentLocationInfo,
+  completionStats,
+  paymentInfo
+}) {
+  // ❌ 모든 Store Hook 호출과 데이터 가공 로직 삭제!
+  // 이제 모든 데이터는 props로 받아서 사용합니다.
   
   // 현재 단계 계산 - 수납 단계는 모든 검사 완료 후
-  const currentStep = todaySchedule.length;
-  
-  
-  const locationInfo = {
-    name: '원무과 수납창구',
-    building: '본관',
-    floor: '1층',
-    room: '중앙홀 우측',
-    department: '원무과',
-    directions: '엘리베이터로 1층 이동 후 오른쪽으로 가시면 됩니다',
-    mapFile: 'main_1f.svg',
-    svgId: 'payment-desk',
-    mapId: 'main_1f',
-    // 실제 백엔드 데이터 사용 (hospital_navigation)
-    x_coord: 280, // 백엔드에서 원무과 수납창구 좌표 사용
-    y_coord: 250,
-    // 현재 위치
-    currentLocation: {
-      x_coord: 200,
-      y_coord: 300,
-      building: '본관',
-      floor: '1',
-      room: '엘리베이터 홀'
-    },
-    // 실제 hospital_navigation 경로 데이터 사용
-    pathNodes: activeRoute?.path_nodes || navigationRoute?.nodes || [],
-    pathEdges: activeRoute?.path_edges || navigationRoute?.edges || []
-  };
-  
-  // 수납 대기 정보 - store에서 계산된 값 사용
-  const paymentInfo = waitingInfo || {
-    peopleAhead: 0,
-    estimatedTime: 5
-  };
+  const currentStep = todaySchedule?.length || 0;
 
   return (
     <FormatATemplate
       screenType="payment"
       currentStep={currentStep}
-      totalSteps={todaySchedule.length || 7}
+      totalSteps={totalSteps}
       nextAction={null} // 자동 생성되도록 null 전달
       waitingInfo={paymentInfo}
-      locationInfo={locationInfo}
+      locationInfo={paymentLocationInfo}
       todaySchedule={todaySchedule}
       taggedLocation={taggedLocation}
       patientState={user?.state || patientState || 'PAYMENT'}

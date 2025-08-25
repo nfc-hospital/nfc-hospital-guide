@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&amp;display=swap');
+            
+            /* 기본 스타일 */
+            .bg { fill: #ffffff; }
+            .room { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 2; }
+            .treatment-room { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; }
+            .convenience { fill: #e0f2fe; stroke: #0891b2; stroke-width: 2; }
+            .doorway { stroke: #ffffff; stroke-width: 8; }
+
+            /* 텍스트 스타일 */
+            .text-base { font-family: "Noto Sans KR", sans-serif; text-anchor: middle; fill: #1e293b; font-weight: 600; }
+            .text-large { font-size: 16px; }
+            .text-medium { font-size: 14px; }
+            .icon-text { font-size: 12px; fill: #475569; }
+        </style>
+    </defs>
+
+    <!-- 배경 -->
+    <rect width="900" height="600" class="bg"/>
+
+    <!-- 공간 배치 -->
+    <g id="floor-layout">
+        
+        <!-- 중앙 - 로비 (큰 원형 공간) -->
+        <circle cx="450" cy="300" r="100" class="room"/>
+        <text x="450" y="290" class="text-base text-large">암센터 로비</text>
+        <text x="450" y="315" class="text-base text-medium">Cancer Center Lobby</text>
+
+        <!-- 좌측 - 상담실들 -->
+        <g id="consultation-area">
+            <!-- 상담실 1 -->
+            <rect x="80" y="200" width="140" height="100" class="treatment-room"/>
+            <line x1="220" y1="240" x2="220" y2="260" class="doorway"/>
+            <text x="150" y="255" class="text-base text-large">상담실 1</text>
+
+            <!-- 상담실 2 -->
+            <rect x="80" y="340" width="140" height="100" class="treatment-room"/>
+            <line x1="220" y1="370" x2="220" y2="390" class="doorway"/>
+            <text x="150" y="395" class="text-base text-large">상담실 2</text>
+        </g>
+
+        <!-- 상단 - 대기실 -->
+        <rect x="300" y="80" width="300" height="100" class="room"/>
+        <line x1="420" y1="180" x2="480" y2="180" class="doorway"/>
+        <text x="450" y="135" class="text-base text-large">치료 대기실</text>
+
+        <!-- 우측 - 치료실들 -->
+        <g id="treatment-area">
+            <!-- 방사선치료실 -->
+            <rect x="650" y="200" width="180" height="140" class="treatment-room"/>
+            <line x1="650" y1="260" x2="650" y2="280" class="doorway"/>
+            <text x="740" y="265" class="text-base text-large">방사선치료실</text>
+
+            <!-- 항암치료실 -->
+            <rect x="650" y="80" width="180" height="100" class="treatment-room"/>
+            <line x1="650" y1="120" x2="650" y2="140" class="doorway"/>
+            <text x="740" y="135" class="text-base text-large">항암치료실</text>
+        </g>
+
+        <!-- 하단 - 휴게실 -->
+        <rect x="280" y="450" width="220" height="100" class="convenience"/>
+        <line x1="360" y1="450" x2="420" y2="450" class="doorway"/>
+        <text x="390" y="505" class="text-base text-large">휴게실</text>
+
+        <!-- 시설들 (아이콘만) -->
+        <g id="facilities">
+            <!-- 입구 -->
+            <g transform="translate(150, 150)">
+                <path d="M-15 0 L15 0 M10 -5 L15 0 L10 5" stroke="#475569" stroke-width="3" fill="none"/>
+            </g>
+            <text x="150" y="175" class="text-base icon-text">암센터 입구</text>
+
+            <!-- 엘리베이터 -->
+            <g transform="translate(580, 480)">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-10 -8 L0 -15 L10 -8 M-10 8 L0 15 L10 8" stroke="#475569" stroke-width="2" fill="none"/>
+            </g>
+            <text x="580" y="520" class="text-base icon-text">엘리베이터</text>
+
+            <!-- 본관 연결통로 -->
+            <g transform="translate(50, 120)">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-15 0 L15 0 M-10 -5 L-15 0 L-10 5 M10 -5 L15 0 L10 5" stroke="#475569" stroke-width="2" fill="none"/>
+            </g>
+            <text x="50" y="160" class="text-base icon-text">본관연결</text>
+
+            <!-- 화장실 -->
+            <g transform="translate(750, 450)">
+                <circle cx="-8" cy="-8" r="4" fill="#475569"/>
+                <rect x="-10" y="-2" width="4" height="10" fill="#475569"/>
+                <circle cx="8" cy="-8" r="4" fill="#475569"/>
+                <path d="M 6 -2 L 10 -2 L 10 8 L 8 8 L 8 3 L 6 3 Z" fill="#475569"/>
+            </g>
+            <text x="750" y="480" class="text-base icon-text">화장실</text>
+        </g>
+    </g>
+</svg>

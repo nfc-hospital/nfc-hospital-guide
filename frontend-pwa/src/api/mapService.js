@@ -10,7 +10,7 @@ export const mapService = {
    */
   async getMaps() {
     try {
-      const response = await api.get('/integrations/test/maps/');
+      const response = await api.get('/test/maps/');
       return response.data;
     } catch (error) {
       console.error('Failed to fetch maps:', error);
@@ -25,7 +25,7 @@ export const mapService = {
    */
   async getFacilityRoute(facilityName) {
     try {
-      const response = await api.get(`/integrations/test/facility-route/${encodeURIComponent(facilityName)}/`);
+      const response = await api.get(`/test/facility-route/${encodeURIComponent(facilityName)}/`);
       return response.data;
     } catch (error) {
       console.error(`Failed to fetch route for ${facilityName}:`, error);
@@ -40,7 +40,7 @@ export const mapService = {
    */
   async saveFacilityRoute(routeData) {
     try {
-      const response = await api.post('/integrations/test/save-facility-route/', routeData);
+      const response = await api.post('/test/save-facility-route/', routeData);
       return response.data;
     } catch (error) {
       console.error('Failed to save facility route:', error);

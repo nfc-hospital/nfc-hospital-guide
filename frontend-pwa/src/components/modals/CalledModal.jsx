@@ -1,19 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import useJourneyStore from '../../store/journeyStore';
 
-export default function CalledModal({ isOpen, onClose }) {
-  const { user, currentQueues, todaysAppointments } = useJourneyStore();
+export default function CalledModal({ 
+  isOpen, 
+  onClose, 
+  examInfo: propsExamInfo,
+  userName,
+  currentTask
+}) {
   const [isClosing, setIsClosing] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
 
-  // 호출된 큐 찾기
-  const calledQueue = currentQueues.find(q => q.state === 'called');
-  const calledAppointment = todaysAppointments?.find(
-    apt => apt.status === 'called' || 
-    (calledQueue && apt.appointment_id === calledQueue.appointment_id)
-  );
-
-  const examInfo = calledQueue?.exam || calledAppointment?.exam;
+  // props로 전달받은 examInfo를 우선 사용
+  const examInfo = propsExamInfo || currentTask?.exam;
 
   useEffect(() => {
     if (!isOpen) {
@@ -123,7 +121,7 @@ export default function CalledModal({ isOpen, onClose }) {
               호출되었습니다!
             </h1>
             <p className="text-lg text-white/90 font-semibold">
-              {user?.name}님, 검사실로 와주세요
+              {userName || '환자'}님, 검사실로 와주세요
             </p>
           </div>
 

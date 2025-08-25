@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="900" height="600" viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&amp;display=swap');
+            /* 기본 스타일 */
+            .bg { fill: #ffffff; }
+            .room { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 2; }
+            .treatment-room { fill: #dbeafe; stroke: #3b82f6; stroke-width: 2; }
+            .convenience { fill: #e0f2fe; stroke: #0891b2; stroke-width: 2; }
+            .doorway { stroke: #ffffff; stroke-width: 8; }
+            /* 텍스트 스타일 */
+            .text-base { font-family: "Noto Sans KR", sans-serif; text-anchor: middle; fill: #1e293b; font-weight: 600; }
+            .text-large { font-size: 16px; }
+            .text-medium { font-size: 14px; }
+            .icon-text { font-size: 12px; fill: #475569; }
+        </style>
+    </defs>
+    <rect width="900" height="600" class="bg"/>
+    <g id="floor-layout">
+        <circle cx="450" cy="300" r="100" class="room" id="lobby-cancer-center" data-name="암센터 로비" data-interactive="true"/>
+        <text x="450" y="290" class="text-base text-large">암센터 로비</text>
+        <text x="450" y="315" class="text-base text-medium">Cancer Center Lobby</text>
+        <g id="consultation-area">
+            <rect x="80" y="200" width="140" height="100" class="treatment-room" id="room-consultation-1" data-name="상담실 1" data-interactive="true"/>
+            <line x1="220" y1="240" x2="220" y2="260" class="doorway"/>
+            <text x="150" y="255" class="text-base text-large">상담실 1</text>
+            <rect x="80" y="340" width="140" height="100" class="treatment-room" id="room-consultation-2" data-name="상담실 2" data-interactive="true"/>
+            <line x1="220" y1="370" x2="220" y2="390" class="doorway"/>
+            <text x="150" y="395" class="text-base text-large">상담실 2</text>
+        </g>
+        <rect x="300" y="80" width="300" height="100" class="room" id="waiting-room-treatment" data-name="치료 대기실" data-interactive="true"/>
+        <line x1="420" y1="180" x2="480" y2="180" class="doorway"/>
+        <text x="450" y="135" class="text-base text-large">치료 대기실</text>
+        <g id="treatment-area">
+            <rect x="650" y="200" width="180" height="140" class="treatment-room" id="room-radiation-therapy" data-name="방사선치료실" data-interactive="true"/>
+            <line x1="650" y1="260" x2="650" y2="280" class="doorway"/>
+            <text x="740" y="265" class="text-base text-large">방사선치료실</text>
+            <rect x="650" y="80" width="180" height="100" class="treatment-room" id="room-chemotherapy" data-name="항암치료실" data-interactive="true"/>
+            <line x1="650" y1="120" x2="650" y2="140" class="doorway"/>
+            <text x="740" y="135" class="text-base text-large">항암치료실</text>
+        </g>
+        <rect x="280" y="450" width="220" height="100" class="convenience" id="lounge" data-name="휴게실" data-interactive="true"/>
+        <line x1="360" y1="450" x2="420" y2="450" class="doorway"/>
+        <text x="390" y="505" class="text-base text-large">휴게실</text>
+        <g id="facilities">
+            <g transform="translate(150, 160)" id="info-cancer-center-gate" data-name="암센터 입구" data-interactive="true">
+                <path d="M-15 0 L15 0 M10 -5 L15 0 L10 5" stroke="#475569" stroke-width="3" fill="none"/>
+                <text y="30" class="text-base icon-text">암센터 입구</text>
+            </g>
+            <g transform="translate(580, 500)" id="facility-elevator-3" data-name="엘리베이터" data-interactive="true">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-10 -8 L0 -15 L10 -8 M-10 8 L0 15 L10 8" stroke="#475569" stroke-width="2" fill="none"/>
+                <text y="40" class="text-base icon-text">엘리베이터</text>
+            </g>
+            <g transform="translate(50, 140)" id="conn-main-building" data-name="본관 연결통로" data-interactive="true">
+                <rect x="-20" y="-20" width="40" height="40" fill="none" stroke="#475569" stroke-width="2"/>
+                <path d="M-15 0 L15 0 M-10 -5 L-15 0 L-10 5 M10 -5 L15 0 L10 5" stroke="#475569" stroke-width="2" fill="none"/>
+                <text y="40" class="text-base icon-text">본관연결</text>
+            </g>
+            <g transform="translate(750, 465)" id="facility-restroom-3" data-name="화장실" data-interactive="true">
+                <circle cx="-8" cy="-8" r="4" fill="#475569"/>
+                <rect x="-10" y="-2" width="4" height="10" fill="#475569"/>
+                <circle cx="8" cy="-8" r="4" fill="#475569"/>
+                <path d="M 6 -2 L 10 -2 L 10 8 L 8 8 L 8 3 L 6 3 Z" fill="#475569"/>
+                <text y="30" class="text-base icon-text">화장실</text>
+            </g>
+        </g>
+    </g>
+</svg>

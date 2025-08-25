@@ -5,6 +5,8 @@ Hospital Navigation Views
 
 from django.shortcuts import get_object_or_404
 from django.db import models, transaction
+from django.http import HttpResponse, Http404
+from django.conf import settings
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -14,6 +16,7 @@ from rest_framework.decorators import action
 from django.utils import timezone
 import logging
 import json
+import os
 from typing import List, Dict, Optional, Tuple
 import heapq
 from collections import defaultdict
@@ -377,56 +380,121 @@ def navigation_complete(request):
         )
 
 
-# 병원 지도 조회 API
+# 병원 지도 조회 API (SVG 파일 + 메타데이터)
 @api_view(['GET'])
 @permission_classes([permissions.AllowAny])
 def get_hospital_map(request, floor_id):
     """
-    특정 층 지도 정보 조회 - GET /api/hospital/map/{floor_id}/
+    특정 층 지도 정보 조회 - GET /api/v1/hospital/map/{floor_id}/
+    HospitalMap 모델에서 SVG 데이터와 메타데이터 제공
     """
     try:
         # floor_id는 "main_1f", "cancer_2f" 같은 형식
+        # floor_id 파싱
         parts = floor_id.split('_')
-        if len(parts) != 2:
-            return APIResponse.error(
-                message="잘못된 층 ID 형식입니다.",
-                code="INVALID_FLOOR_ID",
-                status_code=status.HTTP_400_BAD_REQUEST
+        if len(parts) == 2:
+            building = parts[0]
+            floor_str = parts[1]
+            
+            # 층수를 정수로 변환
+            try:
+                if 'b' in floor_str:  # 지하층 (예: b1)
+                    floor = -int(floor_str.replace('b', ''))
+                else:  # 지상층 (예: 1f, 2f)
+                    floor = int(floor_str.replace('f', ''))
+            except ValueError:
+                floor = 1
+        else:
+            building = 'main'
+            floor = 1
+        
+        # DB에서 지도 메타데이터 조회
+        hospital_map = None
+        nodes = []
+        
+        try:
+            hospital_map = HospitalMap.objects.get(
+                building__iexact=building,
+                floor=floor,
+                is_active=True
             )
+            
+            # SVG 데이터가 DB에 있으면 사용, 없으면 파일에서 읽기
+            if hospital_map.svg_data:
+                svg_content = hospital_map.svg_data
+            else:
+                # 정적 파일에서 읽기
+                svg_filename = f"{floor_id}.svg"
+                svg_path = os.path.join(settings.BASE_DIR, 'static', 'maps', svg_filename)
+                
+                if not os.path.exists(svg_path):
+                    svg_filename = f"{floor_id}.interactive.svg"
+                    svg_path = os.path.join(settings.BASE_DIR, 'static', 'maps', svg_filename)
+                
+                if os.path.exists(svg_path):
+                    with open(svg_path, 'r', encoding='utf-8') as f:
+                        svg_content = f.read()
+                else:
+                    svg_content = None
+            
+            # 해당 층의 노드들도 함께 조회
+            nodes = NavigationNode.objects.filter(
+                map=hospital_map
+            ).select_related('nfc_tag', 'exam')
+            
+        except HospitalMap.DoesNotExist:
+            # DB에 없으면 파일에서만 읽기
+            svg_filename = f"{floor_id}.svg"
+            svg_path = os.path.join(settings.BASE_DIR, 'static', 'maps', svg_filename)
+            
+            if not os.path.exists(svg_path):
+                svg_filename = f"{floor_id}.interactive.svg"
+                svg_path = os.path.join(settings.BASE_DIR, 'static', 'maps', svg_filename)
+            
+            if os.path.exists(svg_path):
+                with open(svg_path, 'r', encoding='utf-8') as f:
+                    svg_content = f.read()
+            else:
+                return APIResponse.error(
+                    message=f"지도 파일을 찾을 수 없습니다: {floor_id}",
+                    code="MAP_NOT_FOUND",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            pass
         
-        building = parts[0]
-        floor = int(parts[1].replace('f', ''))
+        # 응답 데이터 구성
+        response_data = {
+            'svg_content': svg_content,
+            'svg_url': f'/static/maps/{svg_filename}',
+            'floor_id': floor_id,
+            'building': building,
+            'floor': floor,
+            'metadata': {}
+        }
         
-        # 지도 찾기
-        hospital_map = get_object_or_404(
-            HospitalMap,
-            building__iexact=building,
-            floor=floor,
-            is_active=True
-        )
-        
-        # 해당 층의 노드들도 함께 조회
-        nodes = NavigationNode.objects.filter(
-            map=hospital_map
-        ).select_related('nfc_tag', 'exam')
-        
-        map_serializer = HospitalMapSerializer(hospital_map)
-        nodes_serializer = NavigationNodeSerializer(nodes, many=True)
+        # DB 데이터가 있으면 추가
+        if hospital_map:
+            map_serializer = HospitalMapSerializer(hospital_map)
+            nodes_serializer = NavigationNodeSerializer(nodes, many=True)
+            response_data['metadata'] = {
+                'map': map_serializer.data,
+                'nodes': nodes_serializer.data,
+                'width': hospital_map.width,
+                'height': hospital_map.height
+            }
+        else:
+            # 기본 메타데이터
+            response_data['metadata'] = {
+                'width': 900,
+                'height': 600,
+                'nodes': []
+            }
         
         return APIResponse.success(
             message="지도 정보를 조회했습니다.",
-            data={
-                'map': map_serializer.data,
-                'nodes': nodes_serializer.data
-            }
+            data=response_data
         )
         
-    except ValueError:
-        return APIResponse.error(
-            message="잘못된 층 번호입니다.",
-            code="INVALID_FLOOR_NUMBER",
-            status_code=status.HTTP_400_BAD_REQUEST
-        )
     except Exception as e:
         logger.error(f"Get hospital map error: {str(e)}")
         return APIResponse.error(
@@ -668,6 +736,9 @@ class NavigationManagementViewSet(ModelViewSet):
             return HospitalMapSerializer
         elif self.basename == 'navigation-nodes':
             return NavigationNodeSerializer
+        elif self.basename == 'navigation-edges':
+            from .serializers import NavigationEdgeSerializer
+            return NavigationEdgeSerializer
         elif self.basename == 'patient-routes':
             return PatientRouteSerializer
         return super().get_serializer_class()
@@ -676,7 +747,19 @@ class NavigationManagementViewSet(ModelViewSet):
         if self.basename == 'hospital-maps':
             return HospitalMap.objects.all()
         elif self.basename == 'navigation-nodes':
-            return NavigationNode.objects.select_related('map', 'nfc_tag', 'exam')
+            queryset = NavigationNode.objects.select_related('map', 'nfc_tag', 'exam')
+            # map_id 파라미터로 필터링
+            map_id = self.request.query_params.get('map_id')
+            if map_id:
+                queryset = queryset.filter(map__map_id=map_id)
+            return queryset
+        elif self.basename == 'navigation-edges':
+            queryset = NavigationEdge.objects.select_related('from_node', 'to_node')
+            # map_id 파라미터로 필터링
+            map_id = self.request.query_params.get('map_id')
+            if map_id:
+                queryset = queryset.filter(from_node__map__map_id=map_id)
+            return queryset
         elif self.basename == 'patient-routes':
             queryset = PatientRoute.objects.select_related(
                 'user', 'start_node', 'end_node', 'target_exam'
@@ -684,6 +767,10 @@ class NavigationManagementViewSet(ModelViewSet):
             # 관리자가 아닌 경우 자신의 경로만
             if not self.request.user.is_staff:
                 queryset = queryset.filter(user=self.request.user)
+            # map_id 파라미터로 필터링
+            map_id = self.request.query_params.get('map_id')
+            if map_id:
+                queryset = queryset.filter(start_node__map__map_id=map_id)
             return queryset
         return None
     

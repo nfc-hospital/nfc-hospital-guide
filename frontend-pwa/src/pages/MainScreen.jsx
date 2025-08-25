@@ -8,7 +8,7 @@ import UnregisteredScreen from '../components/screens/UnregisteredScreen';
 import ArrivedScreen from '../components/screens/ArrivedScreen';
 import RegisteredScreen from '../components/screens/RegisteredScreen';
 import WaitingScreen from '../components/screens/WaitingScreen';
-import CalledScreen from '../components/screens/CalledScreen';
+// CalledScreen은 별도로 없음 - WaitingScreen 사용
 import FinishedScreen from '../components/screens/FinishedScreen';
 import PaymentScreen from '../components/screens/PaymentScreen';
 import AdminHomeScreen from '../components/screens/AdminHomeScreen';
@@ -23,7 +23,7 @@ const StateScreenMap = {
   ARRIVED: ArrivedScreen,
   REGISTERED: RegisteredScreen,
   WAITING: WaitingScreen,
-  CALLED: CalledScreen,
+  CALLED: WaitingScreen, // 호출됨도 대기 화면 사용 (호출 상태 표시)
   ONGOING: WaitingScreen, // 진행 중도 대기 화면 사용
   COMPLETED: RegisteredScreen, // 완료도 등록 화면 사용
   PAYMENT: PaymentScreen,

@@ -268,14 +268,7 @@ export default function PublicHome() {
   }, [isSpeaking]);
 
 
-  if (selectedDepartment) {
-    return (
-      <DepartmentDirections 
-        department={selectedDepartment}
-        onClose={handleReset}
-      />
-    );
-  }
+  // selectedDepartment는 더 이상 사용하지 않음 (selectedFacility로 통합)
 
   if (selectedFacility) {
     // mapStore에서 경로 데이터 가져오기
@@ -332,7 +325,7 @@ export default function PublicHome() {
             </div>
             <div className="p-4">
               <MapNavigator 
-                mapId={currentMapId || selectedFacility.mapFile?.replace('.svg', '') || 'main_1f'}
+                mapId={selectedFacility.mapFile?.replace('.svg', '') || 'main_1f'}
                 highlightRoom={selectedFacility.name}
                 facilityName={selectedFacility.name}
                 pathNodes={routeData?.nodes || EMPTY_NODES}  // ✅ mapStore에서 경로 데이터 사용
