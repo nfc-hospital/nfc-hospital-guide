@@ -34,6 +34,7 @@ const facilityMapping = {
 };
 
 const MapNavigator = ({ 
+  stage,  // JourneyNavigator에서 전달받는 stage prop
   mapId: propMapId,  // props로 받은 mapId (폴백용)
   highlightRoom, 
   facilityName, 
@@ -45,7 +46,8 @@ const MapNavigator = ({
   currentLocation: propCurrentLocation = null,  // props로 받은 현재 위치 (폴백용)
   targetLocation = null,  // 목표 위치
   svgWidth = 900,  // SVG 기본 너비
-  svgHeight = 600  // SVG 기본 높이
+  svgHeight = 600,  // SVG 기본 높이
+  onStageComplete  // stage 완료 콜백
 }) => {
   const svgContainerRef = useRef(null);
   const [showNodes, setShowNodes] = useState(false);
@@ -57,15 +59,22 @@ const MapNavigator = ({
   const storeCurrentLocation = useMapStore(state => state.currentLocation);
   const currentMapId = useMapStore(state => state.currentMapId);
   
-  // Props의 mapId를 우선 사용, 없으면 Store 사용
-  const mapId = propMapId || currentMapId || 'main_1f';
+  // stage에서 데이터 추출
+  const stageMapId = stage?.mapName;
+  const stageNodes = stage?.routeData?.nodes || [];
+  const stageEdges = stage?.routeData?.edges || [];
+  
+  // Props의 mapId 우선순위: stage > props > store
+  const mapId = stageMapId || propMapId || currentMapId || 'main_1f';
   
   // Store에서 경로 데이터 가져오기 (navigationRoute 우선)
   const routeData = navigationRoute || activeRoute || {};
   
-  // Store에서 가져온 데이터가 없으면 props 사용 (폴백)
-  const corridorNodes = routeData.nodes?.length > 0 ? routeData.nodes : propPathNodes;
-  const corridorEdges = routeData.edges?.length > 0 ? routeData.edges : propPathEdges;
+  // 경로 데이터 우선순위: store > stage > props
+  const corridorNodes = routeData.nodes?.length > 0 ? routeData.nodes : 
+    (stageNodes.length > 0 ? stageNodes : propPathNodes);
+  const corridorEdges = routeData.edges?.length > 0 ? routeData.edges : 
+    (stageEdges.length > 0 ? stageEdges : propPathEdges);
   
   // 현재 위치 설정 - 첫 번째 노드를 현재 위치로 사용
   const currentLocation = corridorNodes.length > 0 ? corridorNodes[0] : 
@@ -153,6 +162,32 @@ const MapNavigator = ({
   const currentMap = mapSequence[currentMapIndex];
   const mapSrc = mapImages[currentMap?.id] || mapImages.default;
   
+  // stage가 transition인 경우 특별한 UI 표시
+  if (stage?.isTransition) {
+    return (
+      <div className="bg-white rounded-xl shadow-md p-6">
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="bg-blue-600 text-white rounded-full p-2">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-blue-800">이동 안내</h3>
+          </div>
+          <p className="text-lg text-blue-700 whitespace-pre-line">{stage.transitionInstruction}</p>
+          {onStageComplete && (
+            <button 
+              onClick={onStageComplete}
+              className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+            >
+              다음 단계로
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
   
   // 지도 전환 핸들러
   const handleMapClick = () => {
@@ -706,6 +741,18 @@ const MapNavigator = ({
           </div>
         )}
       </div>
+      
+      {/* stage 모드일 때 완료 버튼 */}
+      {stage && onStageComplete && !stage.isTransition && (
+        <div className="mt-4 flex justify-center">
+          <button 
+            onClick={onStageComplete}
+            className="px-8 py-3 bg-green-600 text-white text-lg font-semibold rounded-xl hover:bg-green-700 transition-all shadow-lg"
+          >
+            {stage.endPoint ? '도착 확인' : '다음 단계로'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
