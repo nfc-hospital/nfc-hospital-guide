@@ -90,7 +90,7 @@ class TagLogAdmin(admin.ModelAdmin):
     date_hierarchy = 'timestamp' # 스캔 시간 기준으로 날짜별 탐색
     ordering = ('-timestamp',)
 
-    # 로그 모델은 조회를 목적으로 하므로, 수정/추가/삭제를 비활성화합니다.
+    # 로그 모델은 조회를 목적으로 하므로, 추가/수정은 비활성화하지만 삭제는 허용합니다.
     def has_add_permission(self, request):
         return False
 
@@ -98,7 +98,8 @@ class TagLogAdmin(admin.ModelAdmin):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        return False
+        # 관리자는 로그를 삭제할 수 있도록 허용
+        return request.user.is_superuser
 
     readonly_fields = (
         'tag', 'user', 'action_type', 'timestamp'

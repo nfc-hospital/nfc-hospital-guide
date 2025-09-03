@@ -23,6 +23,12 @@ class UserAdmin(BaseUserAdmin):
     ordering = ('-created_at',)
     date_hierarchy = 'created_at'
 
+    def get_queryset(self, request):
+        """모든 사용자를 표시 (삭제된 사용자 포함)"""
+        qs = super().get_queryset(request)
+        # 모든 사용자 표시
+        return qs
+
     # 필드셋 정의 (기존 BaseUserAdmin의 fieldsets를 확장)
     fieldsets = (
         (None, {'fields': ('email', 'password')}), # pw_hash는 읽기 전용으로 두거나 제외
@@ -64,7 +70,7 @@ class UserAdmin(BaseUserAdmin):
     #     return form
 
     # 액션 추가 (사용자 활성화/비활성화, 역할 변경 등)
-    actions = ['activate_users', 'deactivate_users', 'make_staff', 'make_patient']
+    actions = ['activate_users', 'deactivate_users', 'make_staff', 'make_patient', 'permanently_delete_users']
 
     def activate_users(self, request, queryset):
         """선택된 사용자를 활성화합니다."""
@@ -89,6 +95,21 @@ class UserAdmin(BaseUserAdmin):
         updated = queryset.update(is_staff=False, is_superuser=False, role='patient')
         self.message_user(request, f'{updated}명의 사용자가 \'환자\' 역할로 변경되었습니다.')
     make_patient.short_description = "선택된 사용자를 '환자'로 지정"
+
+    def permanently_delete_users(self, request, queryset):
+        """선택된 사용자를 데이터베이스에서 영구적으로 삭제합니다."""
+        count = queryset.count()
+        queryset.delete()
+        self.message_user(request, f'{count}명의 사용자가 영구적으로 삭제되었습니다.')
+    permanently_delete_users.short_description = "선택된 사용자를 영구 삭제 (복구 불가)"
+
+    def delete_model(self, request, obj):
+        """단일 사용자 삭제 시 실제로 데이터베이스에서 삭제"""
+        obj.delete()
+
+    def delete_queryset(self, request, queryset):
+        """여러 사용자 삭제 시 실제로 데이터베이스에서 삭제"""
+        queryset.delete()
 
 
 
