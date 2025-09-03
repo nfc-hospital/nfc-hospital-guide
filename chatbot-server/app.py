@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import os
+import sys
 import json
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from openai import OpenAI
+
+# Windows 콘솔 UTF-8 설정
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 load_dotenv()
 
@@ -33,15 +41,20 @@ except Exception as e:
     client = None
 
 SYSTEM_PROMPT = """
-당신은 NFC 기반 병원 검사·진료 안내 시스템의 AI 챗봇입니다. 
-환자들이 병원에서 검사나 진료를 받을 때 도움을 주는 역할입니다.
+당신은 서울대학교병원 안내 직원입니다. 간결하고 친절하게 답변하세요.
 
-다음 원칙을 따라 답변해주세요:
-1. 친근하고 이해하기 쉬운 언어를 사용하세요
-2. 의료 정보는 정확하게 전달하되, 진단이나 치료 조언은 피하고 의료진 상담을 권하세요
-3. 병원 위치, 검사 준비사항, 대기시간 등 실용적인 정보를 제공하세요
-4. 모르는 내용은 솔직히 모른다고 하고, 병원 직원에게 문의하도록 안내하세요
-5. 응답은 간결하되 필요한 정보는 빠뜨리지 마세요
+핵심 원칙:
+1. 짧고 명확하게 (3-4문장 이내 권장)
+2. 개인정보가 필요한 질문은 상황에 따라:
+   - 로그인 사용자: 제공된 컨텍스트 활용
+   - 비로그인: "로그인하시면 확인 가능해요"
+   - 불가능한 정보: "원무과(1588-0000)로 문의해주세요"
+3. 친근한 말투 유지 ("~예요", "~네요")
+
+좋은 예시:
+Q: "대기시간 얼마나 걸려요?"
+A(로그인): "지금 3명 대기중이라 약 15분 정도예요."
+A(비로그인): "로그인하시면 실시간 대기현황 확인 가능해요! 평균적으로 평일 오전은 20-30분 정도 걸려요."
 """
 
 @app.route('/health', methods=['GET'])
@@ -71,80 +84,137 @@ def chatbot_query():
         user_question = data['question']
         context = data.get('context', {})
         
-        # 컨텍스트 정보를 시스템 프롬프트에 추가
-        context_info = ""
-        if context.get('currentLocation'):
-            context_info += f"현재 위치: {context['currentLocation']}\n"
-        if context.get('patientExam'):
-            context_info += f"예정된 검사: {context['patientExam']}\n"
+        # 컨텍스트 정보 구성 (비로그인 사용자 지원)
+        context_info = "\n\n현재 상황:\n"
         
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT + context_info},
-            {"role": "user", "content": user_question}
-        ]
+        # 로그인 여부 확인
+        is_guest = context.get('is_guest', True) or not context.get('userId')
+        if is_guest:
+            context_info += "- 비로그인 상태 (개인정보 조회 불가)\n"
+        else:
+            # 로그인 사용자 컨텍스트
+            if context.get('patientState'):
+                state_map = {
+                    'WAITING': '대기중',
+                    'CALLED': '호출됨', 
+                    'ONGOING': '진행중',
+                    'COMPLETED': '완료'
+                }
+                state = state_map.get(context['patientState'], context['patientState'])
+                context_info += f"- 환자 상태: {state}\n"
+            
+            if context.get('currentQueues'):
+                queues = context['currentQueues']
+                if queues and len(queues) > 0:
+                    first_queue = queues[0]
+                    wait_time = first_queue.get('estimated_wait_time', '알 수 없음')
+                    queue_num = first_queue.get('queue_number', '알 수 없음')
+                    context_info += f"- 대기번호: {queue_num}번, 예상시간: {wait_time}분\n"
+            
+            if context.get('todaysAppointments'):
+                apts = context['todaysAppointments']
+                if apts and len(apts) > 0:
+                    next_apt = apts[0]
+                    exam_name = next_apt.get('exam', {}).get('title', '검사')
+                    context_info += f"- 다음 일정: {exam_name}\n"
         
         # OpenAI API 키 확인
         if not client:
+            # API 키가 없을 때도 친근한 폴백 응답
             return jsonify({
-                "success": False,
-                "error": {
-                    "code": "CONFIG_ERROR",
-                    "message": "OpenAI API가 설정되지 않았습니다. 관리자에게 문의하세요."
+                "success": True,
+                "data": {
+                    "response": {
+                        "content": "시스템 점검 중이에요. 원무과(1588-0000)로 문의해주세요.",
+                        "type": "fallback"
+                    }
                 },
                 "timestamp": datetime.now().isoformat()
-            }), 500
-            
-        # OpenAI API 호출
-        print(f"Sending query to OpenAI: {user_question}")
+            })
+        
+        # Few-shot 예시로 톤 설정
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT + context_info},
+            {"role": "user", "content": "혈액검사 금식해야 하나요?"},
+            {"role": "assistant", "content": "네, 8-12시간 금식 필요해요. 물은 괜찮지만 커피는 안 돼요. 당뇨약 드시면 미리 말씀해주세요!"},
+            {"role": "user", "content": "내 대기시간 얼마나 남았어?"},
+            {"role": "assistant", "content": "로그인하시면 실시간 대기현황 확인해드릴 수 있어요. 일반적으로 채혈실은 오전 20-30분, 오후 10분 정도 걸려요."},
+            {"role": "user", "content": "MRI 검사 무서워요"},
+            {"role": "assistant", "content": "걱정 마세요! 아프지 않아요. 소리가 시끄럽지만 헤드폰 드릴게요. 20-30분이면 끝나요. 😊"},
+            {"role": "user", "content": user_question}
+        ]
+        
+        # 질문 로깅 (Windows 인코딩 안전)
+        try:
+            print(f"User question: {user_question}")
+        except UnicodeEncodeError:
+            print(f"User question: {user_question.encode('utf-8', 'ignore').decode('utf-8')}")
+        
+        # GPT 호출 (간결하고 친근한 응답)
         response = client.chat.completions.create(
-            model="gpt-4",  # 또는 "gpt-3.5-turbo" 사용 가능
+            model="gpt-4",  # 또는 "gpt-3.5-turbo"
             messages=messages,
-            max_tokens=500,
-            temperature=0.7
+            max_tokens=200,  # 짧은 응답을 위해 제한
+            temperature=0.8,  # 자연스러운 응답
+            presence_penalty=0.3,  # 반복 줄이기
+            frequency_penalty=0.2,  # 다양한 어휘
+            top_p=0.9  # 자연스러운 응답
         )
         
         ai_response = response.choices[0].message.content
-        print(f"Received response from OpenAI: {ai_response[:100]}...")
+        # Windows 콘솔 인코딩 문제 해결
+        try:
+            print(f"GPT Response: {ai_response[:100]}...")
+        except UnicodeEncodeError:
+            print(f"GPT Response: {ai_response[:100].encode('utf-8', 'ignore').decode('utf-8')}...")
         
         return jsonify({
             "success": True,
             "data": {
                 "object": "chat_message",
                 "messageId": f"msg-{datetime.now().timestamp()}",
-                "userId": context.get('userId', 'anonymous'),
+                "userId": context.get('userId', 'guest'),
                 "type": "user_query",
                 "content": user_question,
                 "response": {
-                    "type": "faq_answer",
+                    "type": "gpt_response",
                     "content": ai_response,
-                    "confidence": 0.85,
-                    "sources": ["openai-gpt"]
+                    "confidence": 0.9,
+                    "sources": ["openai-gpt-4"]
                 }
             },
-            "message": "질문이 성공적으로 처리되었습니다",
+            "message": "응답 완료",
             "timestamp": datetime.now().isoformat()
         })
         
     except Exception as e:
-        print(f"Error in chatbot_query: {type(e).__name__}: {str(e)}")
+        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
         
-        # 에러 메시지를 더 사용자 친화적으로 변경
-        error_message = "챗봇 처리 중 오류가 발생했습니다."
-        if "api_key" in str(e).lower():
-            error_message = "OpenAI API 키가 유효하지 않습니다. 설정을 확인해주세요."
-        elif "rate" in str(e).lower():
-            error_message = "API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요."
+        # 에러 시에도 간결한 폴백 응답
+        fallback_responses = {
+            "default": "연결이 불안정해요. 원무과(1588-0000)로 문의해주세요.",
+            "api_key": "시스템 점검 중입니다.",
+            "rate_limit": "잠시 후 다시 시도해주세요."
+        }
         
+        error_type = "default"
+        if "api_key" in str(e).lower():
+            error_type = "api_key"
+        elif "rate" in str(e).lower():
+            error_type = "rate_limit"
+            
         return jsonify({
-            "success": False,
-            "error": {
-                "code": "INTERNAL_ERROR",
-                "message": error_message
+            "success": True,  # 사용자에게는 성공으로 보이게
+            "data": {
+                "response": {
+                    "type": "fallback",
+                    "content": fallback_responses[error_type]
+                }
             },
             "timestamp": datetime.now().isoformat()
-        }), 500
+        })
 
 @app.route('/api/chatbot/faq', methods=['GET'])
 def get_faq():

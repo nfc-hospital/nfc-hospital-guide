@@ -17,6 +17,7 @@
     "dev:backend:daphne": "cd backend/nfc_hospital_system && set PYTHONPATH=%CD% && set PYTHONIOENCODING=utf-8 && echo Starting Django + WebSocket server with Daphne... && ..\\venv\\Scripts\\python.exe -m daphne -p 8000 --bind 0.0.0.0 nfc_hospital_system.asgi:application",
     "kill-ports": "npx kill-port 8000 5174 3000 5000 || true",
     "dev:chatbot": "cd chatbot-server && venv\\Scripts\\python.exe app.py",
+    "dev:chatbot:enhanced": "cd chatbot-server && venv\\Scripts\\python.exe app_enhanced.py",
     "dev:chatbot:openai": "cd chatbot-server && venv\\Scripts\\python.exe app.py",
     "dev:chatbot:unix": "cd chatbot-server && source venv/bin/activate && python app_fallback.py",
     "dev:db": "cd backend/nfc_hospital_system && python manage.py makemigrations && python manage.py migrate",

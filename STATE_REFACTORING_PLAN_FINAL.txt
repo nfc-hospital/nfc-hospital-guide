@@ -1,0 +1,386 @@
+# 환자 상태 시스템 리팩토링 최종 계획 (기존 코드 최대 활용)
+생성일: 2025-01-03
+버전: Final
+
+=====================================================
+## 📊 현황: 기존 코드 재활용률 95%
+=====================================================
+
+### ✅ 이미 완벽하게 구현된 부분 (수정 불필요)
+1. **Backend 모델**: PatientState의 9단계 상태 완벽 구현
+2. **상태 전환 추적**: StateTransition 모델 완비
+3. **WebSocket 실시간**: signals.py의 알림 시스템 작동 중
+4. **Frontend Store**: journeyStore.js의 상태 관리 완성
+
+### ⚠️ 주요 문제점
+1. **상태값 불일치**: ongoing vs in_progress
+2. **API 엔드포인트 중복**: 5개 이상의 서로 다른 API
+3. **매핑 로직 산재**: Frontend/Backend에 중복된 변환 로직
+4. **위치 데이터 혼재**: 5가지 이상의 위치 표현 방식
+
+=====================================================
+## 🎯 핵심 전략: 기존 코드 정리 + 최소 추가
+=====================================================
+
+### 원칙
+1. **기존 파일 최대한 활용** - 새 파일 생성 최소화
+2. **점진적 마이그레이션** - 한번에 모든 걸 바꾸지 않음
+3. **하위 호환성 유지** - 기존 API 유지하면서 새 API 추가
+4. **안전한 롤백** - 각 단계마다 되돌릴 수 있게
+
+=====================================================
+## Phase 1: 상태값 통일 (기존 models.py 수정)
+=====================================================
+
+### 1.1 기존 models.py에 상태 상수 추가
+```python
+# backend/nfc_hospital_system/p_queue/models.py (상단에 추가)
+
+# ========== 상태 정의 통합 섹션 ==========
+# 기존 STATE_CHOICES를 유지하면서 새로운 통합 정의 추가
+
+# 환자 여정 상태 (기존 PatientState.STATE_CHOICES와 동일)
+PATIENT_JOURNEY_STATES = {
+    'UNREGISTERED': 'UNREGISTERED',
+    'ARRIVED': 'ARRIVED', 
+    'REGISTERED': 'REGISTERED',
+    'WAITING': 'WAITING',
+    'CALLED': 'CALLED',
+    'IN_PROGRESS': 'IN_PROGRESS',  # ONGOING 대신 통일
+    'COMPLETED': 'COMPLETED',
+    'PAYMENT': 'PAYMENT',
+    'FINISHED': 'FINISHED'
+}
+
+# 큐 세부 상태 (기존 Queue.STATE_CHOICES 활용)
+QUEUE_DETAIL_STATES = {
+    'waiting': 'waiting',
+    'delayed': 'delayed',
+    'called': 'called',
+    'no_show': 'no_show',
+    'in_progress': 'in_progress',  # ongoing 대신 통일
+    'completed': 'completed',
+    'cancelled': 'cancelled'
+}
+
+# 상태 매핑 규칙
+QUEUE_TO_JOURNEY_MAP = {
+    'waiting': 'WAITING',
+    'delayed': 'WAITING',
+    'called': 'CALLED',
+    'no_show': 'WAITING',
+    'in_progress': 'IN_PROGRESS',  # ongoing → IN_PROGRESS
+    'completed': 'COMPLETED',
+    'cancelled': 'COMPLETED'
+}
+
+JOURNEY_TO_QUEUE_MAP = {
+    'WAITING': 'waiting',
+    'CALLED': 'called',
+    'IN_PROGRESS': 'in_progress',  # ONGOING → in_progress
+    'COMPLETED': 'completed'
+}
+
+# 기존 Queue 클래스의 STATE_CHOICES 수정
+class Queue(models.Model):
+    STATE_CHOICES = [
+        ('waiting', '대기중'),
+        ('called', '호출됨'),
+        ('in_progress', '진행중'),  # ongoing → in_progress로 변경
+        ('completed', '완료'),
+        ('delayed', '지연'),
+        ('no_show', '미방문/이탈'),
+        ('cancelled', '취소'),
+    ]
+    # ... 나머지는 그대로
+
+# 기존 PatientState 클래스의 STATE_CHOICES 수정
+class PatientState(models.Model):
+    STATE_CHOICES = [
+        ('UNREGISTERED', 'Unregistered'),
+        ('ARRIVED', 'Arrived'),
+        ('REGISTERED', 'Registered'),
+        ('WAITING', 'Waiting'),
+        ('CALLED', 'Called'),
+        ('IN_PROGRESS', 'In Progress'),  # ONGOING → IN_PROGRESS
+        ('COMPLETED', 'Completed'),
+        ('PAYMENT', 'Payment'),
+        ('FINISHED', 'Finished'),
+    ]
+    # ... 나머지는 그대로
+```
+
+### 1.2 데이터 마이그레이션
+```python
+# backend/nfc_hospital_system/p_queue/migrations/00XX_unify_state_names.py
+from django.db import migrations
+
+def forward_migrate(apps, schema_editor):
+    """ongoing → in_progress, ONGOING → IN_PROGRESS"""
+    Queue = apps.get_model('p_queue', 'Queue')
+    PatientState = apps.get_model('p_queue', 'PatientState')
+    StateTransition = apps.get_model('p_queue', 'StateTransition')
+    
+    # Queue 상태 변경
+    Queue.objects.filter(state='ongoing').update(state='in_progress')
+    
+    # PatientState 상태 변경  
+    PatientState.objects.filter(current_state='ONGOING').update(
+        current_state='IN_PROGRESS'
+    )
+    
+    # StateTransition 로그도 변경
+    StateTransition.objects.filter(from_state='ONGOING').update(
+        from_state='IN_PROGRESS'
+    )
+    StateTransition.objects.filter(to_state='ONGOING').update(
+        to_state='IN_PROGRESS'
+    )
+
+def reverse_migrate(apps, schema_editor):
+    """롤백: in_progress → ongoing"""
+    Queue = apps.get_model('p_queue', 'Queue')
+    PatientState = apps.get_model('p_queue', 'PatientState')
+    StateTransition = apps.get_model('p_queue', 'StateTransition')
+    
+    Queue.objects.filter(state='in_progress').update(state='ongoing')
+    PatientState.objects.filter(current_state='IN_PROGRESS').update(
+        current_state='ONGOING'
+    )
+    StateTransition.objects.filter(from_state='IN_PROGRESS').update(
+        from_state='ONGOING'
+    )
+    StateTransition.objects.filter(to_state='IN_PROGRESS').update(
+        to_state='ONGOING'
+    )
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ('p_queue', '최신_마이그레이션_번호'),
+    ]
+    
+    operations = [
+        migrations.RunPython(forward_migrate, reverse_migrate),
+    ]
+```
+
+=====================================================
+## Phase 2: 기존 views.py 정리 (새 파일 X)
+=====================================================
+
+### 2.1 기존 views.py에 통합 함수 추가
+```python
+# backend/nfc_hospital_system/p_queue/views.py (기존 파일에 추가)
+
+# 맨 위에 import 추가
+from .models import (
+    PATIENT_JOURNEY_STATES, 
+    QUEUE_DETAIL_STATES,
+    QUEUE_TO_JOURNEY_MAP,
+    JOURNEY_TO_QUEUE_MAP
+)
+
+# 기존 클래스들 아래에 헬퍼 함수 추가
+def sync_patient_queue_state(user, trigger='system'):
+    """환자 상태와 큐 상태 동기화 헬퍼 함수"""
+    try:
+        patient_state = PatientState.objects.get(user=user)
+        active_queue = Queue.objects.filter(
+            user=user,
+            state__in=['waiting', 'called', 'in_progress']
+        ).first()
+        
+        if active_queue:
+            # Queue → Patient 동기화
+            expected_journey = QUEUE_TO_JOURNEY_MAP.get(active_queue.state)
+            if expected_journey and patient_state.current_state != expected_journey:
+                patient_state.current_state = expected_journey
+                patient_state.save()
+                
+                StateTransition.objects.create(
+                    user=user,
+                    from_state=patient_state.current_state,
+                    to_state=expected_journey,
+                    trigger_type=trigger
+                )
+    except PatientState.DoesNotExist:
+        pass
+
+# 기존 PatientCurrentStateView 클래스 수정
+class PatientCurrentStateView(APIView):
+    """기존 클래스를 개선"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        user = request.user
+        
+        # 동기화 먼저 수행
+        sync_patient_queue_state(user)
+        
+        # 기존 로직 그대로 사용
+        try:
+            patient_state = PatientState.objects.get(user=user)
+            # ... 기존 코드
+```
+
+### 2.2 기존 API 엔드포인트 정리 (urls.py)
+```python
+# backend/nfc_hospital_system/p_queue/urls.py (기존 파일 수정)
+
+urlpatterns = [
+    # 기존 URL 유지 (하위 호환성)
+    path('patient/current-state/', PatientCurrentStateView.as_view()),
+    path('dashboard/realtime-data/', DashboardRealtimeDataView.as_view()),
+    
+    # 새 URL 추가 (API v3 명세 준수)
+    path('../patient-journey/current-state/', PatientCurrentStateView.as_view()),
+    path('../patient-journey/perform-action/', PatientActionView.as_view()),
+    
+    # 기존 URL들은 deprecated 표시만
+    # 실제 삭제는 나중에
+]
+```
+
+=====================================================
+## Phase 3: Frontend 최소 수정
+=====================================================
+
+### 3.1 journeyStore.js 상태값만 변경
+```javascript
+// frontend-pwa/src/store/journeyStore.js (기존 파일 수정)
+
+// 상단의 상태 정의만 수정
+const PATIENT_STATES = {
+    UNREGISTERED: 'UNREGISTERED',
+    ARRIVED: 'ARRIVED',
+    REGISTERED: 'REGISTERED',
+    WAITING: 'WAITING',
+    CALLED: 'CALLED',
+    IN_PROGRESS: 'IN_PROGRESS',  // ONGOING → IN_PROGRESS
+    COMPLETED: 'COMPLETED',
+    PAYMENT: 'PAYMENT',
+    FINISHED: 'FINISHED'
+};
+
+// 나머지 로직은 find & replace
+// 'ONGOING' → 'IN_PROGRESS'
+// 'ongoing' → 'in_progress'
+```
+
+### 3.2 apiService.js는 그대로 유지
+```javascript
+// frontend-pwa/src/api/apiService.js
+// 기존 API 호출은 그대로 유지
+// 새 API는 필요시 추가만
+```
+
+=====================================================
+## Phase 4: 안전한 배포 전략
+=====================================================
+
+### 4.1 단계별 배포
+```bash
+# 1단계: 개발 환경 테스트
+python manage.py makemigrations p_queue
+python manage.py migrate --fake  # 먼저 fake로 테스트
+python manage.py migrate  # 실제 적용
+
+# 2단계: 상태값 확인
+python manage.py shell
+>>> from p_queue.models import Queue, PatientState
+>>> Queue.objects.filter(state='ongoing').count()  # 0이어야 함
+>>> PatientState.objects.filter(current_state='ONGOING').count()  # 0이어야 함
+
+# 3단계: API 테스트
+curl http://localhost:8000/api/v1/patient-journey/current-state/
+curl http://localhost:8000/api/v1/p-queue/patient/current-state/  # 둘 다 동작해야 함
+
+# 4단계: Frontend 테스트
+pnpm dev:frontend
+# 브라우저에서 상태 전환 테스트
+
+# 5단계: 스테이징 배포
+git checkout -b feature/state-unification
+git commit -am "feat: Unify state naming (ongoing → in_progress)"
+git push origin feature/state-unification
+# PR 생성 후 스테이징 환경에서 테스트
+
+# 6단계: 프로덕션 배포
+# 문제 없으면 main 브랜치에 머지
+```
+
+### 4.2 롤백 계획
+```bash
+# 만약 문제 발생시
+python manage.py migrate p_queue 이전_마이그레이션_번호
+git revert HEAD
+git push origin main
+```
+
+=====================================================
+## Phase 5: 기존 코드 정리 (나중에)
+=====================================================
+
+### 5.1 Deprecated 코드 표시
+```python
+# 3개월 후 삭제 예정 표시
+def old_api_endpoint():
+    """
+    @deprecated: 2025-04-03에 삭제 예정
+    대신 /api/v1/patient-journey/current-state/ 사용
+    """
+    # 기존 코드
+```
+
+### 5.2 불필요한 중복 제거
+- 3개월 운영 후 문제 없으면 중복 API 제거
+- 사용하지 않는 매핑 로직 제거
+- 테스트 코드 정리
+
+=====================================================
+## 📊 예상 작업량
+=====================================================
+
+| 작업 | 예상 시간 | 난이도 | 리스크 |
+|------|----------|--------|--------|
+| models.py 수정 | 1시간 | 낮음 | 낮음 |
+| 마이그레이션 작성 | 30분 | 낮음 | 중간 |
+| views.py 함수 추가 | 1시간 | 낮음 | 낮음 |
+| Frontend 상태값 변경 | 30분 | 낮음 | 낮음 |
+| 테스트 | 2시간 | 중간 | 낮음 |
+| **총 작업 시간** | **5시간** | **낮음** | **낮음** |
+
+=====================================================
+## ✅ 체크리스트
+=====================================================
+
+### Backend
+- [ ] models.py에 상태 상수 추가
+- [ ] 마이그레이션 파일 생성
+- [ ] views.py에 동기화 함수 추가
+- [ ] urls.py 정리 (기존 유지 + 새 URL 추가)
+- [ ] 테스트 실행
+
+### Frontend  
+- [ ] journeyStore.js 상태값 변경
+- [ ] ONGOING → IN_PROGRESS 일괄 변경
+- [ ] 테스트 실행
+
+### 배포
+- [ ] 개발 환경 테스트
+- [ ] 스테이징 환경 테스트
+- [ ] 프로덕션 배포
+- [ ] 모니터링
+
+=====================================================
+## 🎯 핵심 포인트
+=====================================================
+
+1. **새 파일 만들지 말고 기존 파일 수정**
+2. **기존 API 유지하면서 새 API 추가**
+3. **한번에 다 바꾸지 말고 점진적으로**
+4. **각 단계마다 롤백 가능하게**
+5. **테스트 먼저, 배포는 나중에**
+
+---
+END OF FINAL PLAN

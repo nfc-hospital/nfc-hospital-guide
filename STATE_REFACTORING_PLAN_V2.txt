@@ -1,0 +1,1197 @@
+# 환자 상태/큐 상태 리팩토링 계획서 (개선판 v2)
+생성일: 2025-01-03
+작성자: Claude
+버전: 2.0
+
+## 🎯 핵심 개선 전략
+
+### 1. Single Source of Truth (SSOT) 원칙
+- **모든 상태 정의와 매핑 규칙은 Backend에서만 관리**
+- Frontend는 Backend API를 통해 상태 정보를 받아 사용
+- 상태 변환 로직 중복 제거
+
+### 2. Event-Driven Architecture
+- Client는 상태를 직접 변경하지 않고 액션/이벤트만 전송
+- Server가 비즈니스 로직에 따라 상태 전이 결정
+- 상태 전이 규칙의 중앙화
+
+### 3. Service Layer Pattern
+- 상태 관리 로직을 서비스 계층으로 캡슐화
+- 테스트 가능성과 재사용성 향상
+- Signal과 View의 책임 분리
+
+=====================================================
+## 📊 현황 분석 (기존 계획서 참조)
+=====================================================
+
+### 현재 시스템의 3중 구조
+1. **PatientState.current_state** (9단계 환자 여정)
+2. **Queue.state** (7단계 대기열 상태)  
+3. **Appointment.status** (4+α 예약 상태)
+
+### 주요 문제점
+- 상태 모델 불일치 (ongoing vs in_progress)
+- 매핑 로직 산재 (Frontend/Backend 중복)
+- API 엔드포인트 혼재 (5개 이상)
+- 동기화 메커니즘 부재
+- 코드 중복 (20개+ 컴포넌트)
+
+=====================================================
+## 🏗️ Phase 1: 상태 모델 정의 (Backend 중심화)
+=====================================================
+
+### 1.1 통합 상태 정의 (Backend Only)
+```python
+# common/state_definitions.py (새 파일)
+from enum import Enum
+from typing import Dict, List, Optional
+
+class PatientJourneyState(Enum):
+    """환자 전체 여정 상태 (최상위)"""
+    UNREGISTERED = 'UNREGISTERED'
+    ARRIVED = 'ARRIVED'
+    REGISTERED = 'REGISTERED'
+    WAITING = 'WAITING'
+    CALLED = 'CALLED'
+    IN_PROGRESS = 'IN_PROGRESS'  # ONGOING 대신 통일
+    COMPLETED = 'COMPLETED'
+    PAYMENT = 'PAYMENT'
+    FINISHED = 'FINISHED'
+
+class QueueDetailState(Enum):
+    """대기열 세부 상태"""
+    WAITING = 'waiting'
+    DELAYED = 'delayed'
+    CALLED = 'called'
+    NO_SHOW = 'no_show'
+    IN_PROGRESS = 'in_progress'  # ongoing 대신 통일
+    COMPLETED = 'completed'
+    CANCELLED = 'cancelled'
+
+class PatientAction(Enum):
+    """환자가 수행할 수 있는 액션"""
+    SCAN_NFC = 'scan_nfc'
+    REGISTER = 'register'
+    CONFIRM_ARRIVAL = 'confirm_arrival'
+    ENTER_EXAM_ROOM = 'enter_exam_room'
+    COMPLETE_EXAM = 'complete_exam'
+    MAKE_PAYMENT = 'make_payment'
+    LEAVE_HOSPITAL = 'leave_hospital'
+
+class StaffAction(Enum):
+    """의료진이 수행할 수 있는 액션"""
+    CALL_PATIENT = 'call_patient'
+    START_EXAM = 'start_exam'
+    COMPLETE_EXAM = 'complete_exam'
+    MARK_NO_SHOW = 'mark_no_show'
+    CANCEL_APPOINTMENT = 'cancel_appointment'
+
+# 상태 전이 규칙 정의
+STATE_TRANSITIONS = {
+    PatientJourneyState.UNREGISTERED: {
+        PatientAction.SCAN_NFC: PatientJourneyState.ARRIVED,
+    },
+    PatientJourneyState.ARRIVED: {
+        PatientAction.REGISTER: PatientJourneyState.REGISTERED,
+    },
+    PatientJourneyState.REGISTERED: {
+        PatientAction.CONFIRM_ARRIVAL: PatientJourneyState.WAITING,
+    },
+    PatientJourneyState.WAITING: {
+        StaffAction.CALL_PATIENT: PatientJourneyState.CALLED,
+        StaffAction.MARK_NO_SHOW: PatientJourneyState.WAITING,  # 상태 유지
+    },
+    PatientJourneyState.CALLED: {
+        PatientAction.ENTER_EXAM_ROOM: PatientJourneyState.IN_PROGRESS,
+        StaffAction.START_EXAM: PatientJourneyState.IN_PROGRESS,
+        StaffAction.MARK_NO_SHOW: PatientJourneyState.WAITING,  # 다시 대기
+    },
+    PatientJourneyState.IN_PROGRESS: {
+        PatientAction.COMPLETE_EXAM: PatientJourneyState.COMPLETED,
+        StaffAction.COMPLETE_EXAM: PatientJourneyState.COMPLETED,
+    },
+    PatientJourneyState.COMPLETED: {
+        PatientAction.CONFIRM_ARRIVAL: PatientJourneyState.WAITING,  # 다음 검사
+        PatientAction.MAKE_PAYMENT: PatientJourneyState.PAYMENT,
+    },
+    PatientJourneyState.PAYMENT: {
+        PatientAction.MAKE_PAYMENT: PatientJourneyState.FINISHED,
+    },
+    PatientJourneyState.FINISHED: {
+        PatientAction.LEAVE_HOSPITAL: PatientJourneyState.UNREGISTERED,
+    },
+}
+
+# Queue 상태와 Journey 상태 매핑
+QUEUE_TO_JOURNEY_MAPPING = {
+    QueueDetailState.WAITING: PatientJourneyState.WAITING,
+    QueueDetailState.DELAYED: PatientJourneyState.WAITING,
+    QueueDetailState.CALLED: PatientJourneyState.CALLED,
+    QueueDetailState.NO_SHOW: PatientJourneyState.WAITING,
+    QueueDetailState.IN_PROGRESS: PatientJourneyState.IN_PROGRESS,
+    QueueDetailState.COMPLETED: PatientJourneyState.COMPLETED,
+    QueueDetailState.CANCELLED: PatientJourneyState.COMPLETED,
+}
+
+# Journey 상태와 Queue 상태 역매핑
+JOURNEY_TO_QUEUE_MAPPING = {
+    PatientJourneyState.WAITING: QueueDetailState.WAITING,
+    PatientJourneyState.CALLED: QueueDetailState.CALLED,
+    PatientJourneyState.IN_PROGRESS: QueueDetailState.IN_PROGRESS,
+    PatientJourneyState.COMPLETED: QueueDetailState.COMPLETED,
+}
+```
+
+### 1.2 상태 정의 API 엔드포인트
+```python
+# common/views.py (새 파일)
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from .state_definitions import *
+
+class StateDefinitionsView(APIView):
+    """Frontend에서 상태 정의를 가져올 수 있는 API"""
+    authentication_classes = []  # 공개 API
+    permission_classes = []
+    
+    def get(self, request):
+        return Response({
+            'journey_states': [state.value for state in PatientJourneyState],
+            'queue_states': [state.value for state in QueueDetailState],
+            'patient_actions': [action.value for action in PatientAction],
+            'staff_actions': [action.value for action in StaffAction],
+            'state_transitions': self._serialize_transitions(),
+            'mappings': {
+                'queue_to_journey': {k.value: v.value for k, v in QUEUE_TO_JOURNEY_MAPPING.items()},
+                'journey_to_queue': {k.value: v.value for k, v in JOURNEY_TO_QUEUE_MAPPING.items()},
+            }
+        })
+    
+    def _serialize_transitions(self):
+        result = {}
+        for state, transitions in STATE_TRANSITIONS.items():
+            result[state.value] = {
+                action.value: next_state.value 
+                for action, next_state in transitions.items()
+            }
+        return result
+```
+
+### 1.3 Frontend 타입 정의 (Backend 의존적)
+```typescript
+// types/states.ts (간소화)
+// Backend API에서 가져온 정의를 사용
+
+export interface StateDefinitions {
+    journey_states: string[];
+    queue_states: string[];
+    patient_actions: string[];
+    staff_actions: string[];
+    state_transitions: Record<string, Record<string, string>>;
+    mappings: {
+        queue_to_journey: Record<string, string>;
+        journey_to_queue: Record<string, string>;
+    };
+}
+
+// 앱 시작 시 Backend에서 상태 정의를 가져옴
+export let stateDefinitions: StateDefinitions;
+
+export const loadStateDefinitions = async () => {
+    const response = await fetch('/api/v1/state-definitions/');
+    stateDefinitions = await response.json();
+};
+
+// 매핑 함수는 Backend 데이터 사용
+export const mapQueueToJourney = (queueState: string): string => {
+    return stateDefinitions.mappings.queue_to_journey[queueState];
+};
+```
+
+=====================================================
+## 🎮 Phase 2: Service Layer 도입
+=====================================================
+
+### 2.1 PatientJourneyService 클래스
+```python
+# p_queue/services.py (새 파일)
+from typing import Optional, Dict, Any
+from django.db import transaction
+from django.core.exceptions import ValidationError
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+from .models import PatientState, Queue, StateTransition, QueueStatusLog
+from common.state_definitions import *
+from appointments.models import Appointment
+
+class InvalidActionError(Exception):
+    """잘못된 액션 요청"""
+    pass
+
+class PatientJourneyService:
+    """환자 여정 상태 관리 서비스"""
+    
+    def __init__(self, user):
+        self.user = user
+        self.channel_layer = get_channel_layer()
+        
+    @transaction.atomic
+    def perform_action(self, action_type: str, payload: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        액션을 수행하고 상태를 전이시킴
+        
+        Args:
+            action_type: 수행할 액션 타입
+            payload: 액션에 필요한 추가 데이터
+            
+        Returns:
+            변경된 상태 정보
+            
+        Raises:
+            InvalidActionError: 잘못된 액션이나 전이 불가능한 경우
+        """
+        # 현재 상태 조회
+        patient_state = self._get_or_create_patient_state()
+        current_state = PatientJourneyState(patient_state.current_state)
+        
+        # 액션 타입 확인
+        try:
+            if action_type in [a.value for a in PatientAction]:
+                action = PatientAction(action_type)
+            elif action_type in [a.value for a in StaffAction]:
+                action = StaffAction(action_type)
+            else:
+                raise InvalidActionError(f"Unknown action type: {action_type}")
+        except ValueError:
+            raise InvalidActionError(f"Invalid action: {action_type}")
+        
+        # 상태 전이 가능 여부 확인
+        if current_state not in STATE_TRANSITIONS:
+            raise InvalidActionError(f"No transitions defined for state: {current_state.value}")
+            
+        transitions = STATE_TRANSITIONS[current_state]
+        if action not in transitions:
+            raise InvalidActionError(
+                f"Action '{action_type}' is not allowed in state '{current_state.value}'"
+            )
+        
+        # 새로운 상태
+        new_state = transitions[action]
+        
+        # 상태 변경 수행
+        old_state_value = patient_state.current_state
+        patient_state.current_state = new_state.value
+        patient_state.save()
+        
+        # Queue 상태 동기화 (필요한 경우)
+        self._sync_queue_state(new_state, payload)
+        
+        # 상태 전환 로그 생성
+        StateTransition.objects.create(
+            user=self.user,
+            from_state=old_state_value,
+            to_state=new_state.value,
+            trigger_type=self._get_trigger_type(action),
+            trigger_source=action_type,
+            metadata=payload
+        )
+        
+        # WebSocket 알림 전송
+        self._send_state_update(new_state.value, action_type)
+        
+        # 응답 데이터 구성
+        return self._build_response(patient_state)
+    
+    def get_current_state(self) -> Dict[str, Any]:
+        """현재 환자 상태 조회"""
+        patient_state = self._get_or_create_patient_state()
+        return self._build_response(patient_state)
+    
+    @transaction.atomic
+    def sync_from_queue_update(self, queue: Queue):
+        """Queue 상태 변경에 따른 PatientState 동기화"""
+        try:
+            queue_state = QueueDetailState(queue.state)
+            journey_state = QUEUE_TO_JOURNEY_MAPPING.get(queue_state)
+            
+            if journey_state:
+                patient_state = self._get_or_create_patient_state()
+                if patient_state.current_state != journey_state.value:
+                    old_state = patient_state.current_state
+                    patient_state.current_state = journey_state.value
+                    patient_state.save()
+                    
+                    # 상태 전환 로그
+                    StateTransition.objects.create(
+                        user=self.user,
+                        from_state=old_state,
+                        to_state=journey_state.value,
+                        trigger_type='queue_sync',
+                        trigger_source=f"Queue state changed to {queue.state}"
+                    )
+                    
+                    # WebSocket 알림
+                    self._send_state_update(journey_state.value, 'queue_sync')
+        except ValueError:
+            # 알 수 없는 queue state는 무시
+            pass
+    
+    @transaction.atomic
+    def sync_from_patient_state(self, patient_state: PatientState):
+        """PatientState 변경에 따른 Queue 동기화"""
+        try:
+            journey_state = PatientJourneyState(patient_state.current_state)
+            queue_state = JOURNEY_TO_QUEUE_MAPPING.get(journey_state)
+            
+            if queue_state:
+                # 활성 큐 조회
+                active_queue = Queue.objects.filter(
+                    user=self.user,
+                    state__in=[QueueDetailState.WAITING.value, 
+                               QueueDetailState.CALLED.value,
+                               QueueDetailState.IN_PROGRESS.value]
+                ).first()
+                
+                if active_queue and active_queue.state != queue_state.value:
+                    old_state = active_queue.state
+                    active_queue.state = queue_state.value
+                    active_queue.save()
+                    
+                    # Queue 상태 변경 로그
+                    QueueStatusLog.objects.create(
+                        queue=active_queue,
+                        previous_state=old_state,
+                        new_state=queue_state.value,
+                        reason="Synced from PatientState",
+                        changed_by=None  # System
+                    )
+        except ValueError:
+            pass
+    
+    def _get_or_create_patient_state(self) -> PatientState:
+        """환자 상태 조회 또는 생성"""
+        patient_state, created = PatientState.objects.get_or_create(
+            user=self.user,
+            defaults={
+                'current_state': PatientJourneyState.UNREGISTERED.value,
+                'is_logged_in': True,
+                'login_method': 'simple'
+            }
+        )
+        return patient_state
+    
+    def _sync_queue_state(self, new_journey_state: PatientJourneyState, payload: Dict[str, Any]):
+        """Journey 상태에 따른 Queue 상태 동기화"""
+        queue_state = JOURNEY_TO_QUEUE_MAPPING.get(new_journey_state)
+        
+        if queue_state:
+            # 활성 큐가 있는지 확인
+            active_queue = Queue.objects.filter(
+                user=self.user,
+                state__in=[QueueDetailState.WAITING.value, 
+                          QueueDetailState.CALLED.value,
+                          QueueDetailState.IN_PROGRESS.value]
+            ).first()
+            
+            if active_queue:
+                old_state = active_queue.state
+                active_queue.state = queue_state.value
+                active_queue.save()
+                
+                QueueStatusLog.objects.create(
+                    queue=active_queue,
+                    previous_state=old_state,
+                    new_state=queue_state.value,
+                    reason=f"Journey state changed to {new_journey_state.value}",
+                    changed_by=None,
+                    metadata=payload
+                )
+    
+    def _get_trigger_type(self, action) -> str:
+        """액션으로부터 트리거 타입 결정"""
+        if isinstance(action, PatientAction):
+            if action == PatientAction.SCAN_NFC:
+                return 'nfc_tag'
+            return 'patient_action'
+        elif isinstance(action, StaffAction):
+            return 'staff_action'
+        return 'system_auto'
+    
+    def _send_state_update(self, new_state: str, action_type: str):
+        """WebSocket을 통한 상태 업데이트 알림"""
+        try:
+            async_to_sync(self.channel_layer.group_send)(
+                f"patient_{self.user.id}",
+                {
+                    "type": "state_update",
+                    "journey_state": new_state,
+                    "action": action_type,
+                    "timestamp": timezone.now().isoformat()
+                }
+            )
+        except Exception as e:
+            # WebSocket 전송 실패는 무시 (로깅만)
+            print(f"WebSocket notification failed: {e}")
+    
+    def _build_response(self, patient_state: PatientState) -> Dict[str, Any]:
+        """응답 데이터 구성"""
+        # 활성 큐 조회
+        active_queues = Queue.objects.filter(
+            user=self.user,
+            state__in=[QueueDetailState.WAITING.value,
+                      QueueDetailState.DELAYED.value,
+                      QueueDetailState.CALLED.value,
+                      QueueDetailState.IN_PROGRESS.value]
+        ).select_related('exam', 'appointment')
+        
+        # 당일 예약 조회
+        today = timezone.now().date()
+        appointments = Appointment.objects.filter(
+            user=self.user,
+            scheduled_at__date=today
+        ).select_related('exam')
+        
+        # 다음 가능한 액션 계산
+        current_state = PatientJourneyState(patient_state.current_state)
+        available_actions = []
+        if current_state in STATE_TRANSITIONS:
+            for action in STATE_TRANSITIONS[current_state].keys():
+                available_actions.append(action.value)
+        
+        return {
+            'journey_state': patient_state.current_state,
+            'queue_details': [
+                {
+                    'queue_id': str(q.queue_id),
+                    'exam_id': q.exam.exam_id,
+                    'exam_name': q.exam.title,
+                    'state': q.state,
+                    'queue_number': q.queue_number,
+                    'estimated_wait_time': q.estimated_wait_time
+                }
+                for q in active_queues
+            ],
+            'appointments': [
+                {
+                    'appointment_id': a.appointment_id,
+                    'exam_id': a.exam.exam_id,
+                    'exam_name': a.exam.title,
+                    'scheduled_at': a.scheduled_at.isoformat(),
+                    'status': a.status
+                }
+                for a in appointments
+            ],
+            'available_actions': available_actions,
+            'timestamp': timezone.now().isoformat()
+        }
+```
+
+### 2.2 Views 리팩토링
+```python
+# p_queue/views.py (수정)
+from rest_framework import viewsets, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from .services import PatientJourneyService, InvalidActionError
+
+class PatientJourneyViewSet(viewsets.ViewSet):
+    """환자 여정 상태 관리 API"""
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=False, methods=['GET'])
+    def current_state(self, request):
+        """현재 환자 상태 조회"""
+        service = PatientJourneyService(request.user)
+        return Response(service.get_current_state())
+    
+    @action(detail=False, methods=['POST'])
+    def perform_action(self, request):
+        """액션 수행을 통한 상태 전이"""
+        action_type = request.data.get('action_type')
+        payload = request.data.get('payload', {})
+        
+        if not action_type:
+            return Response(
+                {'error': 'action_type is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        service = PatientJourneyService(request.user)
+        try:
+            result = service.perform_action(action_type, payload)
+            return Response(result)
+        except InvalidActionError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+```
+
+=====================================================
+## 🔄 Phase 3: WebSocket 우선 연결 전략
+=====================================================
+
+### 3.1 WebSocket Consumer 개선
+```python
+# p_queue/consumers.py (수정)
+import json
+from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
+from .services import PatientJourneyService
+
+class PatientJourneyConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope["user"]
+        if not self.user.is_authenticated:
+            await self.close()
+            return
+            
+        self.group_name = f"patient_{self.user.id}"
+        
+        # 그룹에 참여
+        await self.channel_layer.group_add(
+            self.group_name,
+            self.channel_name
+        )
+        
+        await self.accept()
+        
+        # 연결 즉시 현재 상태 전송
+        await self.send_initial_state()
+    
+    async def disconnect(self, close_code):
+        if hasattr(self, 'group_name'):
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name
+            )
+    
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        command = data.get('command')
+        
+        if command == 'fetch_initial_state':
+            await self.send_initial_state()
+        elif command == 'perform_action':
+            await self.handle_action(data)
+        elif command == 'ping':
+            await self.send(text_data=json.dumps({'type': 'pong'}))
+    
+    @database_sync_to_async
+    def get_current_state(self):
+        service = PatientJourneyService(self.user)
+        return service.get_current_state()
+    
+    @database_sync_to_async
+    def perform_action(self, action_type, payload):
+        service = PatientJourneyService(self.user)
+        return service.perform_action(action_type, payload)
+    
+    async def send_initial_state(self):
+        """초기 상태 전송"""
+        state_data = await self.get_current_state()
+        await self.send(text_data=json.dumps({
+            'type': 'initial_state',
+            'payload': state_data
+        }))
+    
+    async def handle_action(self, data):
+        """액션 처리"""
+        action_type = data.get('action_type')
+        payload = data.get('payload', {})
+        
+        try:
+            result = await self.perform_action(action_type, payload)
+            await self.send(text_data=json.dumps({
+                'type': 'action_result',
+                'success': True,
+                'payload': result
+            }))
+        except Exception as e:
+            await self.send(text_data=json.dumps({
+                'type': 'action_result',
+                'success': False,
+                'error': str(e)
+            }))
+    
+    async def state_update(self, event):
+        """그룹 메시지 처리 - 상태 업데이트 브로드캐스트"""
+        await self.send(text_data=json.dumps({
+            'type': 'state_update',
+            'payload': {
+                'journey_state': event['journey_state'],
+                'action': event['action'],
+                'timestamp': event['timestamp']
+            }
+        }))
+```
+
+### 3.2 Frontend Hook 개선
+```javascript
+// hooks/usePatientJourney.js (개선)
+import { useState, useEffect, useCallback, useRef } from 'react';
+
+export const usePatientJourney = () => {
+    const [journeyState, setJourneyState] = useState(null);
+    const [queueDetails, setQueueDetails] = useState(null);
+    const [appointments, setAppointments] = useState([]);
+    const [availableActions, setAvailableActions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [isConnected, setIsConnected] = useState(false);
+    const wsRef = useRef(null);
+    const reconnectTimeoutRef = useRef(null);
+    
+    useEffect(() => {
+        connectWebSocket();
+        
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
+        };
+    }, []);
+    
+    const connectWebSocket = () => {
+        const ws = new WebSocket(`${WS_BASE_URL}/ws/patient-journey/`);
+        
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+            setIsConnected(true);
+            // 연결되면 즉시 초기 상태 요청
+            ws.send(JSON.stringify({ command: 'fetch_initial_state' }));
+            
+            // 연결 유지를 위한 ping
+            setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ command: 'ping' }));
+                }
+            }, 30000); // 30초마다
+        };
+        
+        ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            
+            switch (message.type) {
+                case 'initial_state':
+                case 'state_update':
+                case 'action_result':
+                    const { payload } = message;
+                    setJourneyState(payload.journey_state);
+                    setQueueDetails(payload.queue_details);
+                    setAppointments(payload.appointments);
+                    setAvailableActions(payload.available_actions);
+                    setLoading(false);
+                    break;
+                    
+                case 'pong':
+                    // 연결 확인
+                    break;
+                    
+                default:
+                    console.log('Unknown message type:', message.type);
+            }
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            setIsConnected(false);
+        };
+        
+        ws.onclose = () => {
+            console.log('WebSocket disconnected');
+            setIsConnected(false);
+            
+            // 재연결 시도
+            reconnectTimeoutRef.current = setTimeout(() => {
+                console.log('Attempting to reconnect...');
+                connectWebSocket();
+            }, 3000);
+        };
+        
+        wsRef.current = ws;
+    };
+    
+    const performAction = useCallback(async (actionType, payload = {}) => {
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            // WebSocket이 연결되지 않은 경우 HTTP 폴백
+            try {
+                const response = await fetch('/api/v1/patient-journey/perform-action/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${getAuthToken()}`
+                    },
+                    body: JSON.stringify({ action_type: actionType, payload })
+                });
+                
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Action failed');
+                }
+                
+                // HTTP 응답으로 상태 업데이트
+                setJourneyState(data.journey_state);
+                setQueueDetails(data.queue_details);
+                setAppointments(data.appointments);
+                setAvailableActions(data.available_actions);
+                
+                return data;
+            } catch (error) {
+                console.error('Action failed:', error);
+                throw error;
+            }
+        } else {
+            // WebSocket을 통한 액션 수행
+            wsRef.current.send(JSON.stringify({
+                command: 'perform_action',
+                action_type: actionType,
+                payload
+            }));
+        }
+    }, []);
+    
+    const refresh = useCallback(() => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ command: 'fetch_initial_state' }));
+        } else {
+            // WebSocket이 없으면 재연결 시도
+            connectWebSocket();
+        }
+    }, []);
+    
+    return {
+        // 상태
+        journeyState,
+        queueDetails,
+        appointments,
+        availableActions,
+        loading,
+        isConnected,
+        
+        // 액션
+        performAction,
+        refresh
+    };
+};
+```
+
+=====================================================
+## 🔧 Phase 4: Signals 리팩토링
+=====================================================
+
+### 4.1 서비스 계층을 활용한 Signal
+```python
+# p_queue/signals.py (개선)
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from .models import Queue, PatientState
+from .services import PatientJourneyService
+
+@receiver(post_save, sender=Queue)
+def sync_queue_to_patient_state(sender, instance, created, **kwargs):
+    """Queue 변경 시 PatientState 동기화"""
+    if created:
+        return  # 새로 생성된 경우는 처리하지 않음
+        
+    # 서비스 계층 사용
+    service = PatientJourneyService(user=instance.user)
+    service.sync_from_queue_update(instance)
+
+@receiver(post_save, sender=PatientState)
+def sync_patient_state_to_queue(sender, instance, created, **kwargs):
+    """PatientState 변경 시 Queue 동기화"""
+    if created:
+        return
+        
+    # 서비스 계층 사용
+    service = PatientJourneyService(user=instance.user)
+    service.sync_from_patient_state(instance)
+```
+
+=====================================================
+## 📋 Phase 5: 마이그레이션 전략
+=====================================================
+
+### 5.1 데이터 마이그레이션
+```python
+# p_queue/migrations/00XX_unify_state_naming.py
+from django.db import migrations
+
+def unify_state_names(apps, schema_editor):
+    """상태명 통일 (ongoing → in_progress)"""
+    Queue = apps.get_model('p_queue', 'Queue')
+    PatientState = apps.get_model('p_queue', 'PatientState')
+    
+    # Queue 상태명 변경
+    Queue.objects.filter(state='ongoing').update(state='in_progress')
+    Queue.objects.filter(state='waiting').update(state='waiting')  # 그대로
+    
+    # PatientState 상태명 변경
+    PatientState.objects.filter(current_state='ONGOING').update(
+        current_state='IN_PROGRESS'
+    )
+    
+    # 기타 마이그레이션...
+
+def reverse_unify_state_names(apps, schema_editor):
+    """롤백: 상태명 원복"""
+    Queue = apps.get_model('p_queue', 'Queue')
+    PatientState = apps.get_model('p_queue', 'PatientState')
+    
+    Queue.objects.filter(state='in_progress').update(state='ongoing')
+    PatientState.objects.filter(current_state='IN_PROGRESS').update(
+        current_state='ONGOING'
+    )
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ('p_queue', '00XX_previous_migration'),
+    ]
+    
+    operations = [
+        migrations.RunPython(
+            unify_state_names,
+            reverse_unify_state_names
+        ),
+    ]
+```
+
+=====================================================
+## 🧪 Phase 6: 테스트 전략
+=====================================================
+
+### 6.1 서비스 계층 테스트
+```python
+# tests/test_patient_journey_service.py
+import pytest
+from django.test import TestCase
+from unittest.mock import Mock, patch
+from p_queue.services import PatientJourneyService, InvalidActionError
+from common.state_definitions import PatientJourneyState, PatientAction
+
+class TestPatientJourneyService(TestCase):
+    def setUp(self):
+        self.user = create_test_user()
+        self.service = PatientJourneyService(self.user)
+    
+    def test_perform_valid_action(self):
+        """유효한 액션 수행 테스트"""
+        # UNREGISTERED 상태에서 시작
+        result = self.service.perform_action(
+            PatientAction.SCAN_NFC.value,
+            {'tag_id': 'test_tag_123'}
+        )
+        
+        self.assertEqual(result['journey_state'], 
+                        PatientJourneyState.ARRIVED.value)
+        self.assertIn(PatientAction.REGISTER.value, 
+                     result['available_actions'])
+    
+    def test_invalid_action_raises_error(self):
+        """잘못된 액션 시 에러 발생 테스트"""
+        with self.assertRaises(InvalidActionError):
+            # UNREGISTERED 상태에서 CALL_PATIENT는 불가능
+            self.service.perform_action('call_patient')
+    
+    def test_queue_sync_updates_patient_state(self):
+        """Queue 동기화 테스트"""
+        # PatientState를 WAITING으로 설정
+        patient_state = PatientState.objects.create(
+            user=self.user,
+            current_state=PatientJourneyState.WAITING.value
+        )
+        
+        # Queue 생성 및 상태 변경
+        queue = Queue.objects.create(
+            user=self.user,
+            state='waiting',
+            exam_id='test_exam'
+        )
+        
+        queue.state = 'called'
+        queue.save()
+        
+        # Signal을 통해 서비스가 호출되고 상태가 동기화되어야 함
+        patient_state.refresh_from_db()
+        self.assertEqual(patient_state.current_state,
+                        PatientJourneyState.CALLED.value)
+    
+    @patch('p_queue.services.async_to_sync')
+    def test_websocket_notification_sent(self, mock_async):
+        """WebSocket 알림 전송 테스트"""
+        # 액션 수행
+        self.service.perform_action(PatientAction.SCAN_NFC.value)
+        
+        # WebSocket 알림이 호출되었는지 확인
+        mock_async.assert_called()
+```
+
+### 6.2 통합 테스트
+```python
+# tests/test_integration.py
+from channels.testing import WebsocketCommunicator
+from django.test import TransactionTestCase
+from p_queue.consumers import PatientJourneyConsumer
+
+class TestWebSocketIntegration(TransactionTestCase):
+    async def test_websocket_receives_initial_state(self):
+        """WebSocket 연결 시 초기 상태 수신 테스트"""
+        communicator = WebsocketCommunicator(
+            PatientJourneyConsumer.as_asgi(),
+            "/ws/patient-journey/"
+        )
+        
+        # 연결
+        connected, _ = await communicator.connect()
+        self.assertTrue(connected)
+        
+        # 초기 상태 메시지 수신
+        message = await communicator.receive_json_from()
+        self.assertEqual(message['type'], 'initial_state')
+        self.assertIn('journey_state', message['payload'])
+        
+        await communicator.disconnect()
+    
+    async def test_action_through_websocket(self):
+        """WebSocket을 통한 액션 수행 테스트"""
+        communicator = WebsocketCommunicator(
+            PatientJourneyConsumer.as_asgi(),
+            "/ws/patient-journey/"
+        )
+        
+        connected, _ = await communicator.connect()
+        
+        # 액션 전송
+        await communicator.send_json_to({
+            'command': 'perform_action',
+            'action_type': 'scan_nfc',
+            'payload': {'tag_id': 'test_123'}
+        })
+        
+        # 결과 수신
+        message = await communicator.receive_json_from()
+        self.assertEqual(message['type'], 'action_result')
+        self.assertTrue(message['success'])
+        
+        await communicator.disconnect()
+```
+
+=====================================================
+## 📊 모니터링 및 디버깅
+=====================================================
+
+### 7.1 상태 일관성 체크
+```python
+# management/commands/check_state_health.py
+from django.core.management.base import BaseCommand
+from django.db import connection
+from p_queue.models import Queue, PatientState
+from common.state_definitions import QUEUE_TO_JOURNEY_MAPPING
+
+class Command(BaseCommand):
+    help = '상태 일관성 및 시스템 헬스 체크'
+    
+    def handle(self, *args, **options):
+        self.check_state_consistency()
+        self.check_orphaned_states()
+        self.check_transition_logs()
+        self.print_statistics()
+    
+    def check_state_consistency(self):
+        """Queue와 PatientState 간 일관성 체크"""
+        inconsistencies = []
+        
+        for patient_state in PatientState.objects.all():
+            active_queue = Queue.objects.filter(
+                user=patient_state.user,
+                state__in=['waiting', 'called', 'in_progress']
+            ).first()
+            
+            if active_queue:
+                expected = QUEUE_TO_JOURNEY_MAPPING.get(
+                    QueueDetailState(active_queue.state)
+                )
+                if expected and patient_state.current_state != expected.value:
+                    inconsistencies.append({
+                        'user': patient_state.user.id,
+                        'patient_state': patient_state.current_state,
+                        'queue_state': active_queue.state,
+                        'expected': expected.value
+                    })
+        
+        if inconsistencies:
+            self.stdout.write(
+                self.style.ERROR(f'Found {len(inconsistencies)} inconsistencies:')
+            )
+            for item in inconsistencies[:10]:  # 처음 10개만 표시
+                self.stdout.write(f"  User {item['user']}: "
+                                f"PS={item['patient_state']}, "
+                                f"Q={item['queue_state']}, "
+                                f"Expected={item['expected']}")
+        else:
+            self.stdout.write(
+                self.style.SUCCESS('✓ All states are consistent')
+            )
+        
+        return len(inconsistencies)
+    
+    def check_orphaned_states(self):
+        """고아 상태 체크 (Queue 없는 WAITING/CALLED 상태)"""
+        orphaned = PatientState.objects.filter(
+            current_state__in=['WAITING', 'CALLED', 'IN_PROGRESS']
+        ).exclude(
+            user__in=Queue.objects.filter(
+                state__in=['waiting', 'called', 'in_progress']
+            ).values_list('user', flat=True)
+        )
+        
+        if orphaned.exists():
+            self.stdout.write(
+                self.style.WARNING(f'Found {orphaned.count()} orphaned states')
+            )
+        else:
+            self.stdout.write(
+                self.style.SUCCESS('✓ No orphaned states')
+            )
+    
+    def check_transition_logs(self):
+        """상태 전환 로그 무결성 체크"""
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM state_transitions
+                WHERE to_state NOT IN (
+                    'UNREGISTERED', 'ARRIVED', 'REGISTERED',
+                    'WAITING', 'CALLED', 'IN_PROGRESS',
+                    'COMPLETED', 'PAYMENT', 'FINISHED'
+                )
+            """)
+            invalid_count = cursor.fetchone()[0]
+            
+        if invalid_count > 0:
+            self.stdout.write(
+                self.style.ERROR(f'Found {invalid_count} invalid transitions')
+            )
+        else:
+            self.stdout.write(
+                self.style.SUCCESS('✓ All transitions are valid')
+            )
+    
+    def print_statistics(self):
+        """시스템 통계 출력"""
+        stats = {
+            'total_patients': PatientState.objects.count(),
+            'active_queues': Queue.objects.filter(
+                state__in=['waiting', 'called', 'in_progress']
+            ).count(),
+            'state_distribution': {}
+        }
+        
+        # 상태별 분포
+        for state in PatientJourneyState:
+            count = PatientState.objects.filter(
+                current_state=state.value
+            ).count()
+            stats['state_distribution'][state.value] = count
+        
+        self.stdout.write(self.style.SUCCESS('\n=== System Statistics ==='))
+        self.stdout.write(f"Total Patients: {stats['total_patients']}")
+        self.stdout.write(f"Active Queues: {stats['active_queues']}")
+        self.stdout.write('\nState Distribution:')
+        for state, count in stats['state_distribution'].items():
+            self.stdout.write(f"  {state}: {count}")
+```
+
+=====================================================
+## 🚀 구현 로드맵
+=====================================================
+
+### Week 1: 기반 구축
+- [ ] Backend 상태 정의 파일 생성 (state_definitions.py)
+- [ ] PatientJourneyService 클래스 구현
+- [ ] 상태 정의 API 엔드포인트 추가
+- [ ] 기본 테스트 케이스 작성
+
+### Week 2: API 및 서비스 계층
+- [ ] PatientJourneyViewSet 구현 (액션 기반)
+- [ ] WebSocket Consumer 개선
+- [ ] Signals 리팩토링 (서비스 계층 활용)
+- [ ] 서비스 계층 단위 테스트
+
+### Week 3: Frontend 통합
+- [ ] usePatientJourney Hook 구현
+- [ ] WebSocket 우선 연결 로직
+- [ ] 상태 정의 동적 로드
+- [ ] 기존 컴포넌트 점진적 마이그레이션
+
+### Week 4: 데이터 마이그레이션
+- [ ] 상태명 통일 마이그레이션 (ongoing → in_progress)
+- [ ] 기존 데이터 정합성 검증
+- [ ] 롤백 계획 수립 및 테스트
+- [ ] 스테이징 환경 배포
+
+### Week 5: 테스트 및 모니터링
+- [ ] 통합 테스트 suite 구축
+- [ ] 성능 테스트 (WebSocket vs HTTP)
+- [ ] 모니터링 대시보드 구축
+- [ ] 상태 일관성 체크 자동화
+
+### Week 6: 배포 및 최적화
+- [ ] 프로덕션 배포 (Blue-Green)
+- [ ] 실시간 모니터링
+- [ ] 성능 튜닝
+- [ ] 문서화 완료
+
+=====================================================
+## 📈 성공 지표 (개선)
+=====================================================
+
+### 정량적 지표
+1. **상태 불일치율**: < 0.01% (기존 0.1%)
+2. **API 응답 시간**: < 100ms (기존 200ms)
+3. **WebSocket 연결 안정성**: > 99.9% (기존 99%)
+4. **코드 중복 제거율**: > 90% (기존 80%)
+5. **테스트 커버리지**: > 95% (기존 90%)
+6. **액션 처리 실패율**: < 0.5%
+
+### 정성적 지표
+1. **개발자 경험**: 상태 관리 복잡도 50% 감소
+2. **유지보수성**: 새로운 상태/액션 추가 시간 70% 단축
+3. **디버깅 효율**: 상태 문제 해결 시간 60% 단축
+4. **시스템 신뢰성**: 상태 관련 버그 80% 감소
+
+=====================================================
+## 🔒 리스크 관리 (강화)
+=====================================================
+
+### 리스크 매트릭스
+| 리스크 | 확률 | 영향도 | 대응 전략 |
+|--------|------|--------|----------|
+| WebSocket 연결 실패 | 중 | 높음 | HTTP 폴백 메커니즘 |
+| 상태 전이 충돌 | 낮음 | 높음 | 트랜잭션 + 낙관적 잠금 |
+| 마이그레이션 실패 | 낮음 | 매우 높음 | 단계별 롤백 계획 |
+| 성능 저하 | 중 | 중간 | 캐싱 + 인덱스 최적화 |
+| 서드파티 의존성 | 낮음 | 낮음 | 최소 의존성 유지 |
+
+### 롤백 계획
+1. **Phase별 독립 배포**: 각 Phase는 독립적으로 롤백 가능
+2. **Feature Flag 사용**: 신규 기능을 플래그로 제어
+3. **데이터베이스 백업**: 마이그레이션 전 자동 백업
+4. **Blue-Green 배포**: 무중단 롤백 지원
+
+=====================================================
+## 📚 참고 자료
+=====================================================
+
+- Django Channels 공식 문서
+- WebSocket 프로토콜 RFC 6455
+- Event-Driven Architecture 패턴
+- Domain-Driven Design (DDD) 원칙
+- SOLID 설계 원칙
+
+---
+END OF IMPROVED PLAN v2
