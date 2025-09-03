@@ -49,21 +49,43 @@ export const mapService = {
   },
 
   /**
-   * 지도 SVG 파일 URL 생성
+   * [삭제 예정] 지도 SVG 파일 URL 생성 (이제 사용하지 않음)
+   * @deprecated API를 통해 SVG 내용을 직접 가져오는 방식으로 변경되었습니다.
    * @param {string} mapId - 지도 ID (예: main_1f, cancer_2f)
    * @returns {string} SVG 파일 URL
    */
   getMapSvgUrl(mapId) {
+    console.warn("getMapSvgUrl is deprecated. Use getMapSvgContent instead.");
     return `/images/maps/${mapId}.svg`;
   },
 
   /**
-   * Interactive 지도 SVG 파일 URL 생성
+   * [삭제 예정] Interactive 지도 SVG 파일 URL 생성 (이제 사용하지 않음)
+   * @deprecated API를 통해 SVG 내용을 직접 가져오는 방식으로 변경되었습니다.
    * @param {string} mapId - 지도 ID
    * @returns {string} Interactive SVG 파일 URL
    */
   getInteractiveMapSvgUrl(mapId) {
+    console.warn("getInteractiveMapSvgUrl is deprecated. Use getMapSvgContent instead.");
     return `/images/maps/${mapId}.interactive.svg`;
+  },
+
+  /**
+   * [신규] API를 통해 지도 SVG 내용을 직접 가져옵니다.
+   * @param {string} mapName - 지도 파일 이름 (예: main_1f.svg)
+   * @returns {Promise<string>} SVG 파일의 텍스트 내용
+   */
+  async getMapSvgContent(mapName) {
+    try {
+      // 기존 'api' 클라이언트를 사용합니다.
+      const response = await api.get(`/maps/${mapName}/`, {
+        responseType: 'text',
+      });
+      return response;
+    } catch (error) {
+      console.error(`Error fetching SVG content for map: ${mapName}`, error);
+      return '<svg viewBox="0 0 100 100"><text x="10" y="50">Map not found</text></svg>';
+    }
   },
 
   /**

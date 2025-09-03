@@ -45,6 +45,9 @@ urlpatterns = [
     path('api/v1/navigation/zones/', views.department_zones_list, name='department-zones-list'),
     path('api/v1/navigation/zones/<int:zone_id>/', views.department_zone_detail, name='department-zone-detail'),
     
+    # SVG 맵 파일 제공 API
+    path('api/v1/maps/<str:map_name>/', views.serve_map_svg, name='serve-map-svg'),
+    
     # 관리자용 ViewSet (REST framework)
     path('api/navigation/', include(router.urls)),
 ]

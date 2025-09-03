@@ -35,6 +35,7 @@ from nfc.models import NFCTag
 from appointments.models import Exam
 from authentication.models import User
 from nfc_hospital_system.utils import APIResponse
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -895,3 +896,21 @@ def department_zone_detail(request, zone_id):
             code="ZONE_DETAIL_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+def serve_map_svg(request, map_name):
+    """
+    요청된 이름의 맵 SVG 파일을 반환하는 API 뷰.
+    보안을 위해 파일 이름에 경로 조작 문자가 있는지 확인합니다.
+    """
+    if not re.match(r'^[a-zA-Z0-9_.-]+$', map_name):
+        raise Http404("잘못된 맵 이름입니다.")
+
+    file_path = os.path.join(settings.STATICFILES_DIRS[0], 'maps', map_name)
+
+    if os.path.exists(file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            svg_content = f.read()
+        return HttpResponse(svg_content, content_type='image/svg+xml')
+    else:
+        raise Http404("맵 파일을 찾을 수 없습니다.")
