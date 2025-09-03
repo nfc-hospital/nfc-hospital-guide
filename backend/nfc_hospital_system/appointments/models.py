@@ -48,41 +48,15 @@ class Exam(models.Model):
         default=5 
     )
 
-    # 위치 정보 필드 추가
-    building = models.CharField(
-        max_length=100,
-        blank=True,
+    # 위치 정보 - NFCTag 참조로 변경
+    location_tag = models.ForeignKey(
+        'nfc.NFCTag',
+        on_delete=models.SET_NULL,
         null=True,
-        verbose_name='건물명',
-        help_text='검사가 진행되는 건물명 (예: 본관, 별관)'
-    )
-
-    floor = models.CharField(
-        max_length=50,
         blank=True,
-        null=True,
-        verbose_name='층수',
-        help_text='검사가 진행되는 층수'
-    )
-
-    room = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        verbose_name='호실명',
-        help_text='검사가 진행되는 상세 호실 (예: 101호)'
-    )
-
-    x_coord = models.FloatField(
-        verbose_name='X 좌표',
-        help_text='지도상의 X 좌표값',
-        default=0.0
-    )
-
-    y_coord = models.FloatField(
-        verbose_name='Y 좌표',
-        help_text='지도상의 Y 좌표값',
-        default=0.0
+        related_name='exam_locations',
+        verbose_name='위치 태그',
+        help_text='검사실 위치의 NFC 태그'
     )
 
     # category 필드 추가
@@ -120,12 +94,37 @@ class Exam(models.Model):
         indexes = [
             models.Index(fields=['department']),
             models.Index(fields=['is_active']),
-            models.Index(fields=['building', 'floor', 'room']), 
+            models.Index(fields=['location_tag']), 
             models.Index(fields=['category']), 
         ]
 
     def __str__(self):
         return f"{self.title} ({self.department})"
+    
+    @property
+    def building(self):
+        """NFCTag에서 건물명 가져오기"""
+        return self.location_tag.building if self.location_tag else None
+    
+    @property
+    def floor(self):
+        """NFCTag에서 층수 가져오기"""
+        return self.location_tag.floor if self.location_tag else None
+    
+    @property
+    def room(self):
+        """NFCTag에서 호실명 가져오기"""
+        return self.location_tag.room if self.location_tag else None
+    
+    @property
+    def x_coord(self):
+        """NFCTag에서 X 좌표 가져오기"""
+        return self.location_tag.x_coord if self.location_tag else 0.0
+    
+    @property
+    def y_coord(self):
+        """NFCTag에서 Y 좌표 가져오기"""
+        return self.location_tag.y_coord if self.location_tag else 0.0
 
 
 class Appointment(models.Model):

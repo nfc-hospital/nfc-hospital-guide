@@ -198,6 +198,94 @@ const useMapStore = create(
       setCurrentLocation: (location) => {
         set({ currentLocation: location });
       },
+
+      // ✅ 새로운 경로 설정 함수 (백엔드 API 응답 직접 처리)
+      setNavigationPath: (pathData) => {
+        if (!pathData) {
+          set({ 
+            activeRoute: null, 
+            navigationRoute: null,
+            destinationLocation: null
+          });
+          return;
+        }
+
+        const { from, to, path, timestamp } = pathData;
+        
+        // 경로 데이터를 지도 표시용 형식으로 변환
+        const nodes = [];
+        const edges = [];
+        
+        // 시작점 추가
+        if (from) {
+          nodes.push({
+            id: from.tag_id,
+            x: from.x_coord || 0,
+            y: from.y_coord || 0,
+            name: from.room || from.description,
+            floor: from.floor,
+            building: from.building
+          });
+        }
+        
+        // 경로 steps를 nodes로 변환
+        if (path && path.steps) {
+          path.steps.forEach((step, index) => {
+            // 중간 노드 추가 (필요시)
+            if (step.node) {
+              nodes.push({
+                id: step.node.id || `step-${index}`,
+                x: step.node.x || 0,
+                y: step.node.y || 0,
+                name: step.instruction,
+                floor: step.node.floor,
+                building: step.node.building
+              });
+            }
+          });
+        }
+        
+        // 도착점 추가
+        if (to) {
+          nodes.push({
+            id: to.tag_id,
+            x: to.x_coord || 0,
+            y: to.y_coord || 0,
+            name: to.room || to.description,
+            floor: to.floor,
+            building: to.building
+          });
+        }
+        
+        // edges 생성 (연속된 노드들을 연결)
+        for (let i = 0; i < nodes.length - 1; i++) {
+          edges.push([nodes[i].id, nodes[i + 1].id]);
+        }
+        
+        console.log('📍 경로 설정 완료:', {
+          nodes: nodes.length,
+          edges: edges.length,
+          distance: path?.distance,
+          time: path?.estimated_time
+        });
+        
+        // 상태 업데이트
+        set({ 
+          activeRoute: {
+            nodes,
+            edges,
+            total_distance: path?.distance || 0,
+            estimated_time: path?.estimated_time || 0
+          },
+          navigationRoute: {
+            nodes,
+            edges,
+            timestamp
+          },
+          destinationLocation: to,
+          currentLocation: from
+        });
+      },
       
       // ✅ 위치 변경 시 자동으로 경로 업데이트 (hospital_navigation API 사용)
       updateRouteBasedOnLocation: async (newLocation, customDestination = null) => {
@@ -242,14 +330,12 @@ const useMapStore = create(
           
           // 2. hospital_navigation API로 경로 요청
           try {
-            // NFC 스캔 기반 경로 안내 API 사용
+            // NFC 스캔 기반 경로 안내 API 사용 (백엔드가 기대하는 파라미터 사용)
             const response = await apiService.navigation.nfcScanNavigate({
-              tag_id: currentPos.tag_id || 'default-location',
-              target_exam_id: nextExam.exam_id,
-              target_location: nextExam.title,
-              is_accessible: false,
+              start_tag_code: currentPos.code || currentPos.tag_id || 'TAG001', // 출발지 태그 코드
+              destination_tag_code: nextExam.location_tag || 'TAG001', // 목적지 태그 코드
               avoid_stairs: false,
-              avoid_crowded: false
+              is_accessible: false
             });
             
             const routeData = response?.data || response;

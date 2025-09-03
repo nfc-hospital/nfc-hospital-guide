@@ -1364,3 +1364,131 @@ class FacilityRouteViewSet(ModelViewSet):
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK
         )
+
+
+class NFCTagScanNavigateView(APIView):
+    """
+    NFC 스캔을 기반으로 실시간 경로를 계산하여 반환하는 API.
+    A* 알고리즘을 사용하여 최적 경로를 찾습니다.
+    """
+    permission_classes = [permissions.AllowAny]  # 테스트용 임시 변경
+    
+    def post(self, request, *args, **kwargs):
+        from hospital_navigation.models import NavigationNode
+        from hospital_navigation.pathfinding import find_shortest_path
+        
+        # 디버깅: NFCTagScanNavigateView가 호출됨을 확인
+        print("🚨🚨🚨 NFCTagScanNavigateView.post() 호출됨! 🚨🚨🚨")
+        print(f"🚨 Request URL: {request.path}")
+        print(f"🚨 Request method: {request.method}")
+        print(f"🚨 Received request data: {request.data}")
+        
+        # 파라미터 이름을 code로 변경하여 명확하게 함
+        start_tag_code = request.data.get('start_tag_code')
+        destination_tag_code = request.data.get('destination_tag_code')
+        avoid_stairs = request.data.get('avoid_stairs', False)
+        is_accessible = request.data.get('is_accessible', False)
+        
+        print(f"📝 Parsed parameters: start_tag_code={start_tag_code}, destination_tag_code={destination_tag_code}")
+
+        if not start_tag_code or not destination_tag_code:
+            return Response(
+                {"error": "출발지와 목적지 태그 코드가 모두 필요합니다."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # code로 NFC 태그 찾기 (프론트엔드는 항상 code를 보냄)
+            start_tag = NFCTag.objects.get(code=start_tag_code)
+            destination_tag = NFCTag.objects.get(code=destination_tag_code)
+        except NFCTag.DoesNotExist:
+            return Response(
+                {"error": "제공된 코드와 일치하는 NFC 태그를 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # NFC 태그와 연결된 NavigationNode 찾기
+        try:
+            # NavigationNode와 NFCTag의 관계 확인
+            # NFCTag를 참조하는 NavigationNode 찾기
+            start_nav_node = NavigationNode.objects.filter(nfc_tag=start_tag).first()
+            destination_nav_node = NavigationNode.objects.filter(nfc_tag=destination_tag).first()
+            
+            if not start_nav_node or not destination_nav_node:
+                # NavigationNode가 없으면 임시로 생성하거나 기본 노드 사용
+                logger.warning(f"NavigationNode not found for tags: {start_tag_code}, {destination_tag_code}")
+                
+                # 같은 위치의 노드 찾기 (좌표 기반)
+                if not start_nav_node:
+                    start_nav_node = NavigationNode.objects.filter(
+                        x_coord=start_tag.x_coord,
+                        y_coord=start_tag.y_coord
+                    ).first()
+                
+                if not destination_nav_node:
+                    destination_nav_node = NavigationNode.objects.filter(
+                        x_coord=destination_tag.x_coord,
+                        y_coord=destination_tag.y_coord
+                    ).first()
+                
+                if not start_nav_node or not destination_nav_node:
+                    return Response(
+                        {"error": "경로 계산에 필요한 네비게이션 노드를 찾을 수 없습니다."},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+        except Exception as e:
+            logger.error(f"Error finding navigation nodes: {e}")
+            return Response(
+                {"error": "경로 계산 중 오류가 발생했습니다."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # 실제 경로 탐색 알고리즘 호출
+        path_result = find_shortest_path(
+            start_nav_node, 
+            destination_nav_node,
+            avoid_stairs=avoid_stairs,
+            is_accessible=is_accessible
+        )
+        
+        if path_result is None:
+            return Response(
+                {"error": "두 지점 사이의 경로를 찾을 수 없습니다."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # API 응답 형식에 맞게 데이터 구성
+        path_data = {
+            "start": {
+                "tag_id": str(start_tag.tag_id),
+                "building": start_tag.building,
+                "floor": start_tag.floor,
+                "room": start_tag.room,
+                "description": start_tag.description,
+                "x_coord": start_tag.x_coord,
+                "y_coord": start_tag.y_coord
+            },
+            "destination": {
+                "tag_id": str(destination_tag.tag_id),
+                "building": destination_tag.building,
+                "floor": destination_tag.floor,
+                "room": destination_tag.room,
+                "description": destination_tag.description,
+                "x_coord": destination_tag.x_coord,
+                "y_coord": destination_tag.y_coord
+            },
+            "path": {
+                "distance": path_result["distance"],
+                "estimated_time": path_result["estimated_time"],
+                "steps": path_result["steps"]
+            },
+            "timestamp": timezone.now().isoformat()
+        }
+        
+        # 경로 탐색 기록 로깅
+        user_info = getattr(request.user, 'user_id', 'Anonymous')
+        logger.info(f"Navigation calculated: {start_tag.room} -> {destination_tag.room} | "
+                   f"Distance: {path_result['distance']}m | Time: {path_result['estimated_time']}s | "
+                   f"User: {user_info}")
+        
+        return Response(path_data, status=status.HTTP_200_OK)

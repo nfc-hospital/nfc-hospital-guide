@@ -329,10 +329,11 @@ class QueueStatusLog(models.Model):
         blank=True, 
         verbose_name='변경 시점 예상대기시간'
     )
-    location = models.CharField(
-        max_length=36, 
-        null=True, 
-        blank=True, 
+    location = models.ForeignKey(
+        'nfc.NFCTag',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         verbose_name='변경 시점 위치'
     )
     metadata = models.JSONField(
@@ -374,7 +375,13 @@ class PatientState(models.Model):
         ('FINISHED', 'Finished'),
     ]
     current_state = models.CharField(max_length=20, choices=STATE_CHOICES, default='UNREGISTERED')
-    current_location = models.CharField(max_length=36, null=True, blank=True)
+    current_location = models.ForeignKey(
+        'nfc.NFCTag',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='current_patients'
+    )
     
     # CharField에서 ForeignKey로 변경
     current_exam = models.ForeignKey(
@@ -446,7 +453,12 @@ class StateTransition(models.Model):
     trigger_source = models.CharField(max_length=100, null=True, blank=True)
     
     # 컨텍스트 정보
-    location_at_transition = models.CharField(max_length=36, null=True, blank=True)
+    location_at_transition = models.ForeignKey(
+        'nfc.NFCTag',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
     exam_id = models.CharField(max_length=50, null=True, blank=True)
     emr_reference = models.CharField(max_length=100, null=True, blank=True)
     

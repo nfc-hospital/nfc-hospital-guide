@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import apiService from '../api/apiService';
-import { authAPI, appointmentAPI, queueAPI, api } from '../api/client';
+import { authAPI, appointmentAPI, queueAPI, api, nfcAPI } from '../api/client';
+import useMapStore from './mapStore';
 
 const useJourneyStore = create(
   devtools(
@@ -622,7 +623,8 @@ const useJourneyStore = create(
                       department: '출입구',
                       x_coord: 150,
                       y_coord: 400,
-                      description: '병원에 도착하시면 원무과로 이동해주세요'
+                      description: '병원에 도착하시면 원무과로 이동해주세요',
+                      location_tag: 'TAG001'  // 접수처 태그 ID
                     };
                     break;
                     
@@ -636,7 +638,8 @@ const useJourneyStore = create(
                       department: '원무과',
                       x_coord: 500,
                       y_coord: 330,
-                      description: '원무과에서 접수를 진행해주세요'
+                      description: '원무과에서 접수를 진행해주세요',
+                      location_tag: 'TAG001'  // 접수처 태그 ID
                     };
                     break;
                     
@@ -685,7 +688,8 @@ const useJourneyStore = create(
                         department: '원무과',
                         x_coord: 420,
                         y_coord: 380,
-                        description: '검사가 모두 완료되었습니다. 수납창구로 이동해주세요.'
+                        description: '검사가 모두 완료되었습니다. 수납창구로 이동해주세요.',
+                        location_tag: 'TAG001'  // 접수처 태그 ID (수납창구도 원무과에 있음)
                       };
                     }
                     break;
@@ -700,7 +704,8 @@ const useJourneyStore = create(
                       department: '원무과',
                       x_coord: 420,
                       y_coord: 380,
-                      description: '수납창구에서 진료비를 수납해주세요'
+                      description: '수납창구에서 진료비를 수납해주세요',
+                      location_tag: 'TAG001'  // 접수처 태그 ID (수납창구도 원무과에 있음)
                     };
                     break;
                     
@@ -714,7 +719,8 @@ const useJourneyStore = create(
                       department: '출입구',
                       x_coord: 150,
                       y_coord: 400,
-                      description: '모든 진료가 완료되었습니다. 안녕히 가세요.'
+                      description: '모든 진료가 완료되었습니다. 안녕히 가세요.',
+                      location_tag: 'TAG001'  // 접수처 태그 ID (정문 근처)
                     };
                     break;
                 }
@@ -965,6 +971,103 @@ const useJourneyStore = create(
             tagError: null,
             // 현재 위치는 유지 (완전히 초기화하지 않음)
           });
+        },
+
+        // 실시간 경로 탐색 (새로운 백엔드 API 사용)
+        navigateToDestination: async () => {
+          const { taggedLocationInfo, getNextExam } = get();
+          const nextExam = getNextExam();
+          const mapStore = useMapStore.getState();
+
+          // 출발지 또는 목적지 정보가 없으면 중단
+          if (!taggedLocationInfo) {
+            console.error('❌ 출발지 정보가 없습니다. NFC 태그를 먼저 스캔해주세요.');
+            return null;
+          }
+          
+          // 출발지 태그 코드 확인
+          const startTagCode = taggedLocationInfo.code || taggedLocationInfo.tag_id || taggedLocationInfo.tag_code;
+          if (!startTagCode) {
+            console.error('❌ 출발지 태그 코드를 찾을 수 없습니다:', taggedLocationInfo);
+            return null;
+          }
+
+          if (!nextExam) {
+            console.log('⚠️ 목적지 정보가 없습니다. 다음 검사가 없을 수 있습니다.');
+            return null;
+          }
+
+          try {
+            console.log('🚀 경로 탐색 시작:', {
+              from: taggedLocationInfo.location_name || taggedLocationInfo.room,
+              to: nextExam.title
+            });
+
+            // 목적지의 tag_id 결정
+            let destinationTagId = null;
+            
+            // nextExam에 location_tag가 있으면 사용
+            if (nextExam.location_tag) {
+              destinationTagId = nextExam.location_tag;
+            } 
+            // 특별한 목적지 처리 (수납창구, 정문 등)
+            else if (nextExam.exam_id === 'payment_desk') {
+              // 수납창구의 고정 태그 ID
+              destinationTagId = 'TAG001'; // 접수처/원무과 태그 (수납창구도 여기 위치)
+            } 
+            else if (nextExam.exam_id === 'main_entrance') {
+              destinationTagId = 'TAG001'; // 정문 근처 접수처 태그
+            }
+            
+            if (!destinationTagId) {
+              console.error('❌ 목적지 태그 ID를 찾을 수 없습니다:', nextExam);
+              return null;
+            }
+
+            // 백엔드 경로 탐색 API 호출 (code 사용)
+            const pathData = await nfcAPI.navigatePath(
+              startTagCode,  // 이미 위에서 정의됨
+              destinationTagId
+            );
+
+            console.log('✅ 경로 탐색 완료:', pathData);
+
+            // mapStore에 경로 정보 업데이트
+            if (pathData && pathData.path) {
+              mapStore.setNavigationPath({
+                from: pathData.start,
+                to: pathData.destination,
+                path: pathData.path,
+                timestamp: pathData.timestamp
+              });
+              
+              console.log('📍 지도에 경로 표시 완료');
+            }
+
+            return pathData;
+          } catch (error) {
+            console.error('❌ 경로 탐색 실패:', error);
+            set({ error: '경로를 찾을 수 없습니다. 잠시 후 다시 시도해주세요.' });
+            return null;
+          }
+        },
+
+        // NFC 스캔 후 자동 경로 탐색
+        handleNFCScanWithNavigation: async (tagId) => {
+          try {
+            // 1. 태그 정보 가져오기
+            const tagInfo = await get().fetchTagInfo(tagId);
+            
+            if (tagInfo) {
+              // 2. 자동으로 경로 탐색 시작
+              await get().navigateToDestination();
+            }
+            
+            return tagInfo;
+          } catch (error) {
+            console.error('❌ NFC 스캔 및 경로 탐색 실패:', error);
+            throw error;
+          }
         },
 
         // 관리자 대시보드 데이터 가져오기

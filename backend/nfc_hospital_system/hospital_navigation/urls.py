@@ -32,8 +32,8 @@ router.register(
 )
 
 urlpatterns = [
-    # 환자용 경로 안내 API - /api/v1 prefix를 따라가도록 수정
-    path('api/v1/nfc/scan/navigate/', views.nfc_scan_navigate, name='nfc-scan-navigate'),
+    # 환자용 경로 안내 API - /api/v1 prefix를 따라가도록 수정 (URL 충돌 방지를 위해 경로 변경)
+    path('api/v1/navigation/scan/', views.nfc_scan_navigate, name='nfc-scan-navigate'),
     path('api/v1/navigation/complete/', views.navigation_complete, name='navigation-complete'),
     path('api/v1/hospital/map/<str:floor_id>/', views.get_hospital_map, name='hospital-map'),
     path('api/v1/routes/search/', views.search_routes, name='routes-search'),

@@ -34,15 +34,15 @@ class ExamAdmin(admin.ModelAdmin):
     Django 관리자 페이지에서 Exam 모델을 관리합니다.
     """
     list_display = (
-        'exam_id', 'title', 'department', 'building', 'floor', 'room',
+        'exam_id', 'title', 'department', 'get_building', 'get_floor', 'get_room',
         'average_duration', 'buffer_time', 'is_active',
         'created_at', 'updated_at'
     )
     list_filter = (
-        'is_active', 'department', 'building', 'floor', 'created_at'
+        'is_active', 'department', 'location_tag', 'created_at'
     )
     search_fields = (
-        'exam_id', 'title', 'description', 'department', 'building', 'room'
+        'exam_id', 'title', 'description', 'department', 'location_tag__building', 'location_tag__room'
     )
     # 폼에서 필드 그룹화 및 정리
     fieldsets = (
@@ -50,8 +50,8 @@ class ExamAdmin(admin.ModelAdmin):
             'fields': ('exam_id', 'title', 'description', 'department', 'category')
         }),
         ('위치 정보', {
-            'fields': ('building', 'floor', 'room', 'x_coord', 'y_coord'),
-            'description': '검사실의 위치 정보를 설정합니다.'
+            'fields': ('location_tag',),
+            'description': '검사실의 위치 NFC 태그를 설정합니다.'
         }),
         ('시간 설정', {
             'fields': ('average_duration', 'buffer_time'),
@@ -70,6 +70,19 @@ class ExamAdmin(admin.ModelAdmin):
     readonly_fields = ('exam_id', 'created_at', 'updated_at')
     ordering = ('department', 'title')
     inlines = [ExamPreparationInline, ExamPostCareInstructionInline] # ExamPreparation과 ExamPostCareInstruction을 인라인으로 포함
+
+    # Admin에서 표시용 메서드들
+    def get_building(self, obj):
+        return obj.building
+    get_building.short_description = '건물'
+    
+    def get_floor(self, obj):
+        return obj.floor
+    get_floor.short_description = '층'
+    
+    def get_room(self, obj):
+        return obj.room
+    get_room.short_description = '호실'
 
     # 검사 ID 자동 생성 (선택 사항: 필요한 경우)
     def save_model(self, request, obj, form, change):

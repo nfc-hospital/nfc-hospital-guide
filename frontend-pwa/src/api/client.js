@@ -161,6 +161,11 @@ export const nfcAPI = {
   createTag: (data) => api.post('/nfc/tags/', data),
   updateTag: (id, data) => api.patch(`/nfc/tags/${id}/`, data),
   deleteTag: (id) => api.delete(`/nfc/tags/${id}/`),
+  // 새로운 경로 탐색 API (code 사용)
+  navigatePath: (startTagCode, destinationTagCode) => api.post('/nfc/scan/navigate/', {
+    start_tag_code: startTagCode,
+    destination_tag_code: destinationTagCode
+  }),
 };
 
 // 예약 관련 API
