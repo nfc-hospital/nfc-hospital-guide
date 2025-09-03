@@ -39,7 +39,7 @@ import './styles/global.css';
 function AppContent() {
   const [elderlyMode, setElderlyMode] = useState(false);
   const { isAuthenticated } = useAuth();
-  const { isLoading, fetchJourneyData, user, patientState, taggedLocationInfo } = useJourneyStore();
+  const { isLoading, fetchJourneyData, user, patientState } = useJourneyStore();
   const { updateRouteBasedOnLocation, updateCurrentLocation, navigationMode } = useMapStore();
 
   // 앱 시작 시 토큰 확인 및 데이터 로딩

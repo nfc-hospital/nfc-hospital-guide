@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useJourneyStore from '../store/journeyStore';
+import useLocationStore from '../store/locationStore';
 import { useAuth } from '../context/AuthContext';
 
 // 상태별 화면 컴포넌트들
@@ -39,7 +40,6 @@ const MainScreen = () => {
     fetchTagInfo,
     clearTagInfo,
     patientState,
-    taggedLocationInfo,
     isLoading,
     error,
     isTagLoading,
@@ -48,6 +48,9 @@ const MainScreen = () => {
     startPolling,
     stopPolling,
   } = useJourneyStore();
+  
+  // 위치 정보는 locationStore에서 가져오기
+  const currentLocation = useLocationStore((state) => state.currentLocation);
 
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -99,7 +102,7 @@ const MainScreen = () => {
       
       return (
         <StateScreen 
-          taggedLocation={taggedLocationInfo}
+          taggedLocation={currentLocation}
           patientState={patientState}
         />
       );

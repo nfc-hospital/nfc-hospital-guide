@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import useJourneyStore from '../store/journeyStore';
+import useLocationStore from '../store/locationStore';
 import useMapStore from '../store/mapStore';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import AdminHomeScreen from '../components/screens/AdminHomeScreen';
@@ -45,7 +46,6 @@ const Home = () => {
   const {
     user,
     patientState,
-    taggedLocationInfo,
     isLoading,
     error,
     fetchJourneyData,
@@ -56,6 +56,9 @@ const Home = () => {
     getWaitingInfo,
     getCompletionStats
   } = useJourneyStore();
+  
+  // 위치 정보는 locationStore에서 가져오기
+  const currentLocation = useLocationStore((state) => state.currentLocation);
   
   // 로컬 state 대신 store의 selector 함수 사용
   const todaySchedule = getTodaysScheduleForUI();
@@ -121,14 +124,14 @@ const Home = () => {
         userState: user?.state,
         todaysAppointments: todaySchedule?.length || 0,
         completedCount: completionStats.completedCount,
-        taggedLocationInfo
+        currentLocation
       });
     }
     
     // JourneyContainer가 모든 상태를 처리
     return (
       <JourneyContainer 
-        taggedLocation={taggedLocationInfo} 
+        taggedLocation={currentLocation} 
       />
     );
   }

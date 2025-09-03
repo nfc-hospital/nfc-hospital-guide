@@ -4,6 +4,7 @@ import apiService from '../api/apiService';
 import { scanNFCTag, checkInWithTag } from '../api/nfc';
 import toast from 'react-hot-toast';
 import useJourneyStore from '../store/journeyStore';
+import useLocationStore from '../store/locationStore';
 import { useAuth } from '../context/AuthContext';
 import { 
   calculateNFCDistance, 
@@ -148,15 +149,22 @@ export default function NFCReader({ onTagScanned, autoStart = true }) {
               }
             }
             
-            // 3. journeyStore로 전체 여정 데이터 업데이트
-            await fetchJourneyData(serialNumber);
+            // 3. 로그인 여부와 상관없이 위치 정보를 locationStore에 저장
+            useLocationStore.getState().setCurrentLocation(responseData.location_info);
             
-            // 4. 태그 인식 콜백
+            // 4. 로그인된 환자일 경우에만 journeyStore 업데이트 및 경로 탐색
+            if (isAuthenticated) {
+              await fetchJourneyData(serialNumber);
+              // 자동 경로 탐색 트리거
+              await useJourneyStore.getState().navigateToDestination();
+            }
+            
+            // 5. 태그 인식 콜백
             if (onTagScanned) {
               onTagScanned(serialNumber, scanResult);
             }
             
-            // 5. 적절한 페이지로 이동
+            // 6. 적절한 페이지로 이동
             if (responseData.next_action?.route) {
               navigate(responseData.next_action.route);
             } else if (responseData.exam_info) {
