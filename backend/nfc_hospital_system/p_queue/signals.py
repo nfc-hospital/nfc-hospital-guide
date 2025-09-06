@@ -5,6 +5,7 @@ from django.dispatch import receiver
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Queue, QueueStatusLog, PatientState
+from .services import PatientJourneyService
 from django.db.models import Count, Q, Avg
 import logging
 
@@ -12,78 +13,31 @@ logger = logging.getLogger(__name__)
 channel_layer = get_channel_layer()
 
 @receiver(post_save, sender=Queue)
-def queue_post_save(sender, instance, created, **kwargs):
-    """Queue 저장 후 WebSocket 알림 전송"""
-    try:
-        print(f"🔥 SIGNAL 발동! Queue {instance.queue_id} 상태: {instance.state}")
+def sync_queue_to_patient_state(sender, instance, created, **kwargs):
+    """Queue 변경 시 PatientState 동기화"""
+    if created:
+        return  # 새로 생성된 경우는 처리하지 않음
         
-        # 개별 큐 알림
-        message_data = {
-            'type': 'queue_updated',
-            'queue_id': str(instance.queue_id),
-            'state': instance.state,
-            'queue_number': instance.queue_number,
-            'exam_id': str(instance.exam.exam_id) if instance.exam else None,
-            'message': f'🔔 실시간 알림: 대기열 {instance.queue_number}번이 {instance.state} 상태로 변경되었습니다!'
-        }
-        
-        # 해당 queue_id 그룹에 브로드캐스트
-        group_name = f'queue_{instance.queue_id}'
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {
-                'type': 'queue_status_update',
-                'data': message_data
-            }
-        )
-        
-        # 관리자 대시보드 업데이트 알림도 전송
-        send_dashboard_update()
-        
-        print(f"✅ WebSocket 알림 전송 완료: {group_name}")
-        logger.info(f"WebSocket 알림 전송: {instance.queue_id} → {instance.state}")
-        
-    except Exception as e:
-        print(f"❌ WebSocket 알림 전송 실패: {str(e)}")
-        logger.error(f"WebSocket 알림 전송 실패: {str(e)}")
+    # 서비스 계층 사용
+    service = PatientJourneyService(user=instance.user)
+    service.sync_from_queue_update(instance)
+    
+    # WebSocket 알림은 서비스 내부에서 처리됨
+    # 관리자 대시보드 업데이트
+    send_dashboard_update()
 
 @receiver(post_save, sender=PatientState)
-def patient_state_post_save(sender, instance, created, **kwargs):
-    """PatientState 저장 후 WebSocket 알림 전송"""
-    try:
-        print(f"🏥 SIGNAL 발동! PatientState {instance.state_id} 상태: {instance.current_state}")
+def sync_patient_state_to_queue(sender, instance, created, **kwargs):
+    """PatientState 변경 시 Queue 동기화"""
+    if created:
+        return
         
-        # 대시보드 업데이트 알림 전송
-        send_dashboard_update()
-        
-        # 개별 환자 상태 알림
-        message_data = {
-            'type': 'patient_state_updated',
-            'state_id': str(instance.state_id),
-            'user_id': str(instance.user.user_id) if hasattr(instance.user, 'user_id') else str(instance.user.id),
-            'current_state': instance.current_state,
-            'current_location': instance.current_location,
-            'current_exam': instance.current_exam,
-            'message': f'🏥 환자 상태가 {instance.current_state}로 변경되었습니다!'
-        }
-        
-        # 환자별 그룹에 브로드캐스트
-        user_id = str(instance.user.user_id) if hasattr(instance.user, 'user_id') else str(instance.user.id)
-        patient_group = f'patient_{user_id}'
-        async_to_sync(channel_layer.group_send)(
-            patient_group,
-            {
-                'type': 'patient_state_update',
-                'data': message_data
-            }
-        )
-        
-        print(f"✅ PatientState WebSocket 알림 전송 완료")
-        logger.info(f"PatientState WebSocket 알림 전송: {instance.state_id} → {instance.current_state}")
-        
-    except Exception as e:
-        print(f"❌ PatientState WebSocket 알림 전송 실패: {str(e)}")
-        logger.error(f"PatientState WebSocket 알림 전송 실패: {str(e)}")
+    # 서비스 계층 사용
+    service = PatientJourneyService(user=instance.user)
+    service.sync_from_patient_state(instance)
+    
+    # 대시보드 업데이트
+    send_dashboard_update()
 
 def send_dashboard_update():
     """관리자 대시보드에 실시간 업데이트 전송"""
@@ -95,7 +49,7 @@ def send_dashboard_update():
         patient_stats = PatientState.objects.aggregate(
             total_waiting=Count('state_id', filter=Q(current_state='WAITING')),
             total_called=Count('state_id', filter=Q(current_state='CALLED')),
-            total_ongoing=Count('state_id', filter=Q(current_state='ONGOING')),
+            total_ongoing=Count('state_id', filter=Q(current_state='IN_PROGRESS')),
             total_completed=Count('state_id', filter=Q(current_state='COMPLETED'))
         )
         

@@ -1,8 +1,8 @@
 from rest_framework.generics import UpdateAPIView, ListAPIView
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions
+from rest_framework import status, permissions, viewsets
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import F, Count, Avg, Max, Min, Q, Sum
@@ -12,8 +12,9 @@ from django.http import StreamingHttpResponse
 import json
 import time
 import logging
-from .models import Queue, QueueStatusLog
+from .models import Queue, QueueStatusLog, PatientState
 from .serializers import QueueSerializer, MyPositionSerializer, QueueStatusUpdateSerializer
+from .services import PatientJourneyService, InvalidActionError
 from appointments.models import Appointment, Exam
 from appointments.serializers import AppointmentSerializer
 from authentication.models import User
@@ -379,20 +380,20 @@ def queue_realtime_data(request):
         # 각 상태별로 개별 쿼리로 확인 (디버깅용)
         waiting_count = PatientState.objects.filter(current_state='WAITING').count()
         called_count = PatientState.objects.filter(current_state='CALLED').count()
-        ongoing_count = PatientState.objects.filter(current_state='ONGOING').count()
+        in_progress_count = PatientState.objects.filter(current_state='IN_PROGRESS').count()
         completed_count = PatientState.objects.filter(current_state='COMPLETED').count()
         payment_count = PatientState.objects.filter(current_state='PAYMENT').count()
         finished_count = PatientState.objects.filter(current_state='FINISHED').count()
         registered_count = PatientState.objects.filter(current_state='REGISTERED').count()
         
-        logger.info(f"State counts - WAITING: {waiting_count}, CALLED: {called_count}, ONGOING: {ongoing_count}")
+        logger.info(f"State counts - WAITING: {waiting_count}, CALLED: {called_count}, IN_PROGRESS: {in_progress_count}")
         logger.info(f"Other states - COMPLETED: {completed_count}, PAYMENT: {payment_count}, FINISHED: {finished_count}, REGISTERED: {registered_count}")
         
         # aggregate 대신 개별 count 사용 (더 확실한 방법)
         patient_stats = {
             'total_waiting': waiting_count,
             'total_called': called_count,
-            'total_ongoing': ongoing_count,
+            'total_in_progress': in_progress_count,
             'total_completed': completed_count,
             'total_payment': payment_count,
             'total_finished': finished_count,
@@ -449,7 +450,7 @@ def queue_realtime_data(request):
             'summary': {
                 'totalWaiting': patient_stats['total_waiting'],
                 'totalCalled': patient_stats['total_called'],
-                'totalInProgress': patient_stats['total_ongoing'],  # ongoing -> totalInProgress
+                'totalInProgress': patient_stats['total_in_progress'],  # in_progress -> totalInProgress
                 'totalCompleted': patient_stats['total_completed'],
                 'totalPayment': patient_stats['total_payment'],
                 'totalFinished': patient_stats['total_finished'],
@@ -463,7 +464,7 @@ def queue_realtime_data(request):
                 'stateCounts': {
                     'WAITING': waiting_count,
                     'CALLED': called_count,
-                    'ONGOING': ongoing_count,
+                    'IN_PROGRESS': in_progress_count,
                     'COMPLETED': completed_count,
                     'PAYMENT': payment_count,
                     'FINISHED': finished_count,
@@ -966,7 +967,7 @@ class PatientCurrentStateView(APIView):
                     state_mapping = {
                         'waiting': 'WAITING',
                         'called': 'CALLED',
-                        'ongoing': 'ONGOING',
+                        'in_progress': 'IN_PROGRESS',
                         'completed': 'COMPLETED',
                         'cancelled': 'REGISTERED'
                     }
@@ -993,7 +994,7 @@ class PatientCurrentStateView(APIView):
             # 현재 대기열 조회
             current_queues = Queue.objects.filter(
                 user=user,
-                state__in=['waiting', 'called', 'ongoing']
+                state__in=['waiting', 'called', 'in_progress']
             ).select_related('exam')
             
             return APIResponse.success(
@@ -1042,7 +1043,7 @@ def patient_current_state(request):
                 state_mapping = {
                     'waiting': 'WAITING',
                     'called': 'CALLED',
-                    'in_progress': 'ONGOING',
+                    'in_progress': 'IN_PROGRESS',
                     'completed': 'COMPLETED',
                     'cancelled': 'REGISTERED'
                 }
@@ -1225,7 +1226,7 @@ def get_next_action_guide(patient_state):
             'action': 'enter_exam_room',
             'priority': 'urgent'
         },
-        'ONGOING': {
+        'IN_PROGRESS': {
             'message': '검사가 진행 중입니다',
             'action': 'exam_in_progress',
             'priority': 'info'
@@ -1388,7 +1389,7 @@ def state_transition_analytics(request):
         
         # 평균 상태 체류 시간 계산
         avg_durations = {}
-        for state in ['WAITING', 'CALLED', 'ONGOING']:
+        for state in ['WAITING', 'CALLED', 'IN_PROGRESS']:
             # 해당 상태로 전환된 후 다음 상태로 전환되기까지의 시간
             state_entries = transitions.filter(to_state=state).order_by('user', 'created_at')
             durations = []
@@ -1559,4 +1560,37 @@ def nurse_patients_by_state(request):
             code="PATIENTS_BY_STATE_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+class PatientJourneyViewSet(viewsets.ViewSet):
+    """환자 여정 상태 관리 API"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['GET'])
+    def current_state(self, request):
+        """현재 환자 상태 조회"""
+        service = PatientJourneyService(request.user)
+        return Response(service.get_current_state())
+    
+    @action(detail=False, methods=['POST'])
+    def perform_action(self, request):
+        """액션 수행을 통한 상태 전이"""
+        action_type = request.data.get('action_type')
+        payload = request.data.get('payload', {})
+        
+        if not action_type:
+            return Response(
+                {'error': 'action_type is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        service = PatientJourneyService(request.user)
+        try:
+            result = service.perform_action(action_type, payload)
+            return Response(result)
+        except InvalidActionError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     

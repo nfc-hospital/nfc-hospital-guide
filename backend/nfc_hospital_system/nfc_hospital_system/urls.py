@@ -56,6 +56,9 @@ urlpatterns = [
     path('api/v1/queue/', include('p_queue.urls')),              # 대기열 
     path('api/v1/dashboard/', include('admin_dashboard.urls')),    # 관리자 대시보드 (알림 API 포함)
     
+    # 새로운 상태 정의 API
+    path('api/v1/state-definitions/', include('common.urls')),  # 상태 정의 조회
+    
     # Phase 2 확장 기능
     # path('api/v1/chatbot/', include('chatbot.urls')),         # AI 챗봇
     path('', include('hospital_navigation.urls')),              # 경로 안내 (여러 경로에 걸쳐 있음)

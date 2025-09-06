@@ -2,6 +2,7 @@ from django.db import models, transaction
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 import uuid
+from common.state_definitions import PatientJourneyState, QueueDetailState
 
 User = get_user_model()
 
@@ -11,15 +12,7 @@ class Queue(models.Model):
     검사별 환자 대기 순서 및 상태 관리
     """
 
-    STATE_CHOICES = [
-        ('waiting', '대기중'),
-        ('called', '호출됨'),
-        ('ongoing', '진행중(검사실/진료실 입장)'),
-        ('completed', '완료'),
-        ('delayed', '지연'), # 추가
-        ('no_show', '미방문/이탈 (No-Show)'), # 추가
-        ('cancelled', '취소'),
-    ]
+    STATE_CHOICES = [(state.value, state.value) for state in QueueDetailState]
 
     PRIORITY_CHOICES = [
         ('normal', '일반'),
@@ -129,7 +122,7 @@ class Queue(models.Model):
 
     def start_examination(self):
         """검사 시작 처리"""
-        self.state = 'ongoing'
+        self.state = 'in_progress'
         self.save(update_fields=['state', 'updated_at'])
 
     def complete_examination(self):
@@ -363,17 +356,7 @@ class PatientState(models.Model):
     state_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='patient_state')
     
-    STATE_CHOICES = [
-        ('UNREGISTERED', 'Unregistered'),
-        ('ARRIVED', 'Arrived'),
-        ('REGISTERED', 'Registered'),
-        ('WAITING', 'Waiting'),
-        ('CALLED', 'Called'),
-        ('ONGOING', 'Ongoing'),
-        ('COMPLETED', 'Completed'),
-        ('PAYMENT', 'Payment'),
-        ('FINISHED', 'Finished'),
-    ]
+    STATE_CHOICES = [(state.value, state.value) for state in PatientJourneyState]
     current_state = models.CharField(max_length=20, choices=STATE_CHOICES, default='UNREGISTERED')
     current_location = models.ForeignKey(
         'nfc.NFCTag',
@@ -429,17 +412,7 @@ class StateTransition(models.Model):
     transition_id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='state_transitions')  # 'users.User' → User
     
-    STATE_CHOICES = [
-        ('UNREGISTERED', 'Unregistered'),
-        ('ARRIVED', 'Arrived'),
-        ('REGISTERED', 'Registered'),
-        ('WAITING', 'Waiting'),
-        ('CALLED', 'Called'),
-        ('ONGOING', 'Ongoing'),
-        ('COMPLETED', 'Completed'),
-        ('PAYMENT', 'Payment'),
-        ('FINISHED', 'Finished'),
-    ]
+    STATE_CHOICES = [(state.value, state.value) for state in PatientJourneyState]
     from_state = models.CharField(max_length=20, choices=STATE_CHOICES, null=True, blank=True)
     to_state = models.CharField(max_length=20, choices=STATE_CHOICES)
     

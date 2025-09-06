@@ -1,8 +1,15 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from . import views
 from . import test_views
 
+# 새로운 ViewSet 라우터
+router = DefaultRouter()
+router.register(r'patient-journey', views.PatientJourneyViewSet, basename='patient-journey')
+
 urlpatterns = [
+    # 새로운 환자 여정 API (권장)
+    path('', include(router.urls)),
     # 대기열 추가 (POST)
     # URL: /api/v1/queue/join/
     path('join/', views.QueueJoinView.as_view(), name='queue-join'),

@@ -11,6 +11,7 @@ from appointments.models import Appointment, Exam
 from integrations.models import EmrSyncStatus
 from p_queue.models import Queue, PatientState
 from django.utils import timezone
+from common.state_definitions import PatientJourneyState, QueueDetailState
 import uuid
 
 
@@ -84,7 +85,7 @@ class Command(BaseCommand):
         PatientState.objects.update_or_create(
             user=user_registered,
             defaults={
-                'current_state': 'REGISTERED',
+                'current_state': PatientJourneyState.REGISTERED.value,
                 'is_logged_in': True,
                 'current_exam': exam1  # Exam 인스턴스를 직접 할당
             }
@@ -137,7 +138,7 @@ class Command(BaseCommand):
         PatientState.objects.update_or_create(
             user=user_waiting,
             defaults={
-                'current_state': 'WAITING',
+                'current_state': PatientJourneyState.WAITING.value,
                 'is_logged_in': True,
                 'current_exam': exam1  # Exam 인스턴스를 직접 할당
             }
@@ -182,18 +183,18 @@ class Command(BaseCommand):
                 exam=apt.exam,
                 defaults={
                     'queue_id': uuid.uuid4(),
-                    'state': 'waiting',
+                    'state': QueueDetailState.WAITING.value,
                     'queue_number': i,
                     'estimated_wait_time': 15 * i,
                     'priority': 'normal'
                 }
             )
         
-        # 3. ONGOING 상태 테스트 계정
-        user_ongoing, created = User.objects.get_or_create(
-            email='test_ongoing@test.com',
+        # 3. IN_PROGRESS 상태 테스트 계정
+        user_in_progress, created = User.objects.get_or_create(
+            email='test_in_progress@test.com',
             defaults={
-                'name': '진행중 테스트',
+                'name': '검사진행중 테스트',
                 'phone_number': '010-3333-3333',
                 'birth_date': '1992-12-12',
                 'role': 'patient',
@@ -201,34 +202,34 @@ class Command(BaseCommand):
             }
         )
         if created:
-            user_ongoing.set_password('test1234')
-            user_ongoing.save()
+            user_in_progress.set_password('test1234')
+            user_in_progress.save()
         
         PatientState.objects.update_or_create(
-            user=user_ongoing,
+            user=user_in_progress,
             defaults={
-                'current_state': 'ONGOING',
+                'current_state': PatientJourneyState.IN_PROGRESS.value,
                 'is_logged_in': True,
                 'current_exam': exam1  # Exam 인스턴스를 직접 할당
             }
         )
         
         # 예약 3개와 대기열 2개 (하나는 진행중)
-        appointments_ongoing = []
+        appointments_in_progress = []
         for i, exam in enumerate([exam1, exam2, exam3], 1):
             apt, _ = Appointment.objects.get_or_create(
-                appointment_id=f'APT_ONG_{i}',  # Primary Key로 조회
+                appointment_id=f'APT_PROG_{i}',  # Primary Key로 조회
                 defaults={
-                    'user': user_ongoing,
+                    'user': user_in_progress,
                     'exam': exam,
                     'scheduled_at': now + timedelta(hours=i),
-                    'status': 'ongoing' if i == 1 else 'scheduled'
+                    'status': 'in_progress' if i == 1 else 'scheduled'
                 }
             )
             # EMR 동기화 상태 생성 - user 필드 사용
             EmrSyncStatus.objects.get_or_create(
-                user=user_ongoing,
-                sync_id=f'EMR_ONG_{i}',
+                user=user_in_progress,
+                sync_id=f'EMR_PROG_{i}',
                 defaults={
                     'patient_emr_id': f'EMR_P003_{i}',
                     'last_sync_time': timezone.now(),
@@ -238,20 +239,20 @@ class Command(BaseCommand):
                     'emr_appointment_time': (now + timedelta(hours=i)).time(),
                     'emr_department': exam.department,
                     'emr_room_number': exam.room,
-                    'mapped_state': 'ongoing' if i == 1 else 'scheduled',
+                    'mapped_state': 'in_progress' if i == 1 else 'scheduled',
                     'mapping_rules_version': '1.0'
                 }
             )
-            appointments_ongoing.append(apt)
+            appointments_in_progress.append(apt)
         
         # 첫 번째는 진행중, 두 번째는 대기중
         Queue.objects.get_or_create(
-            appointment=appointments_ongoing[0],
-            user=user_ongoing,
-            exam=appointments_ongoing[0].exam,
+            appointment=appointments_in_progress[0],
+            user=user_in_progress,
+            exam=appointments_in_progress[0].exam,
             defaults={
                 'queue_id': uuid.uuid4(),
-                'state': 'ongoing',
+                'state': QueueDetailState.IN_PROGRESS.value,
                 'queue_number': 1,
                 'estimated_wait_time': 0,
                 'priority': 'normal',
@@ -260,9 +261,9 @@ class Command(BaseCommand):
         )
         
         Queue.objects.get_or_create(
-            appointment=appointments_ongoing[1],
-            user=user_ongoing,
-            exam=appointments_ongoing[1].exam,
+            appointment=appointments_in_progress[1],
+            user=user_in_progress,
+            exam=appointments_in_progress[1].exam,
             defaults={
                 'queue_id': uuid.uuid4(),
                 'state': 'waiting',
@@ -290,7 +291,7 @@ class Command(BaseCommand):
         PatientState.objects.update_or_create(
             user=user_payment,
             defaults={
-                'current_state': 'PAYMENT',
+                'current_state': PatientJourneyState.PAYMENT.value,
                 'is_logged_in': True
             }
         )
@@ -330,7 +331,7 @@ class Command(BaseCommand):
                 exam=apt.exam,
                 defaults={
                     'queue_id': uuid.uuid4(),
-                    'state': 'completed',
+                    'state': QueueDetailState.COMPLETED.value,
                     'queue_number': i,
                     'estimated_wait_time': 0,
                     'priority': 'normal',
@@ -356,7 +357,7 @@ class Command(BaseCommand):
         PatientState.objects.update_or_create(
             user=user_finished,
             defaults={
-                'current_state': 'FINISHED',
+                'current_state': PatientJourneyState.FINISHED.value,
                 'is_logged_in': True
             }
         )
@@ -367,7 +368,7 @@ class Command(BaseCommand):
         test_accounts = [
             ('test_registered@test.com', 'REGISTERED', '접수/로그인 완료 상태, 예약 3개'),
             ('test_waiting@test.com', 'WAITING', '대기중 상태, 예약 3개, 대기열 2개'),
-            ('test_ongoing@test.com', 'ONGOING', '검사 진행중 상태, 예약 3개, 대기열 2개(1개 진행중)'),
+            ('test_in_progress@test.com', 'IN_PROGRESS', '검사 진행중 상태, 예약 3개, 대기열 2개(1개 진행중)'),
             ('test_payment@test.com', 'PAYMENT', '수납 대기 상태, 예약 2개(완료), 대기열 2개(완료)'),
             ('test_finished@test.com', 'FINISHED', '모든 일정 완료 상태'),
         ]
@@ -404,7 +405,7 @@ class Command(BaseCommand):
         PatientState.objects.update_or_create(
             user=cypress_user,
             defaults={
-                'current_state': 'UNREGISTERED',
+                'current_state': PatientJourneyState.UNREGISTERED.value,
                 'is_logged_in': False
             }
         )
