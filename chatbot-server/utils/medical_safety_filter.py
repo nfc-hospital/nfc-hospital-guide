@@ -3,40 +3,40 @@
 """
 
 def medical_safety_filter(response, question=""):
-    """응답 필터링 및 면책조항 추가"""
+    """응답 필터링 및 면책조항 추가 - 더 유연한 접근"""
     
     disclaimers = {
-        "diagnosis": "※ 이 정보는 참고용이며, 정확한 진단은 의료진과 상담하세요.",
-        "medication": "※ 약물 복용은 반드시 의사/약사와 상담 후 결정하세요.",
-        "emergency": "※ 응급상황 시 즉시 119에 연락하거나 응급실을 방문하세요.",
-        "treatment": "※ 치료 방법은 개인차가 있으므로 의료진과 상담하세요.",
-        "general": "※ 이 정보는 일반적인 안내사항이며, 개인별 상황은 다를 수 있습니다."
+        "diagnosis": "💊 의료 안내: 정확한 진단은 의료진과 상담이 필요합니다.",
+        "medication": "💊 복약 안내: 약물 관련 사항은 의사/약사와 확인하세요.",
+        "emergency": "🚨 응급 안내: 응급상황 시 즉시 119 또는 응급실로!",
+        "treatment": "🏥 치료 안내: 개인별 치료 계획은 의료진과 상담하세요.",
+        "general": "ℹ️ 일반 안내: 자세한 사항은 의료진과 상담하세요."
     }
 
-    # 의료 관련 키워드 감지
+    # 의료 관련 키워드 감지 (부드러운 감지)
     medical_keywords = {
-        "diagnosis": ['진단', '병명', '질환', '증상', '병', '아프', '통증'],
-        "medication": ['약', '복용', '처방', '용량', '부작용', '먹어도', '드셔도'],
-        "emergency": ['응급', '급성', '심한 통증', '출혈', '호흡곤란', '의식잃'],
-        "treatment": ['치료', '수술', '시술', '요법', '처치']
+        "diagnosis": ['진단', '병명', '질환'],
+        "medication": ['약', '복용', '처방', '용량'],
+        "emergency": ['응급', '급성', '심한 통증', '출혈', '호흡곤란'],
+        "treatment": ['치료', '수술', '시술']
     }
 
-    # 금지된 주제들
-    prohibited_topics = [
-        '처방전', '용량', '진단서', '소견서', '치료법', '수술 방법',
-        '약물 조합', '부작용 해결', '증상 진단'
+    # 엄격히 금지된 주제들만 제한
+    strictly_prohibited = [
+        '처방전 발급', '구체적 용량', '진단서 작성', '수술 집도',
+        '약물 처방', '의료 행위'
     ]
 
     question_lower = question.lower()
     response_lower = response.lower()
     
-    # 금지된 주제 체크
-    for topic in prohibited_topics:
+    # 엄격히 금지된 주제만 차단
+    for topic in strictly_prohibited:
         if topic in question_lower:
             return {
-                "response": "죄송합니다. 의료적 판단이 필요한 사항은 의료진과 직접 상담해주세요.",
+                "response": "죄송합니다. 이 내용은 의료진과 직접 상담이 필요한 사항입니다. 병원 진료 시 자세한 상담을 받으실 수 있습니다.",
                 "disclaimer": disclaimers["general"],
-                "suggest_action": "간호사 호출 또는 안내데스크 문의",
+                "suggest_action": "의료진 상담 필요",
                 "blocked": True
             }
 
