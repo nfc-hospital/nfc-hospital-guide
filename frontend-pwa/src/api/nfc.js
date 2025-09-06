@@ -4,6 +4,29 @@ import { api } from './client';
  * NFC API 관련 모든 함수들을 관리하는 모듈
  */
 
+/**
+ * 비로그인 사용자용 NFC 태그 정보 조회
+ * @param {string} tagId - NFC 태그 ID
+ * @returns {Promise} 공개 위치 정보 및 시설 안내
+ */
+export const fetchPublicNFCInfo = async (tagId) => {
+  try {
+    const response = await api.post('/nfc/public-info/', { tag_id: tagId });
+    const responseData = response.data || response;
+    
+    return {
+      success: true,
+      data: responseData
+    };
+  } catch (error) {
+    console.error('Public NFC info fetch error:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to fetch NFC tag information'
+    };
+  }
+};
+
 // NDEF 레코드 타입별 파싱 헬퍼
 const parseNDEFRecord = (record) => {
   const decoder = new TextDecoder();

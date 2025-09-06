@@ -3,6 +3,8 @@ import VoiceInput from './VoiceInput';
 import DepartmentDirections from './maps/DepartmentDirections';
 import departmentAPI from '../services/departmentAPI';
 import AppHeader from './common/AppHeader';
+import { fetchPublicNFCInfo } from '../api/nfc';
+import useMapStore from '../store/mapStore';
 // 시설 관리 데이터 import
 import { 
   DEFAULT_DISPLAY_FACILITIES, 
@@ -12,7 +14,7 @@ import {
   ALL_FACILITIES 
 } from '../data/facilityManagement';
 
-const PublicGuide = () => {
+const PublicGuide = ({ tagId }) => {
   const [isListening, setIsListening] = useState(false);
   const [error, setError] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState(null);
@@ -20,6 +22,10 @@ const PublicGuide = () => {
   const [departments, setDepartments] = useState([]);
   const [facilities, setFacilities] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [nfcLocation, setNfcLocation] = useState(null); // NFC 태그 위치 정보
+  
+  // mapStore에서 위치 업데이트 함수 가져오기
+  const { updateCurrentLocation } = useMapStore();
   
   // 기본 아이콘 매핑 (백엔드에서 아이콘이 없는 경우 사용)
   const defaultIcons = {
@@ -53,6 +59,41 @@ const PublicGuide = () => {
     '산부인과': 'zone-obstetrics',
     '소아과': 'zone-pediatrics'
   };
+
+  // NFC 태그 정보 가져오기 (tagId가 있을 때만)
+  useEffect(() => {
+    const fetchNFCData = async () => {
+      if (tagId) {
+        try {
+          console.log('🏷️ NFC 태그 정보 조회:', tagId);
+          const result = await fetchPublicNFCInfo(tagId);
+          
+          if (result.success && result.data) {
+            const locationInfo = result.data.location_info;
+            if (locationInfo) {
+              setNfcLocation(locationInfo);
+              
+              // mapStore에 현재 위치 업데이트
+              updateCurrentLocation({
+                building: locationInfo.building,
+                floor: locationInfo.floor,
+                room: locationInfo.room,
+                x: locationInfo.x_coord,
+                y: locationInfo.y_coord,
+                description: locationInfo.current_location
+              });
+              
+              console.log('📍 NFC 위치 설정 완료:', locationInfo);
+            }
+          }
+        } catch (error) {
+          console.error('NFC 태그 정보 조회 실패:', error);
+        }
+      }
+    };
+    
+    fetchNFCData();
+  }, [tagId, updateCurrentLocation]);
 
   // 컴포넌트 마운트 시 API에서 데이터 가져오기
   useEffect(() => {
@@ -307,6 +348,7 @@ const PublicGuide = () => {
       <DepartmentDirections 
         department={selectedDepartment}
         onClose={handleReset}
+        startLocation={nfcLocation}
       />
     );
   }
@@ -350,6 +392,19 @@ const PublicGuide = () => {
             찾으시는 진료과를 말씀해 주세요
           </p>
         </div>
+
+        {/* NFC 위치 정보 표시 (있을 경우) */}
+        {nfcLocation && (
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📍</span>
+              <div>
+                <p className="text-blue-900 font-medium">현재 위치</p>
+                <p className="text-blue-700">{nfcLocation.current_location || `${nfcLocation.building} ${nfcLocation.floor}층 ${nfcLocation.room}`}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 음성 입력 */}
         <VoiceInput

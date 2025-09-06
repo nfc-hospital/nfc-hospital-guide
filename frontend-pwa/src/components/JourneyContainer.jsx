@@ -77,7 +77,7 @@ const JourneyContainer = ({ taggedLocation }) => {
     
     // 현재 활성 대기열 찾기
     const activeQueue = queues.find(
-      q => q.state === 'waiting' || q.state === 'called' || q.state === 'ongoing'
+      q => q.state === 'waiting' || q.state === 'called' || q.state === 'in_progress'
     );
     
     if (activeQueue) {

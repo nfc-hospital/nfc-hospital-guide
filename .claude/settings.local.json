@@ -4,7 +4,8 @@
       "Bash(pnpm install:*)",
       "Bash(npx eslint:*)",
       "Bash(node:*)",
-      "Bash(pnpm dev:frontend:*)"
+      "Bash(pnpm dev:frontend:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }

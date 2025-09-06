@@ -103,7 +103,8 @@ const Home = () => {
 
   // 사용자 정보가 없는 경우 - 비로그인 상태
   if (!user) {
-    return <PublicGuide />;
+    // tagId가 있으면 NFC 태그 정보와 함께 전달
+    return <PublicGuide tagId={tagId} />;
   }
 
   // ✨ 역할에 따른 라우팅

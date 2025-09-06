@@ -170,10 +170,10 @@ const useJourneyStore = create(
             };
           }
           
-          // ✅ CALLED, ONGOING 상태: 현재 진행 중인 검사를 목적지로
-          if (patientState === 'CALLED' || patientState === 'ONGOING') {
+          // ✅ CALLED, IN_PROGRESS 상태: 현재 진행 중인 검사를 목적지로
+          if (patientState === 'CALLED' || patientState === 'IN_PROGRESS') {
             const currentExam = schedule.find(s => 
-              s.status === 'called' || s.status === 'ongoing'
+              s.status === 'called' || s.status === 'in_progress'
             );
             if (currentExam) {
               return currentExam.exam;
@@ -503,7 +503,7 @@ const useJourneyStore = create(
                 console.log('🔍 최종 currentQueues:', currentQueues);
                 
                 // ✅ --- 환자 상태 계산 로직 (큐와 예약 데이터 기반) ---
-                // 환자 여정: UNREGISTERED -> ARRIVED -> REGISTERED -> WAITING -> CALLED -> ONGOING -> COMPLETED -> PAYMENT -> FINISHED
+                // 환자 여정: UNREGISTERED -> ARRIVED -> REGISTERED -> WAITING -> CALLED -> IN_PROGRESS -> COMPLETED -> PAYMENT -> FINISHED
                 
                 // 1. 프로필 API의 기본 상태에서 시작 (userData는 위에서 정의됨)
                 // userData.state를 사용하거나, 이미 설정된 현재 store의 patientState 사용
@@ -521,7 +521,7 @@ const useJourneyStore = create(
                   console.log(`   - 큐가 ${currentQueues.length}개 있지만 무시됨 (접수 전이므로)`);
                   
                 } else if (profileState === 'REGISTERED' || profileState === 'WAITING' || 
-                          profileState === 'CALLED' || profileState === 'ONGOING' || 
+                          profileState === 'CALLED' || profileState === 'IN_PROGRESS' || 
                           profileState === 'COMPLETED') {
                   // 접수 후 상태에서만 큐 상태 확인
                   
@@ -530,16 +530,16 @@ const useJourneyStore = create(
                   // 2. called가 있으면 그 다음
                   // 3. waiting 중 첫 번째 큐
                   
-                  const ongoingQueue = currentQueues.find(q => q.state === 'ongoing');
+                  const inProgressQueue = currentQueues.find(q => q.state === 'in_progress');
                   const calledQueue = currentQueues.find(q => q.state === 'called');
                   const waitingQueues = currentQueues.filter(q => q.state === 'waiting');
                   const completedQueues = currentQueues.filter(q => q.state === 'completed');
                   
                   let activeQueue = null;
                   
-                  if (ongoingQueue) {
-                    activeQueue = ongoingQueue;
-                    computedState = 'ONGOING';
+                  if (inProgressQueue) {
+                    activeQueue = inProgressQueue;
+                    computedState = 'IN_PROGRESS';
                     console.log(`🏃 진행 중인 검사: ${activeQueue.exam?.title || '검사'}`);
                     
                   } else if (calledQueue) {
@@ -665,7 +665,7 @@ const useJourneyStore = create(
                     
                   case 'WAITING':
                   case 'CALLED':
-                  case 'ONGOING':
+                  case 'IN_PROGRESS':
                     // 현재 진행 중인 검사
                     console.log(`🔍 [${finalPatientState}] activeQueue:`, activeQueue);
                     console.log(`🔍 [${finalPatientState}] currentQueues:`, currentQueues);
@@ -776,7 +776,8 @@ const useJourneyStore = create(
                   finalAppointments = currentQueues.map(queue => ({
                     appointment_id: queue.appointment || `QUEUE_${queue.queue_id}`,
                     status: queue.state === 'waiting' ? 'waiting' : 
-                           queue.state === 'called' ? 'ongoing' : queue.state,
+                           queue.state === 'called' ? 'called' : 
+                           queue.state === 'in_progress' ? 'in_progress' : queue.state,
                     scheduled_at: queue.created_at,
                     exam: queue.exam,
                     queue_info: {
