@@ -3,6 +3,7 @@ import React, { useEffect, useMemo } from 'react';
 import useJourneyStore from '../store/journeyStore';
 import useMapStore from '../store/mapStore';
 import { getFacilityByName } from '../data/facilityManagement';
+import { PatientJourneyState, QueueDetailState } from '../constants/states';
 
 // 컴포넌트 외부에 상수 선언 (무한 렌더링 방지)
 const EMPTY_NODES = [];
@@ -77,7 +78,7 @@ const JourneyContainer = ({ taggedLocation }) => {
     
     // 현재 활성 대기열 찾기
     const activeQueue = queues.find(
-      q => q.state === 'waiting' || q.state === 'called' || q.state === 'in_progress'
+      q => q.state === QueueDetailState.WAITING || q.state === QueueDetailState.CALLED || q.state === QueueDetailState.IN_PROGRESS
     );
     
     if (activeQueue) {
@@ -105,7 +106,7 @@ const JourneyContainer = ({ taggedLocation }) => {
   const waitingInfo = useMemo(() => {
     const queues = currentQueues || [];
     const activeQueue = queues.find(
-      q => q.state === 'waiting' || q.state === 'called' || q.state === 'ongoing'
+      q => q.state === QueueDetailState.WAITING || q.state === QueueDetailState.CALLED || q.state === QueueDetailState.IN_PROGRESS
     );
     
     if (activeQueue) {
@@ -119,7 +120,7 @@ const JourneyContainer = ({ taggedLocation }) => {
     }
     
     // 대기 상태이지만 큐 데이터가 없을 때 기본값 제공
-    if (patientState === 'WAITING' || patientState === 'REGISTERED') {
+    if (patientState === PatientJourneyState.WAITING || patientState === PatientJourneyState.REGISTERED) {
       // 현재 검사의 평균 시간을 사용
       const currentExamData = currentExam || todaysAppointments?.[0]?.exam;
       return {
@@ -132,13 +133,13 @@ const JourneyContainer = ({ taggedLocation }) => {
     
     return null;
   }, [currentQueues, patientState, currentExam, todaysAppointments]);
-  const isOngoing = useMemo(() => patientState === 'ONGOING', [patientState]);
-  const isCalled = useMemo(() => patientState === 'CALLED', [patientState]);
+  const isInProgress = useMemo(() => patientState === PatientJourneyState.IN_PROGRESS, [patientState]);
+  const isCalled = useMemo(() => patientState === PatientJourneyState.CALLED, [patientState]);
   
   // 현재 단계 계산 - useMemo로 최적화
   const currentStep = useMemo(() => 
     todaySchedule.findIndex(s => 
-      ['waiting', 'called', 'ongoing'].includes(s.status)
+      [QueueDetailState.WAITING, QueueDetailState.CALLED, QueueDetailState.IN_PROGRESS].includes(s.status)
     ), [todaySchedule]
   );
   const actualCurrentStep = useMemo(() => currentStep === -1 ? 0 : currentStep, [currentStep]);
@@ -366,7 +367,7 @@ const JourneyContainer = ({ taggedLocation }) => {
   // 다음 행동 결정 로직 - useMemo로 최적화
   const getNextAction = useMemo(() => (taggedLocation) => {
     // 현재 검사가 진행 중이면
-    if (isOngoing) {
+    if (isInProgress) {
       return '검사가 진행 중입니다';
     }
     
@@ -381,7 +382,7 @@ const JourneyContainer = ({ taggedLocation }) => {
     
     // 기본값
     return '대기 번호를 기다려주세요';
-  }, [isOngoing, currentExam]);
+  }, [isInProgress, currentExam]);
 
   // getCompletionStats 로직을 직접 구현
   const completionStats = useMemo(() => {
@@ -484,7 +485,7 @@ const JourneyContainer = ({ taggedLocation }) => {
     fetchJourneyData,
     
     // 계산된 값들
-    isOngoing,
+    isInProgress,
     isCalled,
     currentExam,
     currentTask,
@@ -500,7 +501,7 @@ const JourneyContainer = ({ taggedLocation }) => {
     waitingInfo,
     taggedLocation,
     fetchJourneyData,
-    isOngoing,
+    isInProgress,
     isCalled,
     currentExam,
     currentTask,
@@ -536,10 +537,10 @@ const JourneyContainer = ({ taggedLocation }) => {
   ]);
   
   // 환자 상태에 따른 화면 렌더링 (switch문)
-  const currentState = patientState?.current_state || patientState || 'REGISTERED';
+  const currentState = patientState?.current_state || patientState || PatientJourneyState.REGISTERED;
   
   switch (currentState) {
-    case 'UNREGISTERED':
+    case PatientJourneyState.UNREGISTERED:
       return (
         <React.Suspense fallback={<div>Loading...</div>}>
           <UnregisteredScreen 
@@ -553,7 +554,7 @@ const JourneyContainer = ({ taggedLocation }) => {
         </React.Suspense>
       );
     
-    case 'ARRIVED':
+    case PatientJourneyState.ARRIVED:
       return (
         <React.Suspense fallback={<div>Loading...</div>}>
           <ArrivedScreen 
@@ -565,7 +566,7 @@ const JourneyContainer = ({ taggedLocation }) => {
         </React.Suspense>
       );
     
-    case 'REGISTERED':
+    case PatientJourneyState.REGISTERED:
       // RegisteredScreen만 먼저 props로 데이터 전달
       return (
         <React.Suspense fallback={<div>Loading...</div>}>
@@ -573,9 +574,9 @@ const JourneyContainer = ({ taggedLocation }) => {
         </React.Suspense>
       );
     
-    case 'WAITING':
-    case 'CALLED':
-    case 'ONGOING':
+    case PatientJourneyState.WAITING:
+    case PatientJourneyState.CALLED:
+    case PatientJourneyState.IN_PROGRESS:
       // WaitingScreen도 props로 데이터 전달
       return (
         <React.Suspense fallback={<div>Loading...</div>}>
@@ -583,13 +584,13 @@ const JourneyContainer = ({ taggedLocation }) => {
             {...commonProps}
             locationInfo={locationInfo}
             currentTask={currentTask}
-            isOngoing={isOngoing}
+            isInProgress={isInProgress}
             isCalled={isCalled}
           />
         </React.Suspense>
       );
     
-    case 'COMPLETED':
+    case PatientJourneyState.COMPLETED:
       // COMPLETED 상태는 WaitingScreen 재사용
       return (
         <React.Suspense fallback={<div>Loading...</div>}>
@@ -597,13 +598,13 @@ const JourneyContainer = ({ taggedLocation }) => {
             {...commonProps}
             locationInfo={locationInfo}
             currentTask={currentTask}
-            isOngoing={false}
+            isInProgress={false}
             isCalled={false}
           />
         </React.Suspense>
       );
     
-    case 'PAYMENT':
+    case PatientJourneyState.PAYMENT:
       return (
         <React.Suspense fallback={<div>Loading...</div>}>
           <PaymentScreen 
@@ -615,7 +616,7 @@ const JourneyContainer = ({ taggedLocation }) => {
         </React.Suspense>
       );
     
-    case 'FINISHED':
+    case PatientJourneyState.FINISHED:
       return (
         <React.Suspense fallback={<div>Loading...</div>}>
           <FinishedScreen 

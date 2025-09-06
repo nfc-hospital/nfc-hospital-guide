@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import apiService from '../../api/apiService';
+import { PatientJourneyState, getStateColorClass } from '../../constants/states';
 
 const TestDataManager = () => {
   const { user } = useAuth();
@@ -18,30 +19,37 @@ const TestDataManager = () => {
   const [selectedPatientForLocation, setSelectedPatientForLocation] = useState(null);
   const [availableLocations, setAvailableLocations] = useState([]);
 
-  // 환자 상태 색상 매핑
+  // 환자 상태 색상 매핑 - 중앙화된 정의 사용
   const stateColors = {
-    UNREGISTERED: 'bg-gray-100 text-gray-700',
-    ARRIVED: 'bg-blue-100 text-blue-700',
-    REGISTERED: 'bg-indigo-100 text-indigo-700',
-    WAITING: 'bg-amber-100 text-amber-700',
-    CALLED: 'bg-green-100 text-green-700',
-    ONGOING: 'bg-purple-100 text-purple-700',
-    COMPLETED: 'bg-teal-100 text-teal-700',
-    PAYMENT: 'bg-orange-100 text-orange-700',
-    FINISHED: 'bg-gray-300 text-gray-700'
+    [PatientJourneyState.UNREGISTERED]: 'bg-gray-100 text-gray-700',
+    [PatientJourneyState.ARRIVED]: 'bg-blue-100 text-blue-700',
+    [PatientJourneyState.REGISTERED]: 'bg-indigo-100 text-indigo-700',
+    [PatientJourneyState.WAITING]: 'bg-amber-100 text-amber-700',
+    [PatientJourneyState.CALLED]: 'bg-green-100 text-green-700',
+    [PatientJourneyState.IN_PROGRESS]: 'bg-purple-100 text-purple-700',
+    [PatientJourneyState.COMPLETED]: 'bg-teal-100 text-teal-700',
+    [PatientJourneyState.PAYMENT]: 'bg-orange-100 text-orange-700',
+    [PatientJourneyState.FINISHED]: 'bg-gray-300 text-gray-700'
   };
 
   // 상태 흐름 순서
   const stateFlow = [
-    'UNREGISTERED', 'ARRIVED', 'REGISTERED', 'WAITING', 
-    'CALLED', 'ONGOING', 'COMPLETED', 'PAYMENT', 'FINISHED'
+    PatientJourneyState.UNREGISTERED, 
+    PatientJourneyState.ARRIVED, 
+    PatientJourneyState.REGISTERED, 
+    PatientJourneyState.WAITING, 
+    PatientJourneyState.CALLED, 
+    PatientJourneyState.IN_PROGRESS, 
+    PatientJourneyState.COMPLETED, 
+    PatientJourneyState.PAYMENT, 
+    PatientJourneyState.FINISHED
   ];
 
   // 시나리오 타입별 아이콘
   const scenarioIcons = {
     payment_flow: '💳',
     completed_flow: '✅',
-    ongoing_exam: '🔬',
+    in_progress_exam: '🔬',
     registered_flow: '📋',
     waiting_flow: '⏰',
     cypress_test: '🤖',
@@ -384,9 +392,9 @@ const TestDataManager = () => {
                                 호출
                               </button>
                               <button
-                                onClick={() => updateQueueState(patient.current_queue.queue_id, 'ongoing')}
+                                onClick={() => updateQueueState(patient.current_queue.queue_id, 'in_progress')}
                                 className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
-                                  patient.current_queue.state === 'ongoing' 
+                                  patient.current_queue.state === 'in_progress' 
                                     ? 'bg-blue-500 text-white' 
                                     : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
                                 }`}

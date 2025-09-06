@@ -6,6 +6,7 @@ import './ChatbotSystem.css';
 import apiService from '../../api/apiService';
 import { useAuth } from '../../context/AuthContext';
 import useJourneyStore from '../../store/journeyStore';
+import { PatientJourneyState, QueueDetailState } from '../../constants/states';
 
 const ChatbotSystem = ({ elderlyMode = false }) => {
   const [currentStage, setCurrentStage] = useState(1);
@@ -161,7 +162,7 @@ const ChatbotSystem = ({ elderlyMode = false }) => {
     const stateMap = {
       'waiting': '대기 중',
       'called': '호출됨',
-      'ongoing': '진료 중',
+      [QueueDetailState.IN_PROGRESS]: '진료 중',
       'completed': '완료',
       'delayed': '지연',
       'no_show': '미방문',
@@ -177,7 +178,7 @@ const ChatbotSystem = ({ elderlyMode = false }) => {
       'REGISTERED': '접수 완료',
       'WAITING': '대기 중',
       'CALLED': '호출됨',
-      'ONGOING': '검사/진료 진행 중',
+      [PatientJourneyState.IN_PROGRESS]: '검사/진료 진행 중',
       'COMPLETED': '검사/진료 완료',
       'PAYMENT': '수납 대기',
       'FINISHED': '모든 절차 완료'

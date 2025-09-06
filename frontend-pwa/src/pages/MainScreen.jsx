@@ -25,7 +25,7 @@ const StateScreenMap = {
   REGISTERED: RegisteredScreen,
   WAITING: WaitingScreen,
   CALLED: WaitingScreen, // 호출됨도 대기 화면 사용 (호출 상태 표시)
-  ONGOING: WaitingScreen, // 진행 중도 대기 화면 사용
+  IN_PROGRESS: WaitingScreen, // 진행 중도 대기 화면 사용
   COMPLETED: RegisteredScreen, // 완료도 등록 화면 사용
   PAYMENT: PaymentScreen,
   FINISHED: FinishedScreen,

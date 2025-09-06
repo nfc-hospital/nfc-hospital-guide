@@ -4,6 +4,7 @@ import { ChevronDownIcon, MapPinIcon, CalendarIcon, ClipboardDocumentListIcon } 
 import { CheckIcon } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
+import { PatientJourneyState, QueueDetailState } from '../../constants/states';
 
 // 상태와 NFC 태그 정보를 기반으로 다음 행동 안내 문구 생성
 const getNextActionText = (patientState, currentExam, taggedLocation, locationInfo) => {
@@ -70,7 +71,7 @@ const getNextActionText = (patientState, currentExam, taggedLocation, locationIn
       }
       return '검사실로 입장하기';
       
-    case 'ONGOING':
+    case PatientJourneyState.IN_PROGRESS:
       if (examTitle) {
         return `${examTitle} 진행 중`;
       }
@@ -195,17 +196,17 @@ const FormatATemplate = ({
       return 1; // 없으면 접수 단계
     }
     
-    // 검사/진료 관련 상태 (WAITING, CALLED, ONGOING, COMPLETED)
-    if (['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
-      // 현재 진행 중인 검사 찾기 (waiting, called, ongoing 상태)
+    // 검사/진료 관련 상태 (WAITING, CALLED, IN_PROGRESS, COMPLETED)
+    if ([PatientJourneyState.WAITING, PatientJourneyState.CALLED, PatientJourneyState.IN_PROGRESS, PatientJourneyState.COMPLETED].includes(patientState)) {
+      // 현재 진행 중인 검사 찾기 (waiting, called, in_progress 상태)
       let activeExamIndex = -1;
       
       // 모든 검사를 순회하면서 현재 활성화된 검사 찾기
       for (let i = 0; i < steps.length; i++) {
         const step = steps[i];
         if (step.state === 'EXAM') {
-          // waiting, called, ongoing 상태인 검사를 현재로
-          if (['waiting', 'called', 'ongoing'].includes(step.status)) {
+          // waiting, called, in_progress 상태인 검사를 현재로
+          if ([QueueDetailState.WAITING, QueueDetailState.CALLED, QueueDetailState.IN_PROGRESS].includes(step.status)) {
             activeExamIndex = i;
             break;
           }
@@ -384,21 +385,21 @@ const FormatATemplate = ({
     const statusMap = {
       'pending': '대기',
       'scheduled': '예정',
-      'waiting': '대기중',
-      'called': '호출됨',
-      'ongoing': '진행중',
-      'completed': '완료',
-      'delayed': '지연',
-      'cancelled': '취소'
+      [QueueDetailState.WAITING]: '대기중',
+      [QueueDetailState.CALLED]: '호출됨',
+      [QueueDetailState.IN_PROGRESS]: '진행중',
+      [QueueDetailState.COMPLETED]: '완료',
+      [QueueDetailState.DELAYED]: '지연',
+      [QueueDetailState.CANCELLED]: '취소'
     };
     return statusMap[status] || status;
   };
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'completed': return 'bg-gray-100 text-gray-600';
-      case 'ongoing': return 'bg-blue-100 text-blue-700';
-      case 'waiting': return 'bg-amber-100 text-amber-700';
+      case QueueDetailState.COMPLETED: return 'bg-gray-100 text-gray-600';
+      case QueueDetailState.IN_PROGRESS: return 'bg-blue-100 text-blue-700';
+      case QueueDetailState.WAITING: return 'bg-amber-100 text-amber-700';
       default: return 'bg-gray-50 text-gray-500';
     }
   };

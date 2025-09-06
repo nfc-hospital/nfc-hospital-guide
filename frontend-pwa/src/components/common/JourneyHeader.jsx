@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import useJourneyStore from '../../store/journeyStore';
+import { PatientJourneyState } from '../../constants/states';
 
 export default function JourneyHeader() {
   const { user, todaysAppointments } = useJourneyStore();
@@ -14,7 +15,7 @@ export default function JourneyHeader() {
     if (pathname.includes('finished')) return 'FINISHED';
     if (pathname.includes('registered')) return 'REGISTERED';
     if (pathname.includes('arrived')) return 'ARRIVED';
-    if (pathname.includes('exam')) return 'ONGOING';
+    if (pathname.includes('exam')) return PatientJourneyState.IN_PROGRESS;
     return 'UNREGISTERED';
   };
   
@@ -29,15 +30,15 @@ export default function JourneyHeader() {
   
   // 9단계 여정 정의
   const PATIENT_JOURNEY_STATES = [
-    'UNREGISTERED',  // 1. 병원 도착 전
-    'ARRIVED',       // 2. 병원 도착
-    'REGISTERED',    // 3. 접수 완료
-    'WAITING',       // 4. 대기 중
-    'CALLED',        // 5. 호출됨
-    'ONGOING',       // 6. 진행 중
-    'COMPLETED',     // 7. 완료
-    'PAYMENT',       // 8. 수납
-    'FINISHED'       // 9. 귀가
+    PatientJourneyState.UNREGISTERED,  // 1. 병원 도착 전
+    PatientJourneyState.ARRIVED,       // 2. 병원 도착
+    PatientJourneyState.REGISTERED,    // 3. 접수 완료
+    PatientJourneyState.WAITING,       // 4. 대기 중
+    PatientJourneyState.CALLED,        // 5. 호출됨
+    PatientJourneyState.IN_PROGRESS,   // 6. 진행 중
+    PatientJourneyState.COMPLETED,     // 7. 완료
+    PatientJourneyState.PAYMENT,       // 8. 수납
+    PatientJourneyState.FINISHED       // 9. 귀가
   ];
 
   // 현재 상태의 인덱스 찾기
@@ -49,7 +50,7 @@ export default function JourneyHeader() {
   
   // appointments가 있고 WAITING~COMPLETED 상태인 경우 더 세밀한 진행률 계산
   if (todaysAppointments && todaysAppointments.length > 0 && 
-      ['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
+      [PatientJourneyState.WAITING, PatientJourneyState.CALLED, PatientJourneyState.IN_PROGRESS, PatientJourneyState.COMPLETED].includes(patientState)) {
     
     const completedAppointments = todaysAppointments.filter(apt => apt.status === 'completed').length;
     const totalAppointments = todaysAppointments.length;
@@ -68,7 +69,7 @@ export default function JourneyHeader() {
   const getProgressColor = () => {
     if (patientState === 'FINISHED') return 'from-emerald-400 to-green-500';
     if (patientState === 'PAYMENT') return 'from-amber-400 to-orange-500';
-    if (['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
+    if ([PatientJourneyState.WAITING, PatientJourneyState.CALLED, PatientJourneyState.IN_PROGRESS, PatientJourneyState.COMPLETED].includes(patientState)) {
       return 'from-blue-400 to-indigo-500';
     }
     return 'from-gray-300 to-gray-400';
@@ -82,7 +83,7 @@ export default function JourneyHeader() {
       'REGISTERED': '접수 완료',
       'WAITING': '검사 대기 중',
       'CALLED': '호출됨',
-      'ONGOING': '검사 진행 중',
+      [PatientJourneyState.IN_PROGRESS]: '검사 진행 중',
       'COMPLETED': '검사 완료',
       'PAYMENT': '수납 중',
       'FINISHED': '모든 일정 완료'
@@ -104,7 +105,7 @@ export default function JourneyHeader() {
         return '대기실에서 잠시 기다려주세요. 순서가 되면 호출해드립니다';
       case 'CALLED':
         return '지금 검사실로 들어가주세요!';
-      case 'ONGOING':
+      case PatientJourneyState.IN_PROGRESS:
         return '검사가 진행 중입니다. 안내에 따라주세요';
       case 'COMPLETED':
         return '모든 검사가 완료되었습니다. 수납처로 이동해주세요';
@@ -120,7 +121,7 @@ export default function JourneyHeader() {
   // 진행률 텍스트
   const getProgressText = () => {
     if (patientState === 'FINISHED') return '100%';
-    if (todaysAppointments && ['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
+    if (todaysAppointments && [PatientJourneyState.WAITING, PatientJourneyState.CALLED, PatientJourneyState.IN_PROGRESS, PatientJourneyState.COMPLETED].includes(patientState)) {
       const completed = todaysAppointments.filter(apt => apt.status === 'completed').length;
       return `${completed}/${todaysAppointments.length} 검사`;
     }

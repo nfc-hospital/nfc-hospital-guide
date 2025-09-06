@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import FormatATemplate from '../templates/FormatATemplate';
 import { ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
 import CalledModal from '../modals/CalledModal';
+import { PatientJourneyState } from '../../constants/states';
 
 export default function WaitingScreen({ 
   // props로 받은 데이터들
@@ -15,7 +16,7 @@ export default function WaitingScreen({
   locationInfo,
   currentExam,
   currentTask,
-  isOngoing,
+  isInProgress,
   isCalled,
   actualCurrentStep,
   completionStats
@@ -26,7 +27,7 @@ export default function WaitingScreen({
   
   // CALLED 상태일 때 모달 표시 (한 번만)
   useEffect(() => {
-    const shouldShowModal = (isCalled || currentTask?.state === 'called' || patientState === 'CALLED');
+    const shouldShowModal = (isCalled || currentTask?.state === 'called' || patientState === PatientJourneyState.CALLED);
     
     if (shouldShowModal && !hasShownModal) {
       setShowCalledModal(true);
@@ -58,12 +59,12 @@ export default function WaitingScreen({
       todaySchedule={todaySchedule}
       queueData={currentTask}
       taggedLocation={taggedLocation}
-      patientState={user?.state || patientState || (isOngoing ? 'ONGOING' : isCalled ? 'CALLED' : 'WAITING')}
+      patientState={user?.state || patientState || (isInProgress ? PatientJourneyState.IN_PROGRESS : isCalled ? PatientJourneyState.CALLED : PatientJourneyState.WAITING)}
       currentExam={currentExam}
     >
       {/* 추가 콘텐츠 영역 - 상태별 안내 */}
       <div className="space-y-4">
-        {isOngoing && (
+        {isInProgress && (
           <div className="bg-green-50 rounded-2xl p-6 text-center">
             <div className="flex justify-center mb-3">
               <ClipboardDocumentCheckIcon className="w-16 h-16 text-green-600" />

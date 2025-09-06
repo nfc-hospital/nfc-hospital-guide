@@ -1,4 +1,5 @@
 import React from 'react';
+import { PatientJourneyState, QueueDetailState } from '../../constants/states';
 
 /**
  * SimpleProgressBar - 환자의 전체 여정 진행도를 보여주는 단순한 진행률 바
@@ -11,15 +12,15 @@ import React from 'react';
 export default function SimpleProgressBar({ patientState, appointments, showLabel = true, className = '' }) {
   // 9단계 여정 정의
   const PATIENT_JOURNEY_STATES = [
-    'UNREGISTERED',  // 1. 병원 도착 전
-    'ARRIVED',       // 2. 병원 도착
-    'REGISTERED',    // 3. 접수 완료
-    'WAITING',       // 4. 대기 중
-    'CALLED',        // 5. 호출됨
-    'ONGOING',       // 6. 진행 중
-    'COMPLETED',     // 7. 완료
-    'PAYMENT',       // 8. 수납
-    'FINISHED'       // 9. 귀가
+    PatientJourneyState.UNREGISTERED,  // 1. 병원 도착 전
+    PatientJourneyState.ARRIVED,       // 2. 병원 도착
+    PatientJourneyState.REGISTERED,    // 3. 접수 완료
+    PatientJourneyState.WAITING,       // 4. 대기 중
+    PatientJourneyState.CALLED,        // 5. 호출됨
+    PatientJourneyState.IN_PROGRESS,   // 6. 진행 중
+    PatientJourneyState.COMPLETED,     // 7. 완료
+    PatientJourneyState.PAYMENT,       // 8. 수납
+    PatientJourneyState.FINISHED       // 9. 귀가
   ];
 
   // 현재 상태의 인덱스 찾기
@@ -31,12 +32,12 @@ export default function SimpleProgressBar({ patientState, appointments, showLabe
   
   // appointments가 있고 WAITING~COMPLETED 상태인 경우 더 세밀한 진행률 계산 (검사/진료 큐만)
   if (appointments && appointments.length > 0 && 
-      ['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
+      [PatientJourneyState.WAITING, PatientJourneyState.CALLED, PatientJourneyState.IN_PROGRESS, PatientJourneyState.COMPLETED].includes(patientState)) {
     
     // 검사/진료 큐만 필터링
     const examAppointments = appointments.filter(apt => 
       apt.exam_id && apt.status && 
-      ['scheduled', 'confirmed', 'ongoing', 'completed'].includes(apt.status)
+      ['scheduled', 'confirmed', QueueDetailState.IN_PROGRESS, 'completed'].includes(apt.status)
     );
     
     const completedExams = examAppointments.filter(apt => apt.status === 'completed').length;
@@ -56,9 +57,9 @@ export default function SimpleProgressBar({ patientState, appointments, showLabe
 
   // 상태별 색상 결정 - primary-blue 기반
   const getProgressColor = () => {
-    if (patientState === 'FINISHED') return 'from-emerald-500 to-green-600';
-    if (patientState === 'PAYMENT') return 'from-amber-500 to-orange-600';
-    if (['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
+    if (patientState === PatientJourneyState.FINISHED) return 'from-emerald-500 to-green-600';
+    if (patientState === PatientJourneyState.PAYMENT) return 'from-amber-500 to-orange-600';
+    if ([PatientJourneyState.WAITING, PatientJourneyState.CALLED, PatientJourneyState.IN_PROGRESS, PatientJourneyState.COMPLETED].includes(patientState)) {
       return 'from-primary-blue to-primary-blue-dark';
     }
     return 'from-gray-400 to-gray-500';
@@ -67,15 +68,15 @@ export default function SimpleProgressBar({ patientState, appointments, showLabe
   // 현재 상태 텍스트 - 고령자 친화적으로 수정
   const getStatusText = () => {
     const stateTexts = {
-      'UNREGISTERED': '병원 도착 전',
-      'ARRIVED': '병원 도착',
-      'REGISTERED': '접수 완료',
-      'WAITING': '검사 대기 중',
-      'CALLED': '호출됨',
-      'ONGOING': '검사 진행 중',
-      'COMPLETED': '검사 완료',
-      'PAYMENT': '수납 중',
-      'FINISHED': '모든 일정\n완료'
+      [PatientJourneyState.UNREGISTERED]: '병원 도착 전',
+      [PatientJourneyState.ARRIVED]: '병원 도착',
+      [PatientJourneyState.REGISTERED]: '접수 완료',
+      [PatientJourneyState.WAITING]: '검사 대기 중',
+      [PatientJourneyState.CALLED]: '호출됨',
+      [PatientJourneyState.IN_PROGRESS]: '검사 진행 중',
+      [PatientJourneyState.COMPLETED]: '검사 완료',
+      [PatientJourneyState.PAYMENT]: '수납 중',
+      [PatientJourneyState.FINISHED]: '모든 일정\n완료'
     };
     
     return stateTexts[patientState] || '진행 중';
@@ -83,12 +84,12 @@ export default function SimpleProgressBar({ patientState, appointments, showLabe
 
   // 진행률 텍스트 - 검사/진료 큐만 카운트
   const getProgressText = () => {
-    if (patientState === 'FINISHED') return '100%';
-    if (appointments && ['WAITING', 'CALLED', 'ONGOING', 'COMPLETED'].includes(patientState)) {
+    if (patientState === PatientJourneyState.FINISHED) return '100%';
+    if (appointments && [PatientJourneyState.WAITING, PatientJourneyState.CALLED, PatientJourneyState.IN_PROGRESS, PatientJourneyState.COMPLETED].includes(patientState)) {
       // 검사/진료 큐만 필터링 (대기, 결제 등 제외)
       const examAppointments = appointments.filter(apt => 
         apt.exam_id && apt.status && 
-        ['scheduled', 'confirmed', 'ongoing', 'completed'].includes(apt.status)
+        ['scheduled', 'confirmed', QueueDetailState.IN_PROGRESS, 'completed'].includes(apt.status)
       );
       const completedExams = examAppointments.filter(apt => apt.status === 'completed').length;
       return `${completedExams}/${examAppointments.length}`;

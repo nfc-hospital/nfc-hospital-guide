@@ -77,12 +77,12 @@ const useJourneyStore = create(
           
           // 1. appointments에서 진행중인 것 찾기
           const currentFromAppointments = appointments.find(apt => 
-            ['waiting', 'called', 'ongoing'].includes(apt.status)
+            ['waiting', 'called', 'in_progress'].includes(apt.status)
           );
           
           // 2. 큐에서 진행중인 것 찾기
           const activeQueue = queues.find(
-            q => q.state === 'waiting' || q.state === 'ongoing'
+            q => q.state === 'waiting' || q.state === 'in_progress'
           );
           
           return currentFromAppointments || activeQueue || null;
@@ -222,7 +222,7 @@ const useJourneyStore = create(
         getCurrentStepIndex: () => {
           const schedule = get().getTodaysScheduleForUI();
           const currentStep = schedule.findIndex(s => 
-            ['waiting', 'called', 'ongoing'].includes(s.status)
+            ['waiting', 'called', 'in_progress'].includes(s.status)
           );
           return currentStep === -1 ? 0 : currentStep;
         },
@@ -231,7 +231,7 @@ const useJourneyStore = create(
         getWaitingInfo: () => {
           const queues = get().currentQueues || [];
           const activeQueue = queues.find(
-            q => q.state === 'waiting' || q.state === 'called' || q.state === 'ongoing'
+            q => q.state === 'waiting' || q.state === 'called' || q.state === 'in_progress'
           );
           
           if (activeQueue) {
@@ -526,7 +526,7 @@ const useJourneyStore = create(
                   // 접수 후 상태에서만 큐 상태 확인
                   
                   // 여러 큐 중에서 현재 진행 중인 큐 찾기 (순차적 처리)
-                  // 1. ongoing이 있으면 최우선
+                  // 1. in_progress가 있으면 최우선
                   // 2. called가 있으면 그 다음
                   // 3. waiting 중 첫 번째 큐
                   
@@ -620,7 +620,7 @@ const useJourneyStore = create(
                 
                 // ✅ activeQueue를 먼저 정의 (nextExam 계산에서 사용하기 위해)
                 const activeQueue = currentQueues.find(
-                  q => q.state === 'ongoing' || q.state === 'called' || q.state === 'waiting'
+                  q => q.state === 'in_progress' || q.state === 'called' || q.state === 'waiting'
                 );
                 
                 // ✅ --- nextExam과 locationInfo 계산 (한 번에 처리) ---
