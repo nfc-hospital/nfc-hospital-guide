@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.utils import timezone
+from django.utils.formats import localize
 from .models import User, DeviceToken, LoginAttempt
 
 
@@ -12,7 +14,7 @@ class UserAdmin(BaseUserAdmin):
     """
     list_display = (
         'email', 'name', 'role', 'phone_number', 'is_active', 'is_staff',
-        'is_superuser', 'last_login_at', 'created_at'
+        'is_superuser', 'get_last_login_display', 'get_created_at_display'
     )
     list_filter = (
         'is_active', 'is_staff', 'is_superuser', 'role', 'created_at',
@@ -110,6 +112,23 @@ class UserAdmin(BaseUserAdmin):
     def delete_queryset(self, request, queryset):
         """여러 사용자 삭제 시 실제로 데이터베이스에서 삭제"""
         queryset.delete()
+    
+    def get_last_login_display(self, obj):
+        """last_login을 한국 시간으로 표시"""
+        if obj.last_login:
+            # USE_TZ=True인 경우 자동으로 TIME_ZONE 설정에 맞춰 변환됨
+            return localize(timezone.localtime(obj.last_login))
+        return '-'
+    get_last_login_display.short_description = '마지막 로그인'
+    get_last_login_display.admin_order_field = 'last_login'
+    
+    def get_created_at_display(self, obj):
+        """created_at을 한국 시간으로 표시"""
+        if obj.created_at:
+            return localize(timezone.localtime(obj.created_at))
+        return '-'
+    get_created_at_display.short_description = '가입일'
+    get_created_at_display.admin_order_field = 'created_at'
 
 
 
@@ -121,7 +140,7 @@ class DeviceTokenAdmin(admin.ModelAdmin):
     """
     list_display = (
         'token', 'user_id', 'device_type', 'device_name', 'is_active',
-        'is_trusted', 'last_login_at', 'expires_at', 'created_at'
+        'is_trusted', 'get_last_login_display', 'get_expires_at_display', 'get_created_at_display'
     )
     list_filter = (
         'is_active', 'is_trusted', 'device_type', 'created_at', 'last_login_at'
@@ -175,6 +194,30 @@ class DeviceTokenAdmin(admin.ModelAdmin):
         updated = queryset.update(is_trusted=False)
         self.message_user(request, f'{updated}개의 디바이스 토큰이 신뢰할 수 없는 디바이스로 지정되었습니다.')
     mark_as_untrusted.short_description = "선택된 토큰을 '신뢰할 수 없는 디바이스'로 표시"
+    
+    def get_last_login_display(self, obj):
+        """last_login_at을 한국 시간으로 표시"""
+        if obj.last_login_at:
+            return localize(timezone.localtime(obj.last_login_at))
+        return '-'
+    get_last_login_display.short_description = '마지막 로그인'
+    get_last_login_display.admin_order_field = 'last_login_at'
+    
+    def get_expires_at_display(self, obj):
+        """expires_at을 한국 시간으로 표시"""
+        if obj.expires_at:
+            return localize(timezone.localtime(obj.expires_at))
+        return '-'
+    get_expires_at_display.short_description = '만료일'
+    get_expires_at_display.admin_order_field = 'expires_at'
+    
+    def get_created_at_display(self, obj):
+        """created_at을 한국 시간으로 표시"""
+        if obj.created_at:
+            return localize(timezone.localtime(obj.created_at))
+        return '-'
+    get_created_at_display.short_description = '생성일'
+    get_created_at_display.admin_order_field = 'created_at'
 
 
 
@@ -186,7 +229,7 @@ class LoginAttemptAdmin(admin.ModelAdmin):
     로그인 시도 기록은 조회용으로만 사용되므로, 수정/추가/삭제를 비활성화합니다.
     """
     list_display = (
-        'attempted_at', 'user_id', 'login_type', 'status', 'ip_address',
+        'get_attempted_at_display', 'user_id', 'login_type', 'status', 'ip_address',
         'device_uuid', 'failure_reason'
     )
     list_filter = (
@@ -214,3 +257,11 @@ class LoginAttemptAdmin(admin.ModelAdmin):
         'phone_last4', 'birth_date', 'login_type', 'status', 'device_uuid',
         'user_agent', 'ip_address', 'user_id', 'failure_reason', 'attempted_at'
     )
+    
+    def get_attempted_at_display(self, obj):
+        """attempted_at을 한국 시간으로 표시"""
+        if obj.attempted_at:
+            return localize(timezone.localtime(obj.attempted_at))
+        return '-'
+    get_attempted_at_display.short_description = '시도 시간'
+    get_attempted_at_display.admin_order_field = 'attempted_at'

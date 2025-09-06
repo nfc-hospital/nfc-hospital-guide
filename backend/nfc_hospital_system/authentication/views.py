@@ -104,6 +104,13 @@ def simple_login(request):
         except Exception as token_error:
             return APIResponse.error(f"토큰 생성 실패: {str(token_error)}", code="AUTH_005")
         
+        # last_login 업데이트
+        from django.utils import timezone
+        current_time = timezone.now()
+        user.last_login = current_time
+        user.last_login_at = current_time
+        user.save(update_fields=['last_login', 'last_login_at'])
+        
         # PatientState 생성 또는 업데이트
         from p_queue.models import PatientState
         patient_state, created = PatientState.objects.get_or_create(
@@ -277,6 +284,13 @@ def kakao_login(request):
             }
         except Exception as token_error:
             return APIResponse.error(f"토큰 생성 실패: {str(token_error)}", code="AUTH_007")
+        
+        # last_login 업데이트
+        from django.utils import timezone
+        current_time = timezone.now()
+        user.last_login = current_time
+        user.last_login_at = current_time
+        user.save(update_fields=['last_login', 'last_login_at'])
         
         # PatientState 생성 또는 업데이트
         from p_queue.models import PatientState
@@ -564,6 +578,13 @@ def kakao_login_mock(request):
             }
         except Exception as token_error:
             return APIResponse.error(f"토큰 생성 실패: {str(token_error)}", code="AUTH_007")
+        
+        # last_login 업데이트
+        from django.utils import timezone
+        current_time = timezone.now()
+        user.last_login = current_time
+        user.last_login_at = current_time
+        user.save(update_fields=['last_login', 'last_login_at'])
         
         # PatientState 생성 또는 업데이트
         from p_queue.models import PatientState
