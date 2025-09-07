@@ -25,6 +25,7 @@ from .models import (
     HospitalMap, NavigationNode, NavigationEdge,
     PatientRoute, RouteProgress, DepartmentZone
 )
+from .pathfinding_optimized import calculate_optimized_route, clear_pathfinding_cache
 from .serializers import (
     HospitalMapSerializer, NavigationNodeSerializer,
     PatientRouteSerializer, RouteProgressSerializer,
@@ -914,3 +915,116 @@ def serve_map_svg(request, map_name):
         return HttpResponse(svg_content, content_type='image/svg+xml')
     else:
         raise Http404("맵 파일을 찾을 수 없습니다.")
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])  # 임시로 인증 제거
+def calculate_optimized_route_view(request):
+    """
+    Optimized route calculation API with multi-floor support
+    POST /api/v1/navigation/route-optimized/
+    
+    Request body:
+    {
+        "start_node_id": 1,
+        "end_node_id": 2
+    }
+    
+    Response:
+    {
+        "success": true,
+        "data": {
+            "path_coordinates": [...],
+            "total_distance": 150.5,
+            "total_time": 120.0,
+            "floors_involved": [1, 2],
+            "has_floor_transitions": true,
+            "start_floor": 1,
+            "end_floor": 2
+        }
+    }
+    """
+    try:
+        # Validate request data
+        start_node_id = request.data.get('start_node_id')
+        end_node_id = request.data.get('end_node_id')
+        
+        if not start_node_id or not end_node_id:
+            return APIResponse.error(
+                message="start_node_id and end_node_id are required",
+                code="MISSING_PARAMETERS",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Convert to integers and then to UUID format
+        try:
+            start_node_int = int(start_node_id)
+            end_node_int = int(end_node_id)
+            
+            # Convert integer to fixed UUID format
+            start_node_uuid = f'00000000-0000-0000-0000-{start_node_int:012d}'
+            end_node_uuid = f'00000000-0000-0000-0000-{end_node_int:012d}'
+            
+        except ValueError:
+            return APIResponse.error(
+                message="node IDs must be integers",
+                code="INVALID_NODE_IDS",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if nodes exist
+        try:
+            start_node = NavigationNode.objects.get(node_id=start_node_uuid)
+            end_node = NavigationNode.objects.get(node_id=end_node_uuid)
+        except NavigationNode.DoesNotExist as e:
+            return APIResponse.error(
+                message=f"Navigation node not found: {str(e)}",
+                code="NODE_NOT_FOUND",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Calculate optimized route using UUID strings
+        result = calculate_optimized_route(start_node_uuid, end_node_uuid)
+        
+        if result['success']:
+            return APIResponse.success(
+                message="Route calculated successfully",
+                data=result
+            )
+        else:
+            return APIResponse.error(
+                message=result.get('error', 'Route calculation failed'),
+                code="ROUTE_CALCULATION_ERROR",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+            
+    except Exception as e:
+        logger.error(f"Optimized route calculation error: {str(e)}")
+        return APIResponse.error(
+            message="An error occurred while calculating the route",
+            code="ROUTE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAdminUser])
+def clear_route_cache_view(request):
+    """
+    Clear pathfinding cache (Admin only)
+    POST /api/v1/navigation/clear-cache/
+    """
+    try:
+        clear_pathfinding_cache()
+        
+        return APIResponse.success(
+            message="Pathfinding cache cleared successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Clear cache error: {str(e)}")
+        return APIResponse.error(
+            message="Failed to clear pathfinding cache",
+            code="CACHE_CLEAR_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

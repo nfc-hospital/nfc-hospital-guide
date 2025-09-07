@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600">
+  <!-- 배경 -->
+  <rect width="900" height="600" fill="#f9fafb" stroke="#e5e7eb" stroke-width="2"/>
+  
+  <!-- 그리드 라인들 -->
+  <defs>
+    <pattern id="grid" width="50" height="50" patternUnits="userSpaceOnUse">
+      <path d="M 50 0 L 0 0 0 50" fill="none" stroke="#e5e7eb" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="900" height="600" fill="url(#grid)" />
+  
+  <!-- 병원 시설들 -->
+  <!-- 로비 -->
+  <rect id="dept-lobby" x="50" y="350" width="100" height="100" fill="#dbeafe" stroke="#3b82f6" stroke-width="2" rx="10"/>
+  <text x="100" y="405" text-anchor="middle" font-size="14" font-weight="bold" fill="#1e40af">로비</text>
+  
+  <!-- 접수 -->
+  <rect id="dept-reception" x="250" y="250" width="100" height="100" fill="#dcfce7" stroke="#22c55e" stroke-width="2" rx="10"/>
+  <text x="300" y="305" text-anchor="middle" font-size="14" font-weight="bold" fill="#16a34a">접수</text>
+  
+  <!-- 수납 -->
+  <rect id="dept-payment" x="700" y="325" width="100" height="100" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" rx="10"/>
+  <text x="750" y="380" text-anchor="middle" font-size="14" font-weight="bold" fill="#d97706">수납</text>
+  
+  <!-- 검사실 A -->
+  <rect id="dept-lab-a" x="200" y="325" width="100" height="100" fill="#fed7e2" stroke="#ec4899" stroke-width="2" rx="10"/>
+  <text x="250" y="380" text-anchor="middle" font-size="12" font-weight="bold" fill="#be185d">검사실A</text>
+  
+  <!-- 진료실 -->
+  <rect id="dept-exam-room" x="450" y="325" width="100" height="100" fill="#e0e7ff" stroke="#6366f1" stroke-width="2" rx="10"/>
+  <text x="500" y="380" text-anchor="middle" font-size="14" font-weight="bold" fill="#4338ca">진료실</text>
+  
+  <!-- 약국 -->
+  <rect id="store-pharmacy" x="950" y="325" width="100" height="100" fill="#f3e8ff" stroke="#8b5cf6" stroke-width="2" rx="10"/>
+  <text x="1000" y="380" text-anchor="middle" font-size="14" font-weight="bold" fill="#7c3aed">약국</text>
+  
+  <!-- 엘리베이터 -->
+  <rect id="dept-elevator" x="490" y="320" width="60" height="100" fill="#f1f5f9" stroke="#64748b" stroke-width="2" rx="10"/>
+  <text x="520" y="375" text-anchor="middle" font-size="12" font-weight="bold" fill="#475569">EV</text>
+  
+  <!-- 복도 표시 (점선) -->
+  <path d="M 100 400 L 300 300 L 500 375 L 750 375 L 1000 375" 
+        stroke="#94a3b8" stroke-width="3" stroke-dasharray="10,5" fill="none" opacity="0.5"/>
+  
+  <!-- 입구 화살표 -->
+  <path d="M 20 400 L 50 400" stroke="#ef4444" stroke-width="4" marker-end="url(#arrow)" fill="none"/>
+  
+  <!-- 화살표 마커 정의 -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#ef4444"/>
+    </marker>
+  </defs>
+  
+  <!-- 입구 표시 -->
+  <text x="35" y="435" text-anchor="middle" font-size="12" font-weight="bold" fill="#ef4444">입구</text>
+</svg>

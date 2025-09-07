@@ -191,13 +191,13 @@ export default function PublicHome() {
     setError('');
   }, []);
 
-  // 시설 선택 핸들러
+  // 시설 선택 핸들러 (원래 로직 복원)
   const handleFacilitySelect = useCallback(async (facility) => {
     console.log('Selected facility:', facility);
     setSelectedFacility(facility);
     setError(''); // 에러 메시지 초기화
     
-    // mapStore의 탐색 모드로 전환하고 경로 계산
+    // mapStore의 탐색 모드로 전환하고 경로 계산 (백엔드 API 사용)
     await navigateToFacility({
       name: facility.name,
       title: facility.name,
@@ -328,8 +328,16 @@ export default function PublicHome() {
                 mapId={selectedFacility.mapFile?.replace('.svg', '') || 'main_1f'}
                 highlightRoom={selectedFacility.name}
                 facilityName={selectedFacility.name}
-                pathNodes={routeData?.nodes || EMPTY_NODES}  // ✅ mapStore에서 경로 데이터 사용
-                pathEdges={routeData?.edges || EMPTY_EDGES}  // ✅ mapStore에서 경로 데이터 사용
+                pathNodes={routeData?.nodes || EMPTY_NODES}
+                pathEdges={routeData?.edges || EMPTY_EDGES}
+                currentLocation={{
+                  name: '현재 위치',
+                  x_coord: 150,
+                  y_coord: 400,
+                  building: '본관',
+                  floor: '1층'
+                }}
+                targetLocation={selectedFacility}
               />
             </div>
             

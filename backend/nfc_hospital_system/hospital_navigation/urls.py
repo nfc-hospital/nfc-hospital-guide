@@ -48,6 +48,10 @@ urlpatterns = [
     # SVG 맵 파일 제공 API
     path('api/v1/maps/<str:map_name>/', views.serve_map_svg, name='serve-map-svg'),
     
+    # 최적화된 경로 계산 API
+    path('api/v1/navigation/route-optimized/', views.calculate_optimized_route_view, name='optimized-route-calculation'),
+    path('api/v1/navigation/clear-cache/', views.clear_route_cache_view, name='clear-route-cache'),
+    
     # 관리자용 ViewSet (REST framework)
     path('api/navigation/', include(router.urls)),
 ]

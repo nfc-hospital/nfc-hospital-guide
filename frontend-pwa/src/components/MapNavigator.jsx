@@ -106,7 +106,8 @@ const MapNavigator = ({
     'annex-2f': '/images/maps/annex_1f.svg',  // annex-2f도 annex_1f로 폴백
     'cancer_1f': '/images/maps/cancer_1f.svg',
     'cancer_2f': '/images/maps/cancer_2f.svg',
-    'default': '/images/maps/default.svg'
+    'test': '/images/maps/test.svg',  // 테스트 지도
+    'default': '/images/maps/test.svg'  // 기본값도 테스트 지도로 변경
   };
 
   // 다중 층 경로 설정
@@ -210,7 +211,12 @@ const MapNavigator = ({
 
   // 지도 SVG 로드 (지도 변경 시에만)
   useEffect(() => {
-    if (!svgContainerRef.current) return;
+    if (!svgContainerRef.current) {
+      console.warn('SVG 컨테이너 ref가 없습니다');
+      return;
+    }
+    
+    console.log('🗺️ MapNavigator SVG 로드 시작:', { mapId, mapSrc });
     
     // SVG 로드 (백엔드 또는 로컬)
     const loadSvg = async () => {
@@ -234,29 +240,65 @@ const MapNavigator = ({
           } catch (fetchError) {
             console.error('지도 파일 로드 실패:', mapSrc, fetchError);
             // default.svg로 폴백
-            const defaultResponse = await fetch(mapImages.default);
-            svgText = await defaultResponse.text();
+            try {
+              const defaultResponse = await fetch(mapImages.default);
+              if (defaultResponse.ok) {
+                svgText = await defaultResponse.text();
+              } else {
+                // 기본 SVG를 생성
+                svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600">
+                  <rect width="900" height="600" fill="#f3f4f6"/>
+                  <text x="450" y="300" text-anchor="middle" font-size="24" fill="#374151">지도를 불러올 수 없습니다</text>
+                </svg>`;
+              }
+            } catch (defaultError) {
+              // 완전 실패 시 기본 SVG 생성
+              svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600">
+                <rect width="900" height="600" fill="#f3f4f6"/>
+                <text x="450" y="300" text-anchor="middle" font-size="24" fill="#374151">지도를 불러올 수 없습니다</text>
+              </svg>`;
+            }
           }
         } else {
           // 백엔드에서 지도 로드 시도
-          const loadFloorMap = useMapStore.getState().loadFloorMap;
-          const mapData = await loadFloorMap(mapId);
-          if (mapData?.svg_content) {
-            svgText = mapData.svg_content;
-          } else {
-            console.error('지도를 로드할 수 없습니다');
-            return;
+          try {
+            const loadFloorMap = useMapStore.getState().loadFloorMap;
+            const mapData = await loadFloorMap(mapId);
+            if (mapData?.svg_content) {
+              svgText = mapData.svg_content;
+            } else {
+              throw new Error('백엔드에서 지도 데이터를 가져올 수 없습니다');
+            }
+          } catch (backendError) {
+            console.error('백엔드 지도 로드 실패:', backendError);
+            // 기본 SVG 생성
+            svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" width="900" height="600">
+              <rect width="900" height="600" fill="#f3f4f6"/>
+              <text x="450" y="300" text-anchor="middle" font-size="24" fill="#374151">지도를 불러올 수 없습니다</text>
+            </svg>`;
           }
         }
         
-        // SVG 파싱
+        // SVG 파싱 및 검증
         const parser = new DOMParser();
         const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+        
+        // 파싱 오류 확인
+        const parseError = svgDoc.querySelector('parsererror');
+        if (parseError) {
+          throw new Error('SVG 파싱 오류: ' + parseError.textContent);
+        }
+        
         const svgElement = svgDoc.documentElement;
+        
+        // SVG 요소 검증
+        if (!svgElement || svgElement.tagName !== 'svg') {
+          throw new Error('유효하지 않은 SVG 요소');
+        }
         
         // SVG viewBox 정보 가져오기 (좌표 시스템 확인)
         const viewBox = svgElement.getAttribute('viewBox');
-        // console.log('📐 SVG viewBox:', viewBox);
+        console.log('📐 SVG viewBox:', viewBox);
         
         // SVG 크기 속성 설정 (전체가 보이도록)
         svgElement.setAttribute('width', '100%');
@@ -461,18 +503,36 @@ const MapNavigator = ({
           svgElement.appendChild(markerGroup);
         }
         
-        // 컨테이너에 SVG 삽입 (null 체크 추가)
+        // 컨테이너에 SVG 삽입 (안전한 DOM 조작)
         if (svgContainerRef.current) {
-          // 기존 SVG가 있으면 교체, 없으면 추가
-          const existingSvg = svgContainerRef.current.querySelector('svg');
-          if (existingSvg) {
-            svgContainerRef.current.replaceChild(svgElement, existingSvg);
-          } else {
+          try {
+            // 컨테이너 내용 초기화
+            svgContainerRef.current.innerHTML = '';
+            
+            // 새로운 SVG 요소 추가
             svgContainerRef.current.appendChild(svgElement);
+            
+            console.log('✅ SVG 로드 완료:', mapId);
+          } catch (domError) {
+            console.error('SVG DOM 삽입 오류:', domError);
+            // 실패 시 기본 메시지 표시
+            svgContainerRef.current.innerHTML = `
+              <div class="flex items-center justify-center h-full text-gray-500">
+                <p>지도를 표시할 수 없습니다</p>
+              </div>
+            `;
           }
         }
       } catch (error) {
         console.error('SVG 로드 오류:', error);
+        // 오류 시 기본 메시지 표시
+        if (svgContainerRef.current) {
+          svgContainerRef.current.innerHTML = `
+            <div class="flex items-center justify-center h-full text-gray-500">
+              <p>지도를 불러오는 중 오류가 발생했습니다</p>
+            </div>
+          `;
+        }
       }
     };
     

@@ -4,30 +4,131 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import useJourneyStore from '../store/journeyStore';
+import useMapStore from '../store/mapStore';
 
-// DB에 있는 실제 태그 데이터 사용
-// 주의: uid 필드는 tag_uid 값이 아니라 tag_id 값임
-// 백엔드에서는 code로 검색하도록 수정
+// 정확한 좌표를 포함한 실제 태그 데이터
 const realTags = [
-  { code: 'nfc-lobby-001', uid: 'nfc-lobby-001', name: '로비', building: '본관', floor: '1', room: '로비' },
-  { code: 'nfc-reception-001', uid: 'nfc-reception-001', name: '접수', building: '본관', floor: '1', room: '원무과' },
-  { code: 'nfc-payment-001', uid: 'nfc-payment-001', name: '수납', building: '본관', floor: '1', room: '수납창구' },
-  { code: 'nfc-xray-001', uid: 'nfc-xray-001', name: 'X선실', building: '본관', floor: '2', room: 'X-ray실' },
-  { code: 'nfc-blood-test-001', uid: 'nfc-blood-test-001', name: '채혈실', building: '본관', floor: '2', room: '채혈실' },
-  { code: 'nfc-ct-001', uid: 'nfc-ct-001', name: 'CT실', building: '본관', floor: '3', room: 'CT실' },
-  { code: 'nfc-mri-001', uid: 'nfc-mri-001', name: 'MRI실', building: '본관', floor: '3', room: 'MRI실' },
-  { code: 'nfc-cardio-001', uid: 'nfc-cardio-001', name: '심전도실', building: '본관', floor: '2', room: '심전도실' },
-  { code: 'nfc-ultrasound-001', uid: 'nfc-ultrasound-001', name: '초음파실', building: '본관', floor: '3', room: '초음파실' },
-  { code: 'nfc-waiting-area-001', uid: 'nfc-waiting-area-001', name: '대기실', building: '본관', floor: '2', room: '중앙대기실' }
+  { 
+    code: 'nfc-lobby-001', 
+    uid: 'nfc-lobby-001', 
+    name: '로비', 
+    building: '본관', 
+    floor: 1, 
+    room: '로비',
+    x_coord: 100, 
+    y_coord: 400,
+    description: '병원 정문 로비'
+  },
+  { 
+    code: 'nfc-reception-001', 
+    uid: 'nfc-reception-001', 
+    name: '접수', 
+    building: '본관', 
+    floor: 1, 
+    room: '원무과',
+    x_coord: 300, 
+    y_coord: 300,
+    description: '1층 원무과 접수 창구'
+  },
+  { 
+    code: 'nfc-payment-001', 
+    uid: 'nfc-payment-001', 
+    name: '수납', 
+    building: '본관', 
+    floor: 1, 
+    room: '수납창구',
+    x_coord: 750, 
+    y_coord: 375,
+    description: '1층 수납 창구'
+  },
+  { 
+    code: 'nfc-lab-a-001', 
+    uid: 'nfc-lab-a-001', 
+    name: '검사실 A', 
+    building: '본관', 
+    floor: 1, 
+    room: '검사실 A',
+    x_coord: 250, 
+    y_coord: 375,
+    description: '1층 검사실 A (혈액검사, 소변검사)'
+  },
+  { 
+    code: 'nfc-exam-room-001', 
+    uid: 'nfc-exam-room-001', 
+    name: '진료실', 
+    building: '본관', 
+    floor: 1, 
+    room: '진료실',
+    x_coord: 500, 
+    y_coord: 375,
+    description: '1층 진료실 (일반진료, 상담)'
+  },
+  { 
+    code: 'nfc-pharmacy-001', 
+    uid: 'nfc-pharmacy-001', 
+    name: '약국', 
+    building: '본관', 
+    floor: 1, 
+    room: '약국',
+    x_coord: 1000, 
+    y_coord: 375,
+    description: '1층 약국 (처방약 수령)'
+  },
+  { 
+    code: 'nfc-xray-001', 
+    uid: 'nfc-xray-001', 
+    name: 'X선실', 
+    building: '본관', 
+    floor: 2, 
+    room: 'X-ray실',
+    x_coord: 300, 
+    y_coord: 250,
+    description: '2층 X선 촬영실'
+  },
+  { 
+    code: 'nfc-blood-test-001', 
+    uid: 'nfc-blood-test-001', 
+    name: '채혈실', 
+    building: '본관', 
+    floor: 2, 
+    room: '채혈실',
+    x_coord: 400, 
+    y_coord: 300,
+    description: '2층 채혈실'
+  },
+  { 
+    code: 'nfc-elevator-1f', 
+    uid: 'nfc-elevator-1f', 
+    name: '엘리베이터 (1층)', 
+    building: '본관', 
+    floor: 1, 
+    room: '엘리베이터',
+    x_coord: 540, 
+    y_coord: 370,
+    description: '1층 엘리베이터'
+  },
+  { 
+    code: 'nfc-elevator-2f', 
+    uid: 'nfc-elevator-2f', 
+    name: '엘리베이터 (2층)', 
+    building: '본관', 
+    floor: 2, 
+    room: '엘리베이터',
+    x_coord: 540, 
+    y_coord: 370,
+    description: '2층 엘리베이터'
+  }
 ];
 
 export default function MockNFCPanel() {
   const [isScanning, setIsScanning] = useState(false);
   const [selectedTag, setSelectedTag] = useState(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const fetchJourneyData = useJourneyStore((state) => state.fetchJourneyData);
+  const { updateCurrentLocation, updateRouteBasedOnLocation } = useMapStore();
 
   // 개발 환경에서만 표시
   if (process.env.NODE_ENV !== 'development') {
@@ -79,8 +180,28 @@ export default function MockNFCPanel() {
       
       console.log('🏷️ Mock NFC 스캔:', tag.code, mockNDEFMessage);
       
-      // 실제 API 호출 - 백엔드에서 code 필드로 검색하므로 tag.code 사용
+      // 1. 현재 위치 설정 (mapStore에 반영)
+      const locationInfo = {
+        room: tag.room,
+        description: tag.description,
+        name: tag.name,
+        x_coord: tag.x_coord,
+        y_coord: tag.y_coord,
+        building: tag.building,
+        floor: tag.floor,
+        code: tag.code
+      };
+      
+      setCurrentLocation(locationInfo);
+      updateCurrentLocation(locationInfo);
+      
+      console.log('📍 현재 위치 시뮬레이션:', locationInfo);
+      
+      // 2. 실제 API 호출 - 백엔드에서 code 필드로 검색하므로 tag.code 사용
       const result = await scanNFCTag(tag.code, mockNDEFMessage);
+      
+      // 3. 경로 자동 재계산 (목적지가 설정되어 있으면)
+      await updateRouteBasedOnLocation(locationInfo);
       
       console.log('📡 API 응답:', result);
       
@@ -170,7 +291,16 @@ export default function MockNFCPanel() {
             </div>
           </div>
           
-          {/* <p className="text-xs text-gray-500 mb-3">개발용 가상 NFC 태그 스캐너</p> */}
+          {/* 현재 위치 표시 */}
+          {currentLocation && (
+            <div className="mb-3 p-3 bg-green-50 border-2 border-green-200 rounded-xl">
+              <div className="text-xs font-medium text-green-600 mb-1">📍 현재 위치</div>
+              <div className="text-sm font-bold text-green-800">{currentLocation.name}</div>
+              <div className="text-xs text-green-600">
+                {currentLocation.building} {currentLocation.floor}층 • 좌표: ({currentLocation.x_coord}, {currentLocation.y_coord})
+              </div>
+            </div>
+          )}
           
           <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
             {realTags.map((tag) => (

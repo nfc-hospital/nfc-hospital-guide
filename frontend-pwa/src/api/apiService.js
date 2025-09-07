@@ -226,7 +226,13 @@ const apiService = {
         console.error('경로 계산 실패:', error);
         throw error;
       }
-    }
+    },
+
+    // 최적화된 경로 계산 (새로운 multi-floor pathfinding)
+    calculateOptimizedRoute: (data) => api.post('/navigation/route-optimized/', data),
+    
+    // 경로 캐시 초기화 (관리자 전용)
+    clearRouteCache: () => api.post('/navigation/clear-cache/')
   },
 
   // NFC 관련 API (공개 정보)

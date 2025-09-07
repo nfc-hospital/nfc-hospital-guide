@@ -328,27 +328,47 @@ const useMapStore = create(
             to: nextExam.title
           });
           
-          // 2. hospital_navigation API로 경로 요청
+          // 2. hospital_navigation API로 경로 요청 (optimized pathfinding 사용)
           try {
-            // NFC 스캔 기반 경로 안내 API 사용 (백엔드가 기대하는 파라미터 사용)
-            const response = await apiService.navigation.nfcScanNavigate({
-              start_tag_code: currentPos.code || currentPos.tag_id || 'TAG001', // 출발지 태그 코드
-              destination_tag_code: nextExam.location_tag || 'TAG001', // 목적지 태그 코드
-              avoid_stairs: false,
-              is_accessible: false
+            // 좌표 기반으로 가장 가까운 노드 ID 찾기 (임시 구현)
+            const startNodeId = get().findNearestNodeId(currentPos.x_coord || 100, currentPos.y_coord || 400);
+            const endNodeId = get().findNearestNodeId(nextExam.x_coord || 500, nextExam.y_coord || 300);
+            
+            console.log('🎯 노드 매핑:', {
+              시작위치: currentPos,
+              목적지: nextExam,
+              시작노드ID: startNodeId,
+              종료노드ID: endNodeId
             });
+            
+            // 요청 데이터 검증
+            const requestData = {
+              start_node_id: startNodeId,
+              end_node_id: endNodeId
+            };
+            
+            console.log('📡 API 요청 데이터:', requestData, {
+              start_type: typeof startNodeId,
+              end_type: typeof endNodeId,
+              start_value: startNodeId,
+              end_value: endNodeId
+            });
+            
+            // 새로운 optimized pathfinding API 사용
+            const response = await apiService.navigation.calculateOptimizedRoute(requestData);
             
             const routeData = response?.data || response;
             
-            if (routeData && routeData.steps) {
-              // steps 배열에서 nodes와 edges 추출
-              const nodes = routeData.steps.map(step => ({
-                id: step.node_id,
-                x: step.x_coord,
-                y: step.y_coord,
-                name: step.node_name,
-                floor: step.floor,
-                building: step.building
+            if (routeData && routeData.path_coordinates) {
+              // path_coordinates 배열에서 nodes와 edges 추출 (새로운 API 형식)
+              const nodes = routeData.path_coordinates.map((point, index) => ({
+                id: point.node_id,
+                x: point.coordinates.x,
+                y: point.coordinates.y,
+                name: point.name,
+                floor: point.coordinates.floor,
+                building: point.coordinates.building,
+                map_id: point.coordinates.map_id
               }));
               
               // edges 생성 (연속된 노드들을 연결)
@@ -357,7 +377,7 @@ const useMapStore = create(
                 edges.push([nodes[i].id, nodes[i + 1].id]);
               }
               
-              console.log('✅ hospital_navigation 경로 변환 완료:', {
+              console.log('✅ optimized pathfinding 경로 변환 완료:', {
                 원본: routeData,
                 변환된_nodes: nodes,
                 변환된_edges: edges
@@ -369,12 +389,14 @@ const useMapStore = create(
                   nodes: nodes,
                   edges: edges,
                   total_distance: routeData.total_distance,
-                  estimated_time: routeData.estimated_time
+                  estimated_time: routeData.total_time,
+                  floors_involved: routeData.floors_involved,
+                  has_floor_transitions: routeData.has_floor_transitions
                 },
                 navigationRoute: {
                   nodes: nodes,
                   edges: edges,
-                  route_id: routeData.route_id
+                  route_data: routeData
                 },
                 destinationLocation: nextExam,
                 isRouteLoading: false 
@@ -546,6 +568,39 @@ const useMapStore = create(
           node.name?.includes(name) ||
           node.room?.includes(name)
         );
+      },
+
+      // 좌표 기반으로 가장 가까운 노드 ID 찾기
+      findNearestNodeId: (x, y) => {
+        // 병원 내 주요 네비게이션 노드들의 좌표 매핑
+        // 실제로는 백엔드 NavigationNode 테이블에서 가져와야 하지만,
+        // 현재는 MockNFCPanel과 호환되도록 하드코딩
+        const navigationNodes = [
+          { id: 1, x: 100, y: 400, name: '로비' },           // nfc-lobby-001
+          { id: 2, x: 300, y: 300, name: '접수' },           // nfc-reception-001
+          { id: 3, x: 750, y: 375, name: '수납' },           // nfc-payment-001
+          { id: 4, x: 250, y: 375, name: '검사실 A' },       // nfc-lab-a-001
+          { id: 5, x: 500, y: 375, name: '진료실' },         // nfc-exam-room-001
+          { id: 6, x: 1000, y: 375, name: '약국' },          // nfc-pharmacy-001
+          { id: 7, x: 300, y: 250, name: 'X선실' },          // nfc-xray-001 (2층)
+          { id: 8, x: 400, y: 300, name: '채혈실' },         // nfc-blood-test-001 (2층)
+          { id: 9, x: 540, y: 370, name: '엘리베이터' },     // nfc-elevator (1층/2층)
+        ];
+
+        // 유클리드 거리 계산으로 가장 가까운 노드 찾기
+        let nearestNode = navigationNodes[0];
+        let minDistance = Math.sqrt(Math.pow(x - nearestNode.x, 2) + Math.pow(y - nearestNode.y, 2));
+
+        for (const node of navigationNodes) {
+          const distance = Math.sqrt(Math.pow(x - node.x, 2) + Math.pow(y - node.y, 2));
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestNode = node;
+          }
+        }
+
+        console.log(`📍 좌표 (${x}, ${y})에서 가장 가까운 노드: ${nearestNode.name} (ID: ${nearestNode.id}, 거리: ${Math.round(minDistance)})`);
+        return nearestNode.id;
       },
 
 

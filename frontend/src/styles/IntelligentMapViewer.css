@@ -1,0 +1,437 @@
+/* Enhanced styles for IntelligentMapViewer component */
+
+.intelligent-map-viewer {
+  /* Main container styling following CLAUDE.md guidelines */
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease-in-out;
+}
+
+.intelligent-map-viewer:hover {
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+}
+
+/* Route summary header with gradient background */
+.route-summary-header {
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  border-radius: 20px 20px 0 0;
+  padding: 1.5rem;
+  color: white;
+}
+
+.route-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  text-align: center;
+}
+
+.route-summary-item {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+}
+
+.route-summary-item:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Multi-floor indicator */
+.multi-floor-indicator {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  border-radius: 16px;
+  padding: 1rem;
+  margin-top: 1rem;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+/* Floor selection tabs */
+.floor-tabs-container {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  padding: 1.5rem;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.floor-tabs {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.floor-tab {
+  background: white;
+  border: 2px solid #d1d5db;
+  border-radius: 16px;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+  min-height: 56px;
+  min-width: 80px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.floor-tab:hover {
+  background: #f3f4f6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.floor-tab.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+  color: white;
+  border-color: #1e40af;
+  box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+}
+
+/* Next action guidance */
+.next-action-guidance {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  padding: 1.5rem;
+  border-bottom: 2px solid #10b981;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.next-action-icon {
+  font-size: 2rem;
+  animation: bounce 2s infinite;
+}
+
+.next-action-content {
+  flex: 1;
+}
+
+.next-action-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+  margin-bottom: 0.25rem;
+}
+
+.next-action-description {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.next-action-location {
+  font-size: 1rem;
+  opacity: 0.9;
+}
+
+/* Map container */
+.map-container {
+  padding: 2rem;
+  background: white;
+}
+
+.map-display {
+  background: #f8fafc;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 3px solid #e5e7eb;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+.map-svg-container {
+  width: 100%;
+  height: 500px;
+  overflow: hidden;
+  position: relative;
+  background: white;
+}
+
+/* Map overlay for route visualization */
+.route-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.route-path {
+  stroke: #3b82f6;
+  stroke-width: 6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 2px 4px rgba(59, 130, 246, 0.3));
+  animation: draw-path 2s ease-in-out;
+}
+
+.route-marker {
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2));
+  animation: marker-pulse 2s infinite;
+}
+
+.route-marker.start {
+  fill: #10b981;
+  stroke: white;
+  stroke-width: 4;
+}
+
+.route-marker.end {
+  fill: #ef4444;
+  stroke: white;
+  stroke-width: 4;
+}
+
+.route-marker.transition {
+  fill: #f59e0b;
+  stroke: white;
+  stroke-width: 4;
+  animation: bounce 1.5s infinite;
+}
+
+/* Route instructions panel */
+.route-instructions {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 20px;
+  padding: 1.5rem;
+  margin-top: 2rem;
+  border: 2px solid #e5e7eb;
+}
+
+.route-instructions-header {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.route-instruction-item {
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  transition: all 0.3s ease-in-out;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 72px;
+}
+
+.route-instruction-item:hover {
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.route-instruction-item.start {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-color: #10b981;
+}
+
+.route-instruction-item.end {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border-color: #ef4444;
+}
+
+.route-instruction-item.transition {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-color: #f59e0b;
+}
+
+.instruction-icon {
+  font-size: 1.5rem;
+  width: 2.5rem;
+  text-align: center;
+}
+
+.instruction-content {
+  flex: 1;
+}
+
+.instruction-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.instruction-details {
+  font-size: 0.9rem;
+  color: #d97706;
+  font-weight: 500;
+}
+
+.instruction-step {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* Loading and error states */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  gap: 1.5rem;
+}
+
+.loading-spinner {
+  width: 4rem;
+  height: 4rem;
+  border: 4px solid #e5e7eb;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loading-text {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.error-container {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 2px solid #fca5a5;
+  border-radius: 20px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.error-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #dc2626;
+  margin-bottom: 0.5rem;
+}
+
+.error-message {
+  font-size: 1.1rem;
+  color: #b91c1c;
+  margin-bottom: 1.5rem;
+}
+
+.error-retry-button {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-height: 56px;
+}
+
+.error-retry-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(220, 38, 38, 0.3);
+}
+
+/* Animations */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes bounce {
+  0%, 20%, 53%, 80%, 100% {
+    transform: translate3d(0,0,0);
+  }
+  40%, 43% {
+    transform: translate3d(0,-6px,0);
+  }
+  70% {
+    transform: translate3d(0,-3px,0);
+  }
+  90% {
+    transform: translate3d(0,-1px,0);
+  }
+}
+
+@keyframes draw-path {
+  0% {
+    stroke-dasharray: 0 1000;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dasharray: 1000 0;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes marker-pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Responsive design for mobile devices */
+@media (max-width: 768px) {
+  .route-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .floor-tabs {
+    justify-content: center;
+  }
+  
+  .floor-tab {
+    min-width: 60px;
+    padding: 0.5rem 1rem;
+  }
+  
+  .map-container {
+    padding: 1rem;
+  }
+  
+  .map-svg-container {
+    height: 400px;
+  }
+  
+  .route-instruction-item {
+    flex-direction: column;
+    text-align: center;
+    min-height: auto;
+  }
+  
+  .next-action-guidance {
+    flex-direction: column;
+    text-align: center;
+  }
+}
