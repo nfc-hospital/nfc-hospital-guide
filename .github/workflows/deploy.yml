@@ -68,10 +68,11 @@ jobs:
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
 
           # --- 1. 코드 업데이트 및 백엔드 의존성 설치 ---
-          echo ">>> 1. Git 리포지토리 업데이트 및 백엔드 의존성 설치"
+          echo ">>> 1. Git 리포지토리 강제 업데이트 및 백엔드 의존성 설치"
           cd $PROJECT_DIR
-          git reset --hard HEAD
-          git pull origin main
+          git fetch origin main      # 1. 원격 저장소의 최신 정보를 가져옵니다.
+          git reset --hard origin/main # 2. 서버 코드를 원격 저장소 상태로 강제 초기화합니다.
+          git clean -f -d            # 3. 불필요한 파일들을 모두 삭제합니다.
           cd $DJANGO_DIR
           $VENV_PIP install -r requirements.txt
 
