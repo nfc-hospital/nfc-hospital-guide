@@ -15,6 +15,7 @@ import logging
 from .models import NFCTag, TagLog, NFCTagExam, FacilityRoute
 from appointments.models import Exam
 from p_queue.models import Queue, PatientState
+from hospital_navigation.models import NavigationNode
 from .serializers import (
     NFCTagSerializer, NFCTagDetailSerializer, NFCScanRequestSerializer,
     NFCScanResponseSerializer, TagLogSerializer, 
@@ -1492,3 +1493,118 @@ class NFCTagScanNavigateView(APIView):
                    f"User: {user_info}")
         
         return Response(path_data, status=status.HTTP_200_OK)
+
+
+# MockNFC 패널용 API 함수들
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def get_nfc_tags_list(request):
+    """
+    MockNFC 패널용 NFC 태그 목록 조회 API
+    GET /api/nfc/tags/
+    
+    활성화된 NFC 태그들의 목록을 반환하여 MockNFC 패널에서 버튼으로 표시
+    """
+    try:
+        # 활성화된 NFC 태그만 조회
+        tags = NFCTag.objects.filter(is_active=True).values(
+            'tag_id', 'code', 'building', 'floor', 'room', 'description'
+        )
+        
+        # 데이터 포맷팅
+        tag_list = []
+        for tag in tags:
+            tag_list.append({
+                'tag_id': str(tag['tag_id']),
+                'code': tag['code'],
+                'location_name': f"{tag['building']} {tag['room']}",
+                'building': tag['building'],
+                'floor': tag['floor'],
+                'room': tag['room'],
+                'description': tag['description']
+            })
+        
+        logger.info(f"NFC 태그 목록 조회: {len(tag_list)}개 태그 반환")
+        
+        return APIResponse.success(
+            data=tag_list,
+            message=f"{len(tag_list)}개의 NFC 태그를 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except Exception as e:
+        logger.error(f"NFC tags list error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="NFC 태그 목록 조회 중 오류가 발생했습니다.",
+            code="TAG_LIST_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def get_nfc_location(request, tag_id):
+    """
+    NFC 태그 위치 조회 API
+    GET /api/nfc-tags/<tag_id>/location/
+    
+    특정 NFC 태그의 위치 좌표를 NavigationNode를 통해 조회하여 반환
+    """
+    try:
+        # NFC 태그 조회
+        tag = get_object_or_404(NFCTag, tag_id=tag_id, is_active=True)
+        
+        # 태그와 연결된 NavigationNode 찾기
+        nav_node = NavigationNode.objects.filter(nfc_tag=tag).first()
+        
+        if not nav_node:
+            # NavigationNode가 없으면 태그의 좌표를 직접 사용
+            logger.warning(f"NavigationNode not found for tag {tag.code}, using tag coordinates")
+            
+            # 지도 파일 이름 생성
+            map_id = f"{tag.building.lower().replace(' ', '')}_{tag.floor}f"
+            
+            response_data = {
+                'node_id': None,
+                'position': {'x': tag.x_coord, 'y': tag.y_coord},
+                'map_id': map_id,
+                'location_name': f"{tag.building} {tag.room}",
+                'building': tag.building,
+                'floor': tag.floor,
+                'room': tag.room
+            }
+        else:
+            # NavigationNode가 있으면 해당 정보 사용
+            map_id = f"{nav_node.map.building.lower().replace(' ', '')}_{nav_node.map.floor}f"
+            
+            response_data = {
+                'node_id': str(nav_node.node_id),
+                'position': {'x': nav_node.x_coord, 'y': nav_node.y_coord},
+                'map_id': map_id,
+                'location_name': f"{nav_node.map.building} {nav_node.name}",
+                'building': nav_node.map.building,
+                'floor': nav_node.map.floor,
+                'room': nav_node.name
+            }
+        
+        logger.info(f"NFC 위치 조회 성공: {tag.code} -> ({response_data['position']['x']}, {response_data['position']['y']})")
+        
+        return APIResponse.success(
+            data=response_data,
+            message="NFC 태그 위치를 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+        
+    except NFCTag.DoesNotExist:
+        return APIResponse.error(
+            message="존재하지 않거나 비활성화된 NFC 태그입니다.",
+            code="TAG_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"NFC location error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="NFC 태그 위치 조회 중 오류가 발생했습니다.",
+            code="LOCATION_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

@@ -52,6 +52,10 @@ urlpatterns = [
     path('api/v1/navigation/route-optimized/', views.calculate_optimized_route_view, name='optimized-route-calculation'),
     path('api/v1/navigation/clear-cache/', views.clear_route_cache_view, name='clear-route-cache'),
     
+    # 기본 경로 계산 API (navigation.js와 호환)
+    path('api/v1/navigation/path/', views.calculate_route_api, name='calculate-route'),
+    path('api/v1/navigation/route-by-tags/', views.calculate_route_by_tags_api, name='calculate-route-by-tags'),
+    
     # 관리자용 ViewSet (REST framework)
     path('api/navigation/', include(router.urls)),
 ]

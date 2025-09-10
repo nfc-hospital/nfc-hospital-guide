@@ -1028,3 +1028,276 @@ def clear_route_cache_view(request):
             code="CACHE_CLEAR_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+# ================================
+# Navigation.js 호환 API 함수들
+# ================================
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def calculate_route_api(request):
+    """
+    기본 경로 계산 API (navigation.js와 호환)
+    POST /api/v1/navigation/path/
+    
+    Request body:
+    {
+        "start_node_id": "node_123",
+        "end_node_id": "node_456",
+        "avoid_stairs": false,
+        "is_accessible": false
+    }
+    
+    Response:
+    {
+        "success": true,
+        "data": {
+            "path_coordinates": [{"x": 100, "y": 200}, ...],
+            "distance": 150.5,
+            "estimated_time": 120,
+            "steps": [...],
+            "nodes": [...],
+            "edges": [...]
+        },
+        "message": "경로 계산이 완료되었습니다."
+    }
+    """
+    try:
+        # 요청 데이터 검증
+        start_node_id = request.data.get('start_node_id')
+        end_node_id = request.data.get('end_node_id')
+        avoid_stairs = request.data.get('avoid_stairs', False)
+        is_accessible = request.data.get('is_accessible', False)
+        
+        if not start_node_id or not end_node_id:
+            return APIResponse.error(
+                message="start_node_id and end_node_id are required",
+                code="MISSING_PARAMETERS",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logger.info(f"🗺️ 경로 계산 요청: {start_node_id} → {end_node_id}")
+        
+        # 노드 조회
+        try:
+            start_node = NavigationNode.objects.get(node_id=start_node_id)
+            end_node = NavigationNode.objects.get(node_id=end_node_id)
+        except NavigationNode.DoesNotExist as e:
+            return APIResponse.error(
+                message=f"노드를 찾을 수 없습니다: {str(e)}",
+                code="NODE_NOT_FOUND",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 경로 계산 서비스 사용
+        try:
+            # RouteCalculationService에서 경로 계산
+            path_nodes, path_edges, total_distance, estimated_time = RouteCalculationService.find_shortest_path(
+                start_node=start_node,
+                end_node=end_node,
+                avoid_stairs=avoid_stairs,
+                is_accessible=is_accessible
+            )
+            
+            if not path_nodes:
+                return APIResponse.error(
+                    message="경로를 찾을 수 없습니다.",
+                    code="ROUTE_NOT_FOUND",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 좌표 배열 생성
+            path_coordinates = []
+            nodes_data = []
+            edges_data = []
+            
+            # 노드 좌표 조회
+            for node_id in path_nodes:
+                try:
+                    node = NavigationNode.objects.get(node_id=node_id)
+                    path_coordinates.append({
+                        "x": node.x_coord,
+                        "y": node.y_coord
+                    })
+                    nodes_data.append({
+                        "node_id": str(node.node_id),
+                        "name": node.name,
+                        "x": node.x_coord,
+                        "y": node.y_coord
+                    })
+                except NavigationNode.DoesNotExist:
+                    continue
+            
+            # 엣지 정보 조회
+            for edge_id in path_edges:
+                try:
+                    edge = NavigationEdge.objects.get(edge_id=edge_id)
+                    edges_data.append({
+                        "edge_id": str(edge.edge_id),
+                        "distance": edge.distance,
+                        "walk_time": edge.walk_time
+                    })
+                except NavigationEdge.DoesNotExist:
+                    continue
+            
+            return APIResponse.success(
+                message="경로 계산이 완료되었습니다.",
+                data={
+                    "coordinates": path_coordinates,  # navigation.js에서 사용하는 키명
+                    "distance": total_distance,
+                    "estimatedTime": int(estimated_time),
+                    "steps": [],  # 간단한 경로 단계 (향후 확장)
+                    "nodes": nodes_data,
+                    "edges": edges_data
+                }
+            )
+                
+        except Exception as calculation_error:
+            logger.error(f"경로 계산 오류: {str(calculation_error)}")
+            return APIResponse.error(
+                message="경로 계산 중 오류가 발생했습니다.",
+                code="CALCULATION_ERROR",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+    except Exception as e:
+        logger.error(f"Calculate route API error: {str(e)}")
+        return APIResponse.error(
+            message="경로 계산 요청 처리 중 오류가 발생했습니다.",
+            code="API_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def calculate_route_by_tags_api(request):
+    """
+    NFC 태그 기반 경로 계산 API (navigation.js와 호환)
+    POST /api/v1/navigation/route-by-tags/
+    
+    Request body:
+    {
+        "start_tag_code": "NFC001",
+        "end_tag_code": "NFC002",
+        "avoid_stairs": false,
+        "is_accessible": false
+    }
+    """
+    try:
+        # 요청 데이터 검증
+        start_tag_code = request.data.get('start_tag_code')
+        end_tag_code = request.data.get('end_tag_code')
+        avoid_stairs = request.data.get('avoid_stairs', False)
+        is_accessible = request.data.get('is_accessible', False)
+        
+        if not start_tag_code or not end_tag_code:
+            return APIResponse.error(
+                message="start_tag_code and end_tag_code are required",
+                code="MISSING_PARAMETERS",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        logger.info(f"🏷️ 태그 기반 경로 계산: {start_tag_code} → {end_tag_code}")
+        
+        # NFC 태그 조회
+        try:
+            start_tag = NFCTag.objects.get(code=start_tag_code, is_active=True)
+            end_tag = NFCTag.objects.get(code=end_tag_code, is_active=True)
+        except NFCTag.DoesNotExist as e:
+            return APIResponse.error(
+                message=f"NFC 태그를 찾을 수 없습니다: {str(e)}",
+                code="TAG_NOT_FOUND",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 태그와 연결된 노드 찾기
+        try:
+            start_node = NavigationNode.objects.get(nfc_tag=start_tag)
+            end_node = NavigationNode.objects.get(nfc_tag=end_tag)
+        except NavigationNode.DoesNotExist as e:
+            return APIResponse.error(
+                message=f"태그와 연결된 노드를 찾을 수 없습니다: {str(e)}",
+                code="NODE_NOT_LINKED",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # 경로 계산
+        try:
+            # RouteCalculationService에서 경로 계산
+            path_nodes, path_edges, total_distance, estimated_time = RouteCalculationService.find_shortest_path(
+                start_node=start_node,
+                end_node=end_node,
+                avoid_stairs=avoid_stairs,
+                is_accessible=is_accessible
+            )
+            
+            if not path_nodes:
+                return APIResponse.error(
+                    message="경로를 찾을 수 없습니다.",
+                    code="ROUTE_NOT_FOUND",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # 좌표 배열 생성 (태그 기반과 동일한 포맷)
+            path_coordinates = []
+            nodes_data = []
+            edges_data = []
+            
+            # 노드 좌표 조회
+            for node_id in path_nodes:
+                try:
+                    node = NavigationNode.objects.get(node_id=node_id)
+                    path_coordinates.append({
+                        "x": node.x_coord,
+                        "y": node.y_coord
+                    })
+                    nodes_data.append({
+                        "node_id": str(node.node_id),
+                        "name": node.name,
+                        "x": node.x_coord,
+                        "y": node.y_coord
+                    })
+                except NavigationNode.DoesNotExist:
+                    continue
+            
+            # 엣지 정보 조회
+            for edge_id in path_edges:
+                try:
+                    edge = NavigationEdge.objects.get(edge_id=edge_id)
+                    edges_data.append({
+                        "edge_id": str(edge.edge_id),
+                        "distance": edge.distance,
+                        "walk_time": edge.walk_time
+                    })
+                except NavigationEdge.DoesNotExist:
+                    continue
+            
+            return APIResponse.success(
+                message="태그 기반 경로 계산이 완료되었습니다.",
+                data={
+                    "coordinates": path_coordinates,
+                    "distance": total_distance,
+                    "estimatedTime": int(estimated_time),
+                    "steps": [],
+                    "nodes": nodes_data,
+                    "edges": edges_data
+                }
+            )
+                
+        except Exception as calculation_error:
+            logger.error(f"태그 기반 경로 계산 오류: {str(calculation_error)}")
+            return APIResponse.error(
+                message="경로 계산 중 오류가 발생했습니다.",
+                code="CALCULATION_ERROR",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+    except Exception as e:
+        logger.error(f"Calculate route by tags API error: {str(e)}")
+        return APIResponse.error(
+            message="태그 기반 경로 계산 요청 처리 중 오류가 발생했습니다.",
+            code="API_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

@@ -229,7 +229,7 @@ const apiService = {
     },
 
     // 최적화된 경로 계산 (새로운 multi-floor pathfinding)
-    calculateOptimizedRoute: (data) => api.post('/navigation/route-optimized/', data),
+    calculateOptimizedRoute: (data) => api.post('/navigation/path/', data),
     
     // 경로 캐시 초기화 (관리자 전용)
     clearRouteCache: () => api.post('/navigation/clear-cache/')

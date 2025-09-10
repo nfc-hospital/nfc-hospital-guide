@@ -33,8 +33,8 @@ export default defineConfig({
     })
   ],
   server: {
-    port: 5174, // 현재 사용 중인 포트 유지
-    strictPort: false, // 포트가 사용중이면 다른 포트 사용
+    port: 5174, // 고정 포트 5174 사용
+    strictPort: true, // 포트 고정 (다른 포트 사용 안함)
     open: true,
     host: true, // 네트워크 접근 허용
     proxy: {

@@ -16,7 +16,9 @@ urlpatterns = [
     path('scan/', views.nfc_scan, name='nfc-scan'),
     path('scan/navigate/', views.NFCTagScanNavigateView.as_view(), name='nfc-scan-navigate'),  # 실시간 경로 탐색
     path('public-info/', views.nfc_public_scan, name='nfc-public-info'),  # 비로그인용 별도 뷰
+    path('tags/', views.get_nfc_tags_list, name='nfc-tags-list'),  # MockNFC용 태그 목록
     path('tags/<str:tag_id>/', views.get_tag_info, name='tag-info'),  # ViewSet보다 먼저 정의
+    path('tags/<str:tag_id>/location/', views.get_nfc_location, name='nfc-location'),  # NFC 위치 조회
     
     # ViewSet URLs - router.urls는 나중에 처리
     path('', include(router.urls)),

@@ -357,19 +357,29 @@ const useMapStore = create(
             // 새로운 optimized pathfinding API 사용
             const response = await apiService.navigation.calculateOptimizedRoute(requestData);
             
-            const routeData = response?.data || response;
+            const routeData = response?.data?.data || response?.data || response;
             
-            if (routeData && routeData.path_coordinates) {
-              // path_coordinates 배열에서 nodes와 edges 추출 (새로운 API 형식)
-              const nodes = routeData.path_coordinates.map((point, index) => ({
-                id: point.node_id,
-                x: point.coordinates.x,
-                y: point.coordinates.y,
-                name: point.name,
-                floor: point.coordinates.floor,
-                building: point.coordinates.building,
-                map_id: point.coordinates.map_id
+            if (routeData && routeData.coordinates) {
+              // coordinates 배열에서 nodes 정보 추출 (새로운 API 형식)
+              const nodes = routeData.coordinates.map((point, index) => ({
+                id: `node_${index}`,  // 임시 ID
+                x: point.x,
+                y: point.y,
+                name: `Point ${index + 1}`,
+                floor: 1,  // 기본값
+                building: '본관',  // 기본값
+                map_id: 'main_1f'  // 기본값
               }));
+              
+              // nodes 배열에서 추가 정보가 있으면 사용
+              if (routeData.nodes && routeData.nodes.length > 0) {
+                routeData.nodes.forEach((nodeInfo, index) => {
+                  if (nodes[index]) {
+                    nodes[index].id = nodeInfo.node_id;
+                    nodes[index].name = nodeInfo.name;
+                  }
+                });
+              }
               
               // edges 생성 (연속된 노드들을 연결)
               const edges = [];
@@ -388,10 +398,10 @@ const useMapStore = create(
                 activeRoute: {
                   nodes: nodes,
                   edges: edges,
-                  total_distance: routeData.total_distance,
-                  estimated_time: routeData.total_time,
-                  floors_involved: routeData.floors_involved,
-                  has_floor_transitions: routeData.has_floor_transitions
+                  total_distance: routeData.distance || 0,
+                  estimated_time: routeData.estimatedTime || 0,
+                  floors_involved: [1], // 기본값
+                  has_floor_transitions: false
                 },
                 navigationRoute: {
                   nodes: nodes,
@@ -401,6 +411,22 @@ const useMapStore = create(
                 destinationLocation: nextExam,
                 isRouteLoading: false 
               });
+              
+              // 4. LocationStore와 동기화 (경로 정보)
+              try {
+                const { default: useLocationStore } = await import('./locationStore');
+                const locationStore = useLocationStore.getState();
+                
+                locationStore.setRoute(
+                  routeData.coordinates || [],  // coordinates 배열
+                  endNodeId,  // 목적지 노드 ID
+                  nextExam.title || nextExam.room || '목적지'  // 목적지 이름
+                );
+                
+                console.log('🔄 LocationStore와 MapStore 경로 동기화 완료');
+              } catch (syncError) {
+                console.error('LocationStore 동기화 실패:', syncError);
+              }
               
               return;
             }
@@ -572,19 +598,17 @@ const useMapStore = create(
 
       // 좌표 기반으로 가장 가까운 노드 ID 찾기
       findNearestNodeId: (x, y) => {
-        // 병원 내 주요 네비게이션 노드들의 좌표 매핑
-        // 실제로는 백엔드 NavigationNode 테이블에서 가져와야 하지만,
-        // 현재는 MockNFCPanel과 호환되도록 하드코딩
+        // 실제 NavigationNode 데이터 (DB에서 가져온 좌표와 UUID)
         const navigationNodes = [
-          { id: 1, x: 100, y: 400, name: '로비' },           // nfc-lobby-001
-          { id: 2, x: 300, y: 300, name: '접수' },           // nfc-reception-001
-          { id: 3, x: 750, y: 375, name: '수납' },           // nfc-payment-001
-          { id: 4, x: 250, y: 375, name: '검사실 A' },       // nfc-lab-a-001
-          { id: 5, x: 500, y: 375, name: '진료실' },         // nfc-exam-room-001
-          { id: 6, x: 1000, y: 375, name: '약국' },          // nfc-pharmacy-001
-          { id: 7, x: 300, y: 250, name: 'X선실' },          // nfc-xray-001 (2층)
-          { id: 8, x: 400, y: 300, name: '채혈실' },         // nfc-blood-test-001 (2층)
-          { id: 9, x: 540, y: 370, name: '엘리베이터' },     // nfc-elevator (1층/2층)
+          { id: '6f41d9d2-60fd-4748-adb7-2034974de5e7', x: 450, y: 410, name: '간호사실' },
+          { id: '61028404-48ed-4382-b2ff-e86b0043d595', x: 215, y: 290, name: '내과 진료실 1' },
+          { id: '388769ac-681c-4be0-9f08-01804e669615', x: 365, y: 290, name: '내과 진료실 2' },
+          { id: 'c378971a-8c1e-4de6-9d58-b15b93a0a4c6', x: 450, y: 150, name: '상담실 1' },
+          { id: '5ab149dc-4f28-4ff7-92f2-e066eec52db4', x: 200, y: 400, name: '계단' },
+          { id: 'c8df7038-b90e-4a29-a0ba-f0b6a4d5c9e8', x: 350, y: 450, name: '은행' },
+          { id: '650fa82e-595b-4232-b27f-ee184b4fce14', x: 530, y: 320, name: '약국' },
+          { id: 'a8182b6e-5c7c-43f6-8cf9-a71b830f10bf', x: 355, y: 355, name: '엘리베이터' },
+          { id: '497071c2-a868-408c-9595-3cb597b15bae', x: 300, y: 350, name: '안내데스크' }
         ];
 
         // 유클리드 거리 계산으로 가장 가까운 노드 찾기

@@ -28,16 +28,44 @@ const useLocationStore = create(
       
       // 마지막 스캔 시간
       lastScanTime: null,
+      
+      // =====================
+      // 좌표 기반 위치 정보 (NavigationNode용)
+      // =====================
+      
+      // 현재 노드 ID (NavigationNode)
+      currentNodeId: null,
+      
+      // 현재 좌표 (SVG 지도용)
+      currentPosition: { x: 0, y: 0 },
+      
+      // 현재 지도 ID (예: main_1f, main_2f)
+      currentMapId: 'main_1f',
+      
+      // =====================
+      // 경로 안내 관련 상태
+      // =====================
+      
+      // 계산된 경로 좌표 배열
+      routeCoordinates: [],
+      
+      // 경로 안내 활성 여부
+      isRouteActive: false,
+      
+      // 목적지 정보
+      destinationNodeId: null,
+      destinationName: '',
 
       // =====================
       // 액션 (Actions)  
       // =====================
 
       /**
-       * 현재 위치 설정
+       * 현재 위치 설정 (기존 + 좌표 정보 추가)
        * @param {Object} locationData - NFC 태그 위치 정보
+       * @param {Object} coordinateData - 좌표 및 노드 정보 (선택사항)
        */
-      setCurrentLocation: (locationData) => {
+      setCurrentLocation: (locationData, coordinateData = {}) => {
         const timestamp = new Date().toISOString();
         
         set((state) => ({
@@ -47,6 +75,12 @@ const useLocationStore = create(
           },
           lastScanTime: timestamp,
           locationError: null,
+          
+          // 좌표 기반 위치 정보 업데이트
+          currentNodeId: coordinateData.node_id || null,
+          currentPosition: coordinateData.position || { x: 0, y: 0 },
+          currentMapId: coordinateData.map_id || state.currentMapId,
+          
           // 히스토리에 추가 (최대 5개 유지)
           locationHistory: [
             {
@@ -57,7 +91,42 @@ const useLocationStore = create(
           ]
         }));
         
-        console.log('📍 위치 업데이트:', locationData?.room || locationData?.building);
+        console.log('📍 위치 업데이트:', locationData?.room || locationData?.building, 
+                   coordinateData.position ? `(${coordinateData.position.x}, ${coordinateData.position.y})` : '');
+      },
+
+      /**
+       * 좌표 기반 위치만 업데이트 (NavigationNode 기반)
+       * @param {string} nodeId - NavigationNode ID
+       * @param {Object} position - {x, y} 좌표
+       * @param {string} mapId - 지도 ID
+       * @param {Object} additionalInfo - 추가 위치 정보
+       */
+      setCoordinateLocation: (nodeId, position, mapId, additionalInfo = {}) => {
+        const timestamp = new Date().toISOString();
+        
+        set({
+          currentNodeId: nodeId,
+          currentPosition: position,
+          currentMapId: mapId,
+          lastScanTime: timestamp,
+          locationError: null,
+          
+          // 기존 currentLocation도 업데이트 (호환성 유지)
+          currentLocation: {
+            node_id: nodeId,
+            position: position,
+            map_id: mapId,
+            location_name: additionalInfo.location_name || '',
+            building: additionalInfo.building || '',
+            floor: additionalInfo.floor || 1,
+            room: additionalInfo.room || '',
+            timestamp,
+          }
+        });
+        
+        console.log('📍 좌표 위치 업데이트:', 
+                   `${additionalInfo.location_name || 'Unknown'} (${position.x}, ${position.y})`);
       },
 
       /**
@@ -125,6 +194,50 @@ const useLocationStore = create(
       },
 
       /**
+       * 경로 설정
+       * @param {Array} coordinates - 경로 좌표 배열 [{x, y}, ...]
+       * @param {string} destinationNodeId - 목적지 노드 ID
+       * @param {string} destinationName - 목적지 이름
+       */
+      setRoute: (coordinates, destinationNodeId, destinationName) => {
+        set({
+          routeCoordinates: coordinates || [],
+          isRouteActive: true,
+          destinationNodeId,
+          destinationName
+        });
+        
+        console.log('🗺️ 경로 설정됨:', {
+          coordinateCount: coordinates?.length || 0,
+          destinationName,
+          destinationNodeId
+        });
+      },
+
+      /**
+       * 경로 초기화
+       */
+      clearRoute: () => {
+        set({
+          routeCoordinates: [],
+          isRouteActive: false,
+          destinationNodeId: null,
+          destinationName: ''
+        });
+        
+        console.log('🚫 경로 정보 초기화됨');
+      },
+
+      /**
+       * 지도 변경 (층간 이동 등)
+       * @param {string} mapId - 새로운 지도 ID
+       */
+      changeMap: (mapId) => {
+        set({ currentMapId: mapId });
+        console.log('🏢 지도 변경됨:', mapId);
+      },
+
+      /**
        * 모든 위치 정보 초기화
        */
       clearLocationData: () => {
@@ -134,9 +247,20 @@ const useLocationStore = create(
           locationError: null,
           locationHistory: [],
           lastScanTime: null,
+          
+          // 좌표 기반 위치 정보 초기화
+          currentNodeId: null,
+          currentPosition: { x: 0, y: 0 },
+          currentMapId: 'main_1f',
+          
+          // 경로 정보 초기화
+          routeCoordinates: [],
+          isRouteActive: false,
+          destinationNodeId: null,
+          destinationName: ''
         });
         
-        console.log('📍 위치 정보 초기화 완료');
+        console.log('📍 모든 위치 정보 초기화 완료');
       },
 
       /**
@@ -171,6 +295,68 @@ const useLocationStore = create(
         const cutoffTime = new Date(Date.now() - minutesAgo * 60 * 1000);
         return new Date(lastScan) > cutoffTime;
       },
+
+      // =====================
+      // 좌표 기반 Getter 함수들
+      // =====================
+
+      /**
+       * 현재 좌표 위치 정보 반환
+       * @returns {Object} 좌표 기반 위치 정보
+       */
+      getCurrentCoordinateLocation: () => {
+        const state = get();
+        return {
+          nodeId: state.currentNodeId,
+          position: state.currentPosition,
+          mapId: state.currentMapId,
+          isSet: !!state.currentNodeId
+        };
+      },
+
+      /**
+       * 경로 정보 반환
+       * @returns {Object} 경로 관련 정보
+       */
+      getRouteInfo: () => {
+        const state = get();
+        return {
+          isActive: state.isRouteActive,
+          coordinates: state.routeCoordinates,
+          destinationNodeId: state.destinationNodeId,
+          destinationName: state.destinationName,
+          coordinateCount: state.routeCoordinates.length
+        };
+      },
+
+      /**
+       * 현재 상태 요약 반환
+       * @returns {string} 현재 위치 요약
+       */
+      getLocationSummary: () => {
+        const state = get();
+        
+        if (state.currentLocation) {
+          return state.currentLocation.location_name || 
+                 `${state.currentLocation.building} ${state.currentLocation.room}` ||
+                 '위치 설정됨';
+        }
+        
+        if (state.currentNodeId) {
+          return `좌표: (${state.currentPosition.x}, ${state.currentPosition.y})`;
+        }
+        
+        return '위치가 설정되지 않음';
+      },
+
+      /**
+       * 좌표가 설정되어 있는지 확인
+       * @returns {boolean}
+       */
+      hasCoordinateLocation: () => {
+        const state = get();
+        return !!(state.currentNodeId && state.currentPosition.x !== 0 && state.currentPosition.y !== 0);
+      },
     }),
     {
       name: 'location-store', // localStorage 키
@@ -179,6 +365,13 @@ const useLocationStore = create(
         currentLocation: state.currentLocation,
         locationHistory: state.locationHistory,
         lastScanTime: state.lastScanTime,
+        
+        // 좌표 기반 위치 정보도 영구 저장
+        currentNodeId: state.currentNodeId,
+        currentPosition: state.currentPosition,
+        currentMapId: state.currentMapId,
+        
+        // 경로 정보는 세션에서만 유지 (영구 저장하지 않음)
       }),
     }
   )

@@ -128,12 +128,21 @@ def find_shortest_path(
             # 단계별 안내 생성
             steps = generate_navigation_steps(path_nodes, path_edges)
             
+            # 좌표 배열 생성 (프론트엔드용)
+            path_coordinates = []
+            for node in path_nodes:
+                path_coordinates.append({
+                    "x": node.x_coord,
+                    "y": node.y_coord
+                })
+            
             return {
                 "nodes": path_nodes,
                 "edges": path_edges,
                 "distance": total_distance,
                 "estimated_time": estimated_time,
-                "steps": steps
+                "steps": steps,
+                "path_coordinates": path_coordinates  # 추가된 좌표 배열
             }
         
         # 현재 노드에 연결된 이웃 탐색
