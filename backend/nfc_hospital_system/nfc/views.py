@@ -212,7 +212,7 @@ def nfc_scan(request):
         )
 
 @api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([permissions.AllowAny])
 def get_tag_info(request, tag_id):
     """
     태그 위치정보 조회 API - GET /nfc/tags/{tagId}

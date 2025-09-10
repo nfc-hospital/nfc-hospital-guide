@@ -354,8 +354,28 @@ const useMapStore = create(
               end_value: endNodeId
             });
             
-            // 새로운 optimized pathfinding API 사용
-            const response = await apiService.navigation.calculateOptimizedRoute(requestData);
+            // 요청 데이터 유효성 검증
+            if (!startNodeId || !endNodeId) {
+              console.error('❌ 유효하지 않은 노드 ID:', { startNodeId, endNodeId });
+              throw new Error('유효하지 않은 노드 ID');
+            }
+            
+            console.log('🔍 백엔드 테스트용 - 알려진 노드 ID로 직접 테스트:');
+            console.log('계단(5ab149dc-4f28-4ff7-92f2-e066eec52db4) → 안내데스크(497071c2-a868-408c-9595-3cb597b15bae)');
+            
+            console.log('🚀 API 호출 시도: navigation.calculateRoute (MockNFC와 동일한 방식)');
+            
+            // 🆘 TEMPORARY: 404 오류 디버깅을 위해 알려진 유효한 노드 ID로 강제 테스트
+            const KNOWN_START_NODE = '5ab149dc-4f28-4ff7-92f2-e066eec52db4'; // 계단
+            const KNOWN_END_NODE = '497071c2-a868-408c-9595-3cb597b15bae'; // 안내데스크
+            
+            console.warn('🆘 DEBUGGING: 실제 노드 ID 대신 알려진 유효한 노드 ID로 강제 테스트');
+            console.log('원래 요청:', { startNodeId, endNodeId });
+            console.log('테스트 요청:', { KNOWN_START_NODE, KNOWN_END_NODE });
+            
+            // MockNFC와 동일한 방식으로 navigation.js API 직접 사용
+            const { calculateRoute } = await import('../api/navigation');
+            const response = await calculateRoute(KNOWN_START_NODE, KNOWN_END_NODE);
             
             const routeData = response?.data?.data || response?.data || response;
             
@@ -431,63 +451,13 @@ const useMapStore = create(
               return;
             }
           } catch (apiError) {
-            console.log('hospital_navigation API 실패, FacilityRoute로 폴백:', apiError);
-          }
-          
-          // 3. API 실패시 FacilityRoute (map-editor) 폴백
-          const { getFacilityRoute, getAllFacilityRoutes, getDemoRoute } = await import('../api/facilityRoutes');
-          const startPoint = currentPos.room || currentPos.description || '현재 위치';
-          const endPoint = nextExam.title || nextExam.room || '목적지';
-          const routeName = `${startPoint}_${endPoint}`;
-          
-          let routeData = null;
-          
-          // 3-1. 먼저 정확한 경로 찾기
-          try {
-            console.log(`🔍 1단계: 정확한 경로 검색 - 지금은 주석 처리 중 (${routeName})`);
-            const facilityRoute = await getFacilityRoute(routeName);
-            routeData = facilityRoute;
-            console.log('✅ 1단계 성공: 정확한 경로 찾음', routeData);
-          } catch (error) {
-            console.log(`⚠️ 1단계 실패: ${error.message}`);
+            console.log('❌ hospital_navigation API 실패, 간단한 직선 경로로 폴백:', apiError);
             
-            // 3-2. 데모 경로 확인
-            console.log(`🔍 2단계: 데모 경로 검색`);
-            const demoRoute = getDemoRoute(endPoint) || getDemoRoute(routeName);
-            if (demoRoute && demoRoute.nodes && demoRoute.nodes.length > 0) {
-              routeData = demoRoute;
-              console.log('✅ 2단계 성공: 데모 경로 사용', demoRoute);
-            } else {
-              console.log('⚠️ 2단계 실패: 데모 경로 없음');
-              
-              // 3-3. 모든 경로 목록에서 관련 경로 찾기
-              try {
-                console.log('🔍 3단계: 전체 경로에서 관련 경로 검색');
-                const allRoutes = await getAllFacilityRoutes();
-                
-                if (Array.isArray(allRoutes) && allRoutes.length > 0) {
-                  // 목적지 이름이 포함된 경로 찾기
-                  const relatedRoute = allRoutes.find(route => {
-                    if (!route || typeof route !== 'object') return false;
-                    const name = String(route.facility_name || route.name || '');
-                    return name.includes(endPoint) || name.includes(nextExam.title);
-                  });
-                  
-                  if (relatedRoute && relatedRoute.nodes && relatedRoute.nodes.length > 0) {
-                    routeData = relatedRoute;
-                    console.log('✅ 3단계 성공: 관련 경로 찾음', relatedRoute.facility_name);
-                  }
-                }
-              } catch (err) {
-                console.log('⚠️ 3단계 실패:', err.message);
-              }
-            }
-          }
-          
-          // 4. 그래도 유효한 경로 데이터가 없으면 직선 경로 생성
-          if (!routeData || !routeData.nodes || routeData.nodes.length === 0) {
-            console.log('🔍 4단계: 기본 직선 경로 생성');
-            routeData = {
+            // API 실패시 간단한 직선 경로 생성 (폴백 로직 간소화)
+            const startPoint = currentPos.room || currentPos.description || '현재 위치';
+            const endPoint = nextExam.title || nextExam.room || '목적지';
+            
+            const routeData = {
               nodes: [
                 {
                   id: 'start',
@@ -504,22 +474,32 @@ const useMapStore = create(
               ],
               edges: [['start', 'end']]
             };
-            console.log('✅ 4단계 성공: 직선 경로 생성', routeData);
+            
+            console.log('✅ 폴백 성공: 직선 경로 생성', routeData);
+            
+            // 경로 데이터 저장
+            if (routeData && routeData.nodes && routeData.nodes.length > 0) {
+              set({
+                routeNodes: routeData.nodes,
+                routeEdges: routeData.edges || [],
+                navigationRoute: routeData,
+                isRouteLoading: false
+              });
+              console.log('✅ 폴백 경로 설정 완료');
+            } else {
+              set({
+                routeNodes: [],
+                routeEdges: [],
+                navigationRoute: null,
+                isRouteLoading: false
+              });
+              console.log('⚠️ 폴백 경로 생성 실패');
+            }
+            return;
           }
           
-          // 5. 최종 경로 데이터 상태 업데이트
-          set({ 
-            activeRoute: routeData,
-            navigationRoute: {
-              nodes: routeData.nodes || [],
-              edges: routeData.edges || [],
-              facilityName: routeData.facility_name || routeName
-            },
-            destinationLocation: nextExam,
-            isRouteLoading: false 
-          });
-          
-          console.log('✅ 최종 경로 설정 완료');
+          // 성공적으로 API에서 처리된 경우는 이미 위에서 처리됨
+          console.log('✅ API 경로 처리 완료');
           
         } catch (error) {
           console.error('❌ 경로 업데이트 실패:', error);
@@ -598,17 +578,43 @@ const useMapStore = create(
 
       // 좌표 기반으로 가장 가까운 노드 ID 찾기
       findNearestNodeId: (x, y) => {
-        // 실제 NavigationNode 데이터 (DB에서 가져온 좌표와 UUID)
+        // 실제 백엔드 NavigationNode 데이터 (2024-09-10 업데이트)
         const navigationNodes = [
-          { id: '6f41d9d2-60fd-4748-adb7-2034974de5e7', x: 450, y: 410, name: '간호사실' },
-          { id: '61028404-48ed-4382-b2ff-e86b0043d595', x: 215, y: 290, name: '내과 진료실 1' },
-          { id: '388769ac-681c-4be0-9f08-01804e669615', x: 365, y: 290, name: '내과 진료실 2' },
-          { id: 'c378971a-8c1e-4de6-9d58-b15b93a0a4c6', x: 450, y: 150, name: '상담실 1' },
-          { id: '5ab149dc-4f28-4ff7-92f2-e066eec52db4', x: 200, y: 400, name: '계단' },
-          { id: 'c8df7038-b90e-4a29-a0ba-f0b6a4d5c9e8', x: 350, y: 450, name: '은행' },
+          { id: '5ab149dc-4f28-4ff7-92f2-e066eec52db4', x: 780, y: 380, name: '계단' },
+          { id: '497071c2-a868-408c-9595-3cb597b15bae', x: 680, y: 515, name: '안내데스크' },
+          { id: 'f3921a92-7157-4f73-8483-f9b970ecf089', x: 800, y: 220, name: '암센터 연결통로' },
           { id: '650fa82e-595b-4232-b27f-ee184b4fce14', x: 530, y: 320, name: '약국' },
           { id: 'a8182b6e-5c7c-43f6-8cf9-a71b830f10bf', x: 355, y: 355, name: '엘리베이터' },
-          { id: '497071c2-a868-408c-9595-3cb597b15bae', x: 300, y: 350, name: '안내데스크' }
+          { id: '260fa931-7998-464c-a487-37851f29f8b1', x: 380, y: 520, name: '원무과' },
+          { id: 'c8df7038-7685-4970-bb69-935c2d4f187e', x: 680, y: 370, name: '은행' },
+          { id: '558d94af-a1cf-4b89-95c2-8e948d33e230', x: 50, y: 100, name: '응급의료센터' },
+          { id: 'c1e6d4ba-fd28-40fe-93b3-0fdb6d924a40', x: 450, y: 65, name: '정문' },
+          { id: 'aa5d9906-f645-4f71-b1cd-a6f383d8602c', x: 480, y: 160, name: '진단검사의학과' },
+          { id: 'ef3108ff-36a4-4522-8ad3-e983028fb55d', x: 680, y: 160, name: '채혈실' },
+          { id: '5ff1846d-d7d3-4aef-ac0c-0a8228632594', x: 530, y: 420, name: '카페' },
+          { id: 'bb9918e8-17b8-4c1e-9c20-9ab25ab146ff', x: 140, y: 400, name: '헌혈실' },
+          { id: '6e44c258-c1c4-4cd7-ab12-7216e240f7f6', x: 180, y: 495, name: '화장실' },
+          { id: '6f41d9d2-60fd-4748-adb7-2034974de5e7', x: 450, y: 410, name: '간호사실' },
+          { id: '0b600c0e-3659-4c1f-bb47-0a06991b95bd', x: 780, y: 280, name: '계단' },
+          { id: '93a299d9-1718-4d4b-a751-6330200ba494', x: 450, y: 140, name: '내과 대기실' },
+          { id: '61028404-48ed-4382-b2ff-e86b0043d595', x: 215, y: 290, name: '내과 진료실 1' },
+          { id: '388769ac-681c-4be0-9f08-01804e669615', x: 365, y: 290, name: '내과 진료실 2' },
+          { id: '2c012a36-2422-41fb-a040-4fa7b9598dec', x: 515, y: 290, name: '내과 진료실 3' },
+          { id: '62acb987-0d9e-42f5-a0b7-0aa1729d7331', x: 685, y: 430, name: '상담실' },
+          { id: 'e856d440-b156-4b51-ab19-20d180aad4c1', x: 450, y: 520, name: '엘리베이터' },
+          { id: '7d27e28f-429d-4c43-b263-9431905e8b92', x: 215, y: 430, name: '처치실' },
+          { id: 'f611a5bc-2da4-4cbc-bb6a-33c965ffd402', x: 80, y: 280, name: '화장실' },
+          { id: '5ac2fe24-5610-428e-84bc-3411333cd10f', x: 740, y: 270, name: '방사선치료실' },
+          { id: 'aebfff74-5872-46c0-b1e3-27408552c4c4', x: 50, y: 140, name: '본관 연결통로' },
+          { id: 'c378971a-7f84-49c7-8731-69b0d7823690', x: 150, y: 250, name: '상담실 1' },
+          { id: 'b13103b6-a77a-47f7-97f4-d7f7dd0fdf8f', x: 150, y: 390, name: '상담실 2' },
+          { id: '6c784391-270c-4e92-a2dc-20f718741064', x: 450, y: 300, name: '암센터 로비' },
+          { id: '824f4a58-2014-4998-ba28-fc2a64718c7d', x: 150, y: 160, name: '암센터 입구' },
+          { id: '6226d2bd-5ebd-4621-aed6-c0e81b289d91', x: 580, y: 500, name: '엘리베이터' },
+          { id: '80132509-1f9a-43bd-b937-57a8c81f7229', x: 450, y: 130, name: '치료 대기실' },
+          { id: '094a9afb-c602-4d89-9c63-8bcbfee176ff', x: 740, y: 130, name: '항암치료실' },
+          { id: '88167a31-16ea-4d28-a7bc-c76282a2d7c7', x: 750, y: 465, name: '화장실' },
+          { id: 'a107c6b6-a973-4921-b1dc-24195871941f', x: 390, y: 500, name: '휴게실' }
         ];
 
         // 유클리드 거리 계산으로 가장 가까운 노드 찾기

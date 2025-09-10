@@ -59,30 +59,52 @@ export default function MockNFCPanel() {
   const currentNodeId = useLocationStore((state) => state.currentNodeId);
   const currentPosition = useLocationStore((state) => state.currentPosition);
   const currentMapId = useLocationStore((state) => state.currentMapId);
+  const lastScanTime = useLocationStore((state) => state.lastScanTime);
   const setCoordinateLocation = useLocationStore((state) => state.setCoordinateLocation);
   const setCurrentLocationStore = useLocationStore((state) => state.setCurrentLocation);
   
-  // 계산된 값들을 useMemo로 메모이제이션
+  // 계산된 값들을 useMemo로 메모이제이션 - lastScanTime 추가하여 변경 감지 개선
   const currentCoordinateLocation = useMemo(() => ({
     nodeId: currentNodeId,
     position: currentPosition,
     mapId: currentMapId,
-    isSet: !!currentNodeId
-  }), [currentNodeId, currentPosition, currentMapId]);
+    isSet: !!currentNodeId,
+    lastUpdate: lastScanTime
+  }), [currentNodeId, currentPosition, currentMapId, lastScanTime]);
   
+  // 위치 표시 로직 개선 - 더 상세한 정보 표시
   const locationSummary = useMemo(() => {
+    console.log('🔍 MockNFC locationSummary 계산:', {
+      currentLocation,
+      currentNodeId,
+      currentPosition,
+      lastScanTime
+    });
+    
     if (currentLocation) {
-      return currentLocation.location_name || 
-             `${currentLocation.building} ${currentLocation.room}` ||
-             '위치 설정됨';
+      // 더 구체적인 위치 정보 조합
+      const locationName = currentLocation.location_name;
+      const building = currentLocation.building;
+      const room = currentLocation.room;
+      const floor = currentLocation.floor;
+      
+      if (locationName) {
+        return `${locationName} (${building} ${floor}F)`;
+      } else if (building && room) {
+        return `${building} ${floor}F ${room}`;
+      } else if (building) {
+        return `${building} ${floor}F`;
+      } else {
+        return '위치 설정됨';
+      }
     }
     
     if (currentNodeId) {
-      return `좌표: (${currentPosition.x}, ${currentPosition.y})`;
+      return `좌표 위치: (${currentPosition.x}, ${currentPosition.y})`;
     }
     
     return '위치가 설정되지 않음';
-  }, [currentLocation, currentNodeId, currentPosition]);
+  }, [currentLocation, currentNodeId, currentPosition, lastScanTime]);
 
   // NFC 태그 목록 로드
   useEffect(() => {
@@ -130,8 +152,10 @@ export default function MockNFCPanel() {
       
       if (locationData) {
         console.log('📍 위치 정보 조회됨:', locationData);
+        console.log('📍 이전 currentLocation 상태:', currentLocation);
         
         // 2. LocationStore에 좌표 기반 위치 설정
+        console.log('📍 setCoordinateLocation 호출 전');
         setCoordinateLocation(
           locationData.node_id,
           locationData.position,
@@ -143,6 +167,17 @@ export default function MockNFCPanel() {
             room: locationData.room
           }
         );
+        console.log('📍 setCoordinateLocation 호출 후');
+        
+        // 디버깅을 위해 잠시 대기 후 상태 확인
+        setTimeout(() => {
+          console.log('📍 업데이트 후 LocationStore 상태:', {
+            currentNodeId: useLocationStore.getState().currentNodeId,
+            currentPosition: useLocationStore.getState().currentPosition,
+            currentLocation: useLocationStore.getState().currentLocation,
+            lastScanTime: useLocationStore.getState().lastScanTime
+          });
+        }, 100);
         
         // 3. 기존 MapStore도 업데이트 (호환성 유지)
         const mapLocationInfo = {
@@ -221,10 +256,20 @@ export default function MockNFCPanel() {
             duration: 2000
           });
           
-          // journeyStore 업데이트
-          await fetchJourneyData(tag.code);
+          // journeyStore 업데이트 (비로그인 사용자도 지원)
+          const journeyResult = await fetchJourneyData(tag.code);
           
-          // 응답 데이터 처리
+          // 비로그인 사용자의 경우 간단한 성공 처리
+          if (journeyResult?.isGuest) {
+            console.log('👤 비로그인 사용자 MockNFC 스캔 완료');
+            toast.success(`${tag.description} 위치로 설정됨`, {
+              icon: '📍',
+              duration: 2000
+            });
+            return; // 추가 네비게이션 없이 종료
+          }
+          
+          // 응답 데이터 처리 (인증된 사용자만)
           const responseData = result.data;
           
           if (responseData.exam_info?.exam_id) {
@@ -298,7 +343,10 @@ export default function MockNFCPanel() {
           
           {/* 현재 위치 표시 (LocationStore 기반) */}
           {(currentCoordinateLocation.isSet || currentLocation) && (
-            <div className="mb-3 p-3 bg-green-50 border-2 border-green-200 rounded-xl">
+            <div 
+              key={`location-${lastScanTime}`}
+              className="mb-3 p-3 bg-green-50 border-2 border-green-200 rounded-xl"
+            >
               <div className="text-xs font-medium text-green-600 mb-1">📍 현재 위치</div>
               <div className="text-sm font-bold text-green-800">
                 {locationSummary}
@@ -307,6 +355,9 @@ export default function MockNFCPanel() {
                 <div className="text-xs text-green-600">
                   좌표: ({currentCoordinateLocation.position.x}, {currentCoordinateLocation.position.y}) • 
                   지도: {currentCoordinateLocation.mapId}
+                  {lastScanTime && (
+                    <span className="ml-2">• 업데이트: {new Date(lastScanTime).toLocaleTimeString()}</span>
+                  )}
                 </div>
               )}
             </div>

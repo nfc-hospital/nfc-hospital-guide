@@ -286,32 +286,51 @@ const useJourneyStore = create(
           }
           
           try {
-            // 1. 병렬로 사용자 프로필과 NFC 태그 정보 가져오기
-            console.log('🔄 데이터 로딩 중...', tagId ? `태그 ID: ${tagId}` : '태그 없음');
+            // 1. 인증 상태 확인 (토큰 존재 여부로 판단)
+            const isAuthenticated = !!localStorage.getItem('access_token');
+            console.log('🔄 데이터 로딩 중...', tagId ? `태그 ID: ${tagId}` : '태그 없음', `인증 상태: ${isAuthenticated}`);
             
-            const apiCalls = [authAPI.getProfile()];
+            const apiCalls = [];
+            let profileResponse = null;
             
-            // tagId가 있으면 태그 정보도 병렬로 조회
+            // 인증된 사용자만 프로필 조회
+            if (isAuthenticated) {
+              apiCalls.push(authAPI.getProfile());
+            }
+            
+            // tagId가 있으면 태그 정보 조회 (인증 여부 무관)
             if (tagId) {
               set({ isTagLoading: true, tagError: null });
-              apiCalls.push(
-                apiService.nfc.getTagInfo(tagId)
-                  .catch(error => {
-                    console.error('⚠️ NFC 태그 정보 조회 실패:', error);
-                    set({ tagError: error.message });
-                    return null;
-                  })
-              );
+              const tagApiCall = apiService.nfc.getTagInfo(tagId)
+                .catch(error => {
+                  console.error('⚠️ NFC 태그 정보 조회 실패:', error);
+                  set({ tagError: error.message });
+                  return null;
+                });
+              
+              if (isAuthenticated) {
+                apiCalls.push(tagApiCall);
+              } else {
+                // 비로그인 사용자는 태그 정보만 조회
+                apiCalls.push(tagApiCall);
+              }
             }
             
             const responses = await Promise.all(apiCalls);
-            const profileResponse = responses[0];
-            console.log('📦 프로필 API 응답:', profileResponse);
             
-            // NFC 태그 정보가 있다면 상태에 저장하고 현재 위치 업데이트
-            if (tagId && responses.length > 1 && responses[1]) {
+            // 인증된 사용자의 경우 첫 번째 응답이 프로필
+            if (isAuthenticated && responses.length > 0) {
+              profileResponse = responses[0];
+              console.log('📦 프로필 API 응답:', profileResponse);
+            } else {
+              console.log('👤 비로그인 사용자 - 프로필 조회 건너뛰기');
+            }
+            
+            // NFC 태그 정보 처리 (인증 여부에 따라 응답 위치 다름)
+            const tagResponseIndex = isAuthenticated ? 1 : 0;
+            if (tagId && responses.length > tagResponseIndex && responses[tagResponseIndex]) {
               // API 응답 구조 확인
-              const tagResponse = responses[1];
+              const tagResponse = responses[tagResponseIndex];
               console.log('📡 태그 정보 API 응답:', tagResponse);
               
               // data 또는 직접 응답 처리
@@ -326,6 +345,17 @@ const useJourneyStore = create(
               console.log('✅ NFC 태그 정보 업데이트 완료:', tagInfo);
             } else if (tagId) {
               set({ isTagLoading: false });
+            }
+            
+            // 인증된 사용자만 프로필 데이터 처리
+            if (!isAuthenticated) {
+              console.log('👤 비로그인 사용자 - 기본 상태로 설정');
+              set({ 
+                user: null,
+                patientState: 'UNREGISTERED',
+                isLoading: false 
+              });
+              return { success: true, isGuest: true };
             }
             
             // API 응답 구조에 맞게 user 데이터 추출 - 실제 사용자 데이터는 data.user에 있음

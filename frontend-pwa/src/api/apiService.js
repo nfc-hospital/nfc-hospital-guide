@@ -164,8 +164,9 @@ const apiService = {
 
   // 네비게이션 API (hospital_navigation 앱 연동)
   navigation: {
-    // 기존 API
-    calculateRoute: (data) => api.post('/navigation/route', data),
+    // 기존 API (경로 수정됨)
+    calculateRoute: (data) => api.post('/navigation/path/', data),
+    calculateOptimizedRoute: (data) => api.post('/navigation/path/', data), // PublicHome용 추가
     getAccessibleRoute: (data) => api.post('/navigation/accessible-route', data),
     refreshRoute: (data) => api.post('/navigation/route-refresh', data),
     getVoiceGuide: (routeId) => api.get(`/navigation/voice-guide/${routeId}`),
