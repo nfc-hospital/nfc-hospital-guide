@@ -155,7 +155,18 @@ export default function MockNFCPanel() {
         console.log('📍 이전 currentLocation 상태:', currentLocation);
         
         // 2. LocationStore에 좌표 기반 위치 설정
-        console.log('📍 setCoordinateLocation 호출 전');
+        console.log('📍 setCoordinateLocation 호출 전 - 전달할 데이터:', {
+          nodeId: locationData.node_id,
+          position: locationData.position, 
+          mapId: locationData.map_id,
+          additionalInfo: {
+            location_name: locationData.location_name,
+            building: locationData.building,
+            floor: locationData.floor,
+            room: locationData.room
+          }
+        });
+        
         setCoordinateLocation(
           locationData.node_id,
           locationData.position,
@@ -169,14 +180,33 @@ export default function MockNFCPanel() {
         );
         console.log('📍 setCoordinateLocation 호출 후');
         
-        // 디버깅을 위해 잠시 대기 후 상태 확인
+        // ✅ 상태 업데이트 검증 및 강제 리렌더링
         setTimeout(() => {
+          const updatedState = useLocationStore.getState();
           console.log('📍 업데이트 후 LocationStore 상태:', {
-            currentNodeId: useLocationStore.getState().currentNodeId,
-            currentPosition: useLocationStore.getState().currentPosition,
-            currentLocation: useLocationStore.getState().currentLocation,
-            lastScanTime: useLocationStore.getState().lastScanTime
+            currentNodeId: updatedState.currentNodeId,
+            currentPosition: updatedState.currentPosition,
+            currentLocation: updatedState.currentLocation,
+            lastScanTime: updatedState.lastScanTime
           });
+          
+          // currentNodeId가 제대로 설정되지 않았으면 재시도
+          if (!updatedState.currentNodeId && locationData.node_id) {
+            console.warn('⚠️ currentNodeId 설정 실패, 재시도 중...');
+            setCoordinateLocation(
+              locationData.node_id,
+              locationData.position,
+              locationData.map_id,
+              {
+                location_name: locationData.location_name,
+                building: locationData.building,
+                floor: locationData.floor,
+                room: locationData.room
+              }
+            );
+          } else if (updatedState.currentNodeId) {
+            console.log('✅ currentNodeId 설정 성공:', updatedState.currentNodeId);
+          }
         }, 100);
         
         // 3. 기존 MapStore도 업데이트 (호환성 유지)

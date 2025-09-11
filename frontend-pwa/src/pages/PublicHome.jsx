@@ -44,7 +44,10 @@ export default function PublicHome() {
     navigateToFacility,
     activeRoute,
     navigationRoute,
-    currentMapId
+    currentMapId,
+    routeError,           // ✅ 새로운 경로 오류 상태
+    isRouteLoading,       // ✅ 경로 계산 로딩 상태
+    clearRouteError       // ✅ 오류 초기화 함수
   } = useMapStore();
   
   // facilityManagement.js에서 가져온 실제 부서들 사용
@@ -192,23 +195,36 @@ export default function PublicHome() {
   }, []);
 
   // 시설 선택 핸들러 (원래 로직 복원)
+  // ✅ node_id 사전 검증이 포함된 시설 선택 함수
   const handleFacilitySelect = useCallback(async (facility) => {
-    console.log('Selected facility:', facility);
+    console.log('🏢 시설 선택:', facility);
     setSelectedFacility(facility);
-    setError(''); // 에러 메시지 초기화
+    setError(''); // 기존 에러 메시지 초기화
+    clearRouteError(); // 경로 에러 초기화
     
-    // mapStore의 탐색 모드로 전환하고 경로 계산 (백엔드 API 사용)
+    // ✅ node_id 사전 검증
+    if (!facility.node_id) {
+      console.warn('⚠️ 선택된 시설에 node_id가 없음:', facility);
+      setError(`${facility.name}의 위치 정보가 설정되지 않았습니다. 관리자에게 문의해주세요.`);
+      return;
+    }
+    
+    console.log('✅ node_id 검증 통과:', {
+      facilityName: facility.name,
+      nodeId: facility.node_id
+    });
+    
+    // ✅ 단순한 목적지 정보만 전달 - 복잡한 좌표 변환 로직 제거
     await navigateToFacility({
+      node_id: facility.node_id,
       name: facility.name,
       title: facility.name,
       building: facility.building,
       floor: facility.floor,
       room: facility.room,
-      x_coord: facility.x_coord || 500,
-      y_coord: facility.y_coord || 300,
       description: facility.description
     });
-  }, [navigateToFacility]);
+  }, [navigateToFacility, clearRouteError]);
 
   // 음성 안내 기능 (TTS)
   const handleVoiceGuide = useCallback((facility) => {
@@ -301,6 +317,42 @@ export default function PublicHome() {
         </header>
 
         <main className="max-w-7xl mx-auto px-4 py-4 sm:py-8">
+          {/* ✅ 경로 계산 오류 메시지 UI */}
+          {routeError && (
+            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6 animate-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <span className="text-red-600 text-lg">⚠️</span>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-red-800 font-semibold text-sm">경로 계산 오류</h3>
+                  <p className="text-red-700 text-sm mt-1">{routeError}</p>
+                </div>
+                <button
+                  onClick={clearRouteError}
+                  className="text-red-400 hover:text-red-600 transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ✅ 경로 계산 로딩 상태 UI */}
+          {isRouteLoading && (
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6 animate-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-300 border-t-blue-600"></div>
+                </div>
+                <div>
+                  <p className="text-blue-800 font-semibold text-sm">경로 계산 중...</p>
+                  <p className="text-blue-600 text-xs">잠시만 기다려주세요.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-2xl shadow-xl p-5 sm:p-6 mb-6" style={{backgroundColor: '#1d4ed8'}}>
             <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-1">{selectedFacility.name}</h1>
