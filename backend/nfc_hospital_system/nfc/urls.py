@@ -12,30 +12,30 @@ router.register(r'facility-routes', views.FacilityRouteViewSet, basename='facili
 app_name = 'nfc'
 
 urlpatterns = [
-    # 환자용 API (개별 뷰를 먼저 정의)
-    path('scan/', views.nfc_scan, name='nfc-scan'),
-    path('scan/navigate/', views.NFCTagScanNavigateView.as_view(), name='nfc-scan-navigate'),  # 실시간 경로 탐색
-    path('public-info/', views.nfc_public_scan, name='nfc-public-info'),  # 비로그인용 별도 뷰
-    path('tags/', views.get_nfc_tags_list, name='nfc-tags-list'),  # MockNFC용 태그 목록
-    path('tags/<str:tag_id>/', views.get_tag_info, name='tag-info'),  # ViewSet보다 먼저 정의
-    path('tags/<str:tag_id>/location/', views.get_nfc_location, name='nfc-location'),  # NFC 위치 조회
+    # 환자용 NFC API (API 명세서 v3 기준)
+    path('scan/', views.nfc_scan, name='nfc-scan'),                    # POST /api/v1/nfc/scan/
+    path('public-info/', views.nfc_public_scan, name='nfc-public-info'),  # POST /api/v1/nfc/public-info/
     
-    # ViewSet URLs - router.urls는 나중에 처리
-    path('', include(router.urls)),
+    # MockNFC용 태그 목록 (개발용)
+    path('tags/', views.get_nfc_tags_list, name='nfc-tags-list'),
+    path('tags/<str:tag_id>/', views.get_tag_info, name='tag-info'),
+    path('tags/<str:tag_id>/location/', views.get_nfc_location, name='nfc-location'),
     
-    # 관리자용 API (기존 유지)
-    # path('admin/nfc/tags/list/', views.admin_tag_list, name='admin-tag-list'),
-    path('nfc/today-scans/', views.get_today_scans, name='nfc-today-scans'),
+    # 실시간 경로 탐색 (navigation과 연동)
+    path('scan/navigate/', views.NFCTagScanNavigateView.as_view(), name='nfc-scan-navigate'),
     
-    # 검사-태그 매핑 API (새로 추가되거나 수정된 부분)
-    path('admin/nfc/tag-exam-mapping/', views.nfc_tag_exam_mapping_create, name='nfc_tag_exam_mapping_create'), # POST
-    path('tags/<uuid:tag_id>/exams', views.get_tag_exams_list, name='get_tag_exams_list'), # GET
-    path('tags/mapping/<int:mapping_id>', views.delete_tag_exam_mapping, name='delete_tag_exam_mapping'), # DELETE
+    # 검사-태그 매핑 API
+    path('admin/tag-exam-mapping/', views.nfc_tag_exam_mapping_create, name='nfc-tag-exam-mapping'),  # POST /api/v1/dashboard/nfc/tag-exam-mapping
+    path('tags/<str:tag_id>/exams/', views.get_tag_exams_list, name='get-tag-exams-list'),           # GET
+    path('tags/mapping/<int:mapping_id>/', views.delete_tag_exam_mapping, name='delete-tag-exam-mapping'),  # DELETE
     
-    # 추가된 태그 관리 API
-    path('admin/nfc/tags/bulk/', views.bulk_tag_operation, name='bulk-tag-operation'),
-    path('admin/nfc/tags/statistics/', views.tag_usage_statistics, name='tag-usage-statistics'),
+    # 통계 및 모니터링 API
+    path('admin/tags/bulk/', views.bulk_tag_operation, name='bulk-tag-operation'),
+    path('admin/tags/statistics/', views.tag_usage_statistics, name='tag-usage-statistics'),
     path('admin/tags/status/', views.tag_status_monitoring, name='tag-status-monitoring'),
-    path('admin/nfc/tags/<uuid:tag_id>/history/', views.tag_assignment_history, name='tag-assignment-history'),
+    path('admin/tags/<str:tag_id>/history/', views.tag_assignment_history, name='tag-assignment-history'),
+    path('today-scans/', views.get_today_scans, name='nfc-today-scans'),
     
+    # ViewSet URLs (관리자 API용)
+    path('', include(router.urls)),
 ]

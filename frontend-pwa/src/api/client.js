@@ -14,12 +14,15 @@ const apiClient = axios.create({
 // 요청 인터셉터 - JWT 토큰 및 CSRF 토큰 자동 추가
 apiClient.interceptors.request.use(
   (config) => {
-    // JWT 토큰 추가
+    // JWT 토큰 추가 (공개 API 제외)
+    const publicEndpoints = ['/nfc/public-info', '/navigation/zones', '/navigation/maps'];
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url.includes(endpoint));
+    
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
       console.log('🔑 JWT 토큰 헤더에 추가됨:', config.url);
-    } else {
+    } else if (!isPublicEndpoint) {
       console.log('⚠️ JWT 토큰이 없음:', config.url);
     }
     

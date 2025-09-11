@@ -11,7 +11,7 @@ import { api } from './client';
  */
 export const fetchPublicNFCInfo = async (tagId) => {
   try {
-    const response = await api.post('/nfc/public-info/', { tag_id: tagId });
+    const response = await api.post('nfc/public-info/', { tag_id: tagId });
     const responseData = response.data || response;
     
     return {
@@ -191,7 +191,7 @@ export const scanNFCTag = async (serialNumber, ndefMessage = null) => {
     // 로그인 상태에 따른 엔드포인트 선택
     if (isAuthenticated()) {
       // 로그인 상태: 개인화된 정보 제공
-      const response = await api.post('/nfc/scan/', requestData);
+      const response = await api.post('nfc/scan/', requestData);
       
       // 스캔 로그 기록 (비동기, 실패해도 무시)
       // 백엔드에 실제 구현된 엔드포인트가 없으므로 임시 비활성화
@@ -210,7 +210,7 @@ export const scanNFCTag = async (serialNumber, ndefMessage = null) => {
       };
     } else {
       // 비로그인 상태: 공개 정보만 제공
-      const response = await api.post('/nfc/public-info/', requestData);
+      const response = await api.post('nfc/public-info/', requestData);
       
       // API 응답 구조 표준화
       const responseData = response.data || response;
@@ -249,7 +249,7 @@ export const scanNFCTag = async (serialNumber, ndefMessage = null) => {
 export const getTagInfo = async (tagId) => {
   try {
     // URL 경로 수정: /nfc/tags/{tagId}/ (슬래시 없음)
-    const response = await api.get(`/nfc/tags/${tagId}`);
+    const response = await api.get(`nfc/tags/${tagId}`);
     return response;
   } catch (error) {
     console.error('태그 정보 조회 실패:', error);
@@ -264,7 +264,7 @@ export const getTagInfo = async (tagId) => {
  */
 export const getQRBackup = async (tagId) => {
   try {
-    const response = await api.get(`/nfc/qr-backup/${tagId}`);
+    const response = await api.get(`nfc/qr-backup/${tagId}`);
     return response;
   } catch (error) {
     console.error('QR 백업 생성 실패:', error);
@@ -285,7 +285,7 @@ export const getLocationGuide = async (tagId, destination = null) => {
       params.destination = destination;
     }
     
-    const response = await api.post('/navigation/route', params);
+    const response = await api.post('navigation/route', params);
     return response;
   } catch (error) {
     console.error('위치 안내 조회 실패:', error);
@@ -301,7 +301,7 @@ export const getLocationGuide = async (tagId, destination = null) => {
  */
 export const checkInWithTag = async (tagId, appointmentId) => {
   try {
-    const response = await api.post('/queue/checkin', {
+    const response = await api.post('queue/checkin', {
       tag_id: tagId,
       appointment_id: appointmentId,
       timestamp: new Date().toISOString()

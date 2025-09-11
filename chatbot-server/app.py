@@ -29,11 +29,23 @@ try:
             print(f"Removing environment variable: {key}")
             os.environ.pop(key, None)
     
-    # OpenAI 클라이언트 생성
-    client = OpenAI(
-        api_key=os.getenv('OPENAI_API_KEY')
-    )
-    print("OpenAI client initialized successfully")
+    # 프록시 관련 HTTP 환경 변수도 제거
+    proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']
+    for var in proxy_vars:
+        if var in os.environ:
+            print(f"Removing proxy variable: {var}")
+            del os.environ[var]
+    
+    # OpenAI 클라이언트 생성 (가장 기본 매개변수만 사용)
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        print("WARNING: OPENAI_API_KEY not found in environment variables")
+        client = None
+    else:
+        # OpenAI 클라이언트 버전 문제로 인한 임시 비활성화
+        print("OpenAI client temporarily disabled due to proxy configuration conflict")
+        client = None
+        
 except Exception as e:
     print(f"Failed to initialize OpenAI client: {e}")
     import traceback

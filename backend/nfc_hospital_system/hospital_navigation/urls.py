@@ -35,8 +35,9 @@ urlpatterns = [
     # 환자용 경로 안내 API (main urls.py에서 api/v1/navigation/ prefix 이미 포함)
     path('scan/', views.nfc_scan_navigate, name='nfc-scan-navigate'),
     path('complete/', views.navigation_complete, name='navigation-complete'),
-    path('../hospital/map/<str:floor_id>/', views.get_hospital_map, name='hospital-map'),
-    path('../routes/search/', views.search_routes, name='routes-search'),
+    path('route/', views.calculate_optimized_route_view, name='calculate-route'),  # API 명세서 기준
+    path('accessible-route/', views.calculate_optimized_route_view, name='accessible-route'),
+    path('route-refresh/', views.calculate_route_api, name='route-refresh'),
     
     # 개선된 지도 메타데이터 API
     path('maps/', views.get_maps_metadata, name='maps-metadata'),
@@ -46,16 +47,19 @@ urlpatterns = [
     path('zones/<int:zone_id>/', views.department_zone_detail, name='department-zone-detail'),
     
     # SVG 맵 파일 제공 API
-    path('../maps/<str:map_name>/', views.serve_map_svg, name='serve-map-svg'),
+    path('maps/<str:map_name>/', views.serve_map_svg, name='serve-map-svg'),
     
     # 최적화된 경로 계산 API
     path('route-optimized/', views.calculate_optimized_route_view, name='optimized-route-calculation'),
     path('clear-cache/', views.clear_route_cache_view, name='clear-route-cache'),
     
     # 기본 경로 계산 API (navigation.js와 호환)
-    path('path/', views.calculate_route_api, name='calculate-route'),
+    path('path/', views.calculate_route_api, name='calculate-route-legacy'),
     path('route-by-tags/', views.calculate_route_by_tags_api, name='calculate-route-by-tags'),
     
+    # 혼잡도 반영 경로
+    path('congestion-aware-route/', views.calculate_optimized_route_view, name='congestion-aware-route'),
+    
     # 관리자용 ViewSet (REST framework)
-    path('api/navigation/', include(router.urls)),
+    path('api/', include(router.urls)),
 ]

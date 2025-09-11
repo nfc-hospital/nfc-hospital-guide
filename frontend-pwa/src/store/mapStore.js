@@ -318,14 +318,65 @@ const useMapStore = create(
           }
 
         } catch (error) {
-          // 9️⃣ 실패 처리
+          // 9️⃣ 실패 처리 - 오프라인 모드 폴백 포함
           console.error('❌ 시설 경로 계산 실패:', error);
-          set({
-            routeError: "경로 계산에 실패했습니다. 잠시 후 다시 시도해주세요.",
-            activeRoute: null,
-            navigationRoute: null,
-            isRouteLoading: false
-          });
+          
+          // 네트워크 오류나 404 에러인 경우 오프라인 모드로 폴백
+          if (error.message?.includes('네트워크') || error.message?.includes('404') || !navigator.onLine) {
+            console.log('🔄 오프라인 모드로 폴백 처리 중...');
+            
+            // 오프라인 목적지 설정 (좌표 기반)
+            if (destinationFacility?.coordinates) {
+              set({
+                // 오프라인 경로 정보 설정
+                activeRoute: {
+                  nodes: [{ 
+                    name: '현재 위치',
+                    coordinates: useLocationStore.getState().coordinates || { x: 0, y: 0 }
+                  }, {
+                    name: destinationName,
+                    coordinates: destinationFacility.coordinates
+                  }],
+                  coordinates: [
+                    useLocationStore.getState().coordinates || { x: 0, y: 0 },
+                    destinationFacility.coordinates
+                  ],
+                  total_distance: 0,  // 오프라인에서는 계산 불가
+                  estimated_time: 0,
+                  offline_mode: true
+                },
+                navigationRoute: {
+                  destination: destinationName,
+                  coordinates: destinationFacility.coordinates,
+                  offline_mode: true
+                },
+                routeError: null,  // 오프라인 모드에서는 에러 클리어
+                isRouteLoading: false
+              });
+              
+              console.log('✅ 오프라인 모드로 목적지 설정됨:', destinationName);
+            } else {
+              // 좌표 정보도 없는 경우
+              set({
+                routeError: "오프라인 모드: 경로 계산을 할 수 없지만, 목적지 정보는 설정되었습니다.",
+                activeRoute: null,
+                navigationRoute: {
+                  destination: destinationName,
+                  offline_mode: true,
+                  error: true
+                },
+                isRouteLoading: false
+              });
+            }
+          } else {
+            // 기타 오류의 경우 기존 처리
+            set({
+              routeError: "경로 계산에 실패했습니다. 잠시 후 다시 시도해주세요.",
+              activeRoute: null,
+              navigationRoute: null,
+              isRouteLoading: false
+            });
+          }
         }
       },
 

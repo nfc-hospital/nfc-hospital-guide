@@ -20,10 +20,24 @@ const handleApiError = (error, operation) => {
   
   if (error.response) {
     // 서버 응답이 있는 경우
+    const status = error.response.status;
+    let errorMessage = error.response.data?.message || '서버 오류가 발생했습니다.';
+    
+    // 특정 상태 코드에 대한 사용자 친화적 메시지
+    if (status === 404) {
+      if (operation.includes('경로 계산')) {
+        errorMessage = '경로를 찾을 수 없습니다. 출발지나 목적지를 다시 확인해주세요.';
+      } else {
+        errorMessage = '요청한 리소스를 찾을 수 없습니다.';
+      }
+    } else if (status === 500) {
+      errorMessage = '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
+    }
+    
     return {
       success: false,
-      error: error.response.data?.message || '서버 오류가 발생했습니다.',
-      status: error.response.status,
+      error: errorMessage,
+      status: status,
       data: null
     };
   } else if (error.request) {
@@ -55,7 +69,7 @@ const handleApiError = (error, operation) => {
  */
 export const getNfcTags = async () => {
   try {
-    const response = await api.get('/nfc/tags/');
+    const response = await api.get('nfc/tags/');
     
     if (response.data.success) {
       return {
@@ -87,7 +101,7 @@ export const getNfcLocation = async (tagId) => {
       throw new Error('태그 ID가 필요합니다.');
     }
     
-    const response = await api.get(`/nfc/tags/${tagId}/location/`);
+    const response = await api.get(`nfc/tags/${tagId}/location/`);
     
     if (response.data.success) {
       return {
@@ -133,7 +147,7 @@ export const calculateRoute = async (startNodeId, endNodeId, options = {}) => {
       is_accessible: options.isAccessible || false
     };
     
-    const response = await api.post('/navigation/path/', requestData);
+    const response = await api.post('navigation/path/', requestData);
     
     if (response.data.success) {
       const pathData = response.data.data;
@@ -183,7 +197,7 @@ export const calculateRouteByTags = async (startTagCode, endTagCode, options = {
       is_accessible: options.isAccessible || false
     };
     
-    const response = await api.post('/navigation/route-by-tags/', requestData);
+    const response = await api.post('navigation/route-by-tags/', requestData);
     
     if (response.data.success) {
       const pathData = response.data.data;
@@ -223,7 +237,7 @@ export const calculateRouteByTags = async (startTagCode, endTagCode, options = {
  */
 export const getHospitalMaps = async () => {
   try {
-    const response = await api.get('/navigation/maps/');
+    const response = await api.get('navigation/maps/');
     
     if (response.data.success) {
       return {
@@ -249,7 +263,7 @@ export const getHospitalMaps = async () => {
  */
 export const getDepartmentZones = async () => {
   try {
-    const response = await api.get('/navigation/zones/');
+    const response = await api.get('navigation/zones/');
     
     if (response.data.success) {
       return {
@@ -280,7 +294,7 @@ export const getDepartmentZoneDetail = async (zoneId) => {
       throw new Error('존 ID가 필요합니다.');
     }
     
-    const response = await api.get(`/navigation/zones/${zoneId}/`);
+    const response = await api.get(`navigation/zones/${zoneId}/`);
     
     if (response.data.success) {
       return {

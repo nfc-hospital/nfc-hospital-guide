@@ -987,9 +987,34 @@ def calculate_optimized_route_view(request):
         result = calculate_optimized_route(start_node_uuid, end_node_uuid)
         
         if result['success']:
+            # 프론트엔드 호환성을 위해 데이터 형식 통일
+            route_data = result.get('data', result)
+            
+            # coordinates와 path_coordinates 필드 모두 제공
+            coordinates = route_data.get('path_coordinates', [])
+            if not coordinates:
+                coordinates = route_data.get('coordinates', [])
+            
+            unified_data = {
+                "coordinates": coordinates,  # navigation.js 호환성
+                "path_coordinates": coordinates,  # MapStore 호환성
+                "distance": route_data.get('total_distance', route_data.get('distance', 0)),
+                "estimatedTime": int(route_data.get('total_time', route_data.get('estimatedTime', 0))),
+                "steps": route_data.get('steps', []),
+                "nodes": route_data.get('nodes', []),
+                "edges": route_data.get('edges', []),
+                "total_distance": route_data.get('total_distance', route_data.get('distance', 0)),
+                "estimated_time": int(route_data.get('total_time', route_data.get('estimatedTime', 0))),
+                # 추가 메타데이터
+                "floors_involved": route_data.get('floors_involved', []),
+                "has_floor_transitions": route_data.get('has_floor_transitions', False),
+                "start_floor": route_data.get('start_floor'),
+                "end_floor": route_data.get('end_floor')
+            }
+            
             return APIResponse.success(
                 message="Route calculated successfully",
-                data=result
+                data=unified_data
             )
         else:
             return APIResponse.error(
@@ -1100,9 +1125,9 @@ def calculate_route_api(request):
                 is_accessible=is_accessible
             )
             
-            if not path_nodes:
+            if not path_nodes or len(path_nodes) == 0:
                 return APIResponse.error(
-                    message="경로를 찾을 수 없습니다.",
+                    message="경로를 찾을 수 없습니다. 출발지와 목적지 사이에 연결된 경로가 없습니다.",
                     code="ROUTE_NOT_FOUND",
                     status_code=status.HTTP_404_NOT_FOUND
                 )
@@ -1129,6 +1154,14 @@ def calculate_route_api(request):
                 except NavigationNode.DoesNotExist:
                     continue
             
+            # 좌표 배열 검증
+            if not path_coordinates:
+                return APIResponse.error(
+                    message="유효한 좌표를 생성할 수 없습니다. 노드 정보를 확인해주세요.",
+                    code="INVALID_COORDINATES",
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
             # 엣지 정보 조회
             for edge_id in path_edges:
                 try:
@@ -1144,12 +1177,15 @@ def calculate_route_api(request):
             return APIResponse.success(
                 message="경로 계산이 완료되었습니다.",
                 data={
-                    "coordinates": path_coordinates,  # navigation.js에서 사용하는 키명
+                    "coordinates": path_coordinates,  # navigation.js에서 기대하는 키명
+                    "path_coordinates": path_coordinates,  # MapStore 호환성을 위한 중복 제공
                     "distance": total_distance,
                     "estimatedTime": int(estimated_time),
                     "steps": [],  # 간단한 경로 단계 (향후 확장)
                     "nodes": nodes_data,
-                    "edges": edges_data
+                    "edges": edges_data,
+                    "total_distance": total_distance,  # MapStore 호환성
+                    "estimated_time": int(estimated_time)  # MapStore 호환성
                 }
             )
                 
@@ -1233,9 +1269,9 @@ def calculate_route_by_tags_api(request):
                 is_accessible=is_accessible
             )
             
-            if not path_nodes:
+            if not path_nodes or len(path_nodes) == 0:
                 return APIResponse.error(
-                    message="경로를 찾을 수 없습니다.",
+                    message="경로를 찾을 수 없습니다. 출발지와 목적지 사이에 연결된 경로가 없습니다.",
                     code="ROUTE_NOT_FOUND",
                     status_code=status.HTTP_404_NOT_FOUND
                 )
@@ -1262,6 +1298,14 @@ def calculate_route_by_tags_api(request):
                 except NavigationNode.DoesNotExist:
                     continue
             
+            # 좌표 배열 검증
+            if not path_coordinates:
+                return APIResponse.error(
+                    message="유효한 좌표를 생성할 수 없습니다. 노드 정보를 확인해주세요.",
+                    code="INVALID_COORDINATES",
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
             # 엣지 정보 조회
             for edge_id in path_edges:
                 try:
@@ -1277,12 +1321,15 @@ def calculate_route_by_tags_api(request):
             return APIResponse.success(
                 message="태그 기반 경로 계산이 완료되었습니다.",
                 data={
-                    "coordinates": path_coordinates,
+                    "coordinates": path_coordinates,  # navigation.js에서 기대하는 키명
+                    "path_coordinates": path_coordinates,  # MapStore 호환성을 위한 중복 제공
                     "distance": total_distance,
                     "estimatedTime": int(estimated_time),
                     "steps": [],
                     "nodes": nodes_data,
-                    "edges": edges_data
+                    "edges": edges_data,
+                    "total_distance": total_distance,  # MapStore 호환성
+                    "estimated_time": int(estimated_time)  # MapStore 호환성
                 }
             )
                 
