@@ -1133,6 +1133,7 @@ def calculate_route_api(request):
         
         # 경로 계산 서비스 사용
         try:
+            logger.info("DEBUG 경로 계산 서비스 호출 시작")
             # RouteCalculationService에서 경로 계산
             path_nodes, path_edges, total_distance, estimated_time = RouteCalculationService.find_shortest_path(
                 start_node=start_node,
@@ -1141,7 +1142,10 @@ def calculate_route_api(request):
                 is_accessible=is_accessible
             )
             
+            logger.info(f"DEBUG 경로 계산 결과: nodes={len(path_nodes) if path_nodes else 0}, edges={len(path_edges) if path_edges else 0}, distance={total_distance}, time={estimated_time}")
+            
             if not path_nodes or len(path_nodes) == 0:
+                logger.error("ERROR 경로 계산 결과 노드 없음")
                 return APIResponse.error(
                     message="경로를 찾을 수 없습니다. 출발지와 목적지 사이에 연결된 경로가 없습니다.",
                     code="ROUTE_NOT_FOUND",
@@ -1206,7 +1210,7 @@ def calculate_route_api(request):
             )
                 
         except Exception as calculation_error:
-            logger.error(f"경로 계산 오류: {str(calculation_error)}")
+            logger.error(f"ERROR 경로 계산 서비스 예외: {str(calculation_error)}", exc_info=True)
             return APIResponse.error(
                 message="경로 계산 중 오류가 발생했습니다.",
                 code="CALCULATION_ERROR",
@@ -1214,7 +1218,7 @@ def calculate_route_api(request):
             )
             
     except Exception as e:
-        logger.error(f"Calculate route API error: {str(e)}")
+        logger.error(f"ERROR Calculate route API 전체 예외: {str(e)}", exc_info=True)
         return APIResponse.error(
             message="경로 계산 요청 처리 중 오류가 발생했습니다.",
             code="API_ERROR",

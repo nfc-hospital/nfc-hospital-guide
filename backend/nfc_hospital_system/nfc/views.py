@@ -52,17 +52,17 @@ def nfc_public_scan(request):
     공개 정보만 제공 (위치 안내, 기본 정보)
     """
     try:
-        # 🐛 디버깅: 요청 데이터 상세 로깅
-        logger.info(f"🚀 nfc_public_scan 호출됨")
-        logger.info(f"📋 request.data: {request.data}")
-        logger.info(f"📋 request.method: {request.method}")
+        # 디버깅: 요청 데이터 상세 로깅 (이모지 제거)
+        logger.info(f"DEBUG nfc_public_scan 호출됨")
+        logger.info(f"DEBUG request.data: {request.data}")
+        logger.info(f"DEBUG request.method: {request.method}")
         
         # 요청 데이터 검증
         tag_id = request.data.get('tag_id')
-        logger.info(f"🔍 파싱된 tag_id: {tag_id}")
+        logger.info(f"DEBUG 파싱된 tag_id: {tag_id}")
         
         if not tag_id:
-            logger.warning("❌ tag_id 누락")
+            logger.warning("ERROR tag_id 누락")
             return APIResponse.error(
                 message="태그 ID가 필요합니다.",
                 code="TAG_ID_REQUIRED",
@@ -72,31 +72,42 @@ def nfc_public_scan(request):
         # 태그 찾기 (더 유연하게)
         tag = None
         
-        logger.info(f"🔍 태그 찾기 시작: {tag_id}")
+        logger.info(f"DEBUG 태그 찾기 시작: {tag_id}")
         
         # 먼저 tag_id로 검색
         if len(tag_id) == 36 and '-' in tag_id:
             try:
-                logger.info(f"🔍 UUID 형식으로 tag_id 검색: {tag_id}")
+                logger.info(f"DEBUG UUID 형식으로 tag_id 검색: {tag_id}")
                 tag = NFCTag.objects.get(tag_id=tag_id, is_active=True)
-                logger.info(f"✅ tag_id로 태그 찾음: {tag.code}")
+                logger.info(f"SUCCESS tag_id로 태그 찾음: {tag.code}")
             except NFCTag.DoesNotExist:
                 # tag_id로 못 찾으면 tag_uid로도 시도
                 try:
-                    logger.info(f"🔍 UUID 형식으로 tag_uid 검색: {tag_id}")
+                    logger.info(f"DEBUG UUID 형식으로 tag_uid 검색: {tag_id}")
                     tag = NFCTag.objects.get(tag_uid=tag_id, is_active=True)
-                    logger.info(f"✅ tag_uid로 태그 찾음: {tag.code}")
+                    logger.info(f"SUCCESS tag_uid로 태그 찾음: {tag.code}")
                 except NFCTag.DoesNotExist:
-                    logger.warning(f"❌ UUID 형식이지만 tag_id, tag_uid 모두 못 찾음: {tag_id}")
+                    logger.warning(f"ERROR UUID 형식이지만 tag_id, tag_uid 모두 못 찾음: {tag_id}")
         
         # UUID 형식이 아니면 tag_uid 또는 code로 검색
         if not tag:
+            logger.info(f"DEBUG UUID 검색 실패, tag_uid 또는 code로 검색: {tag_id}")
             tag = NFCTag.objects.filter(
                 models.Q(tag_uid=tag_id) | models.Q(code=tag_id),
                 is_active=True
             ).first()
+            
+            if tag:
+                logger.info(f"SUCCESS tag_uid 또는 code로 태그 찾음: {tag.code}")
+            else:
+                logger.warning(f"ERROR 모든 검색 방법 실패: {tag_id}")
         
         if not tag:
+            logger.error(f"FINAL ERROR 태그를 찾을 수 없음: {tag_id}")
+            # 디버깅을 위해 실제 태그 목록 출력
+            all_tags = NFCTag.objects.filter(is_active=True).values('tag_id', 'tag_uid', 'code')
+            logger.info(f"DEBUG 활성 태그 목록: {list(all_tags.all())}")
+            
             return APIResponse.error(
                 message="존재하지 않거나 비활성화된 NFC 태그입니다.",
                 code="TAG_NOT_FOUND",
