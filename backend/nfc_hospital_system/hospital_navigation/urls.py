@@ -32,29 +32,29 @@ router.register(
 )
 
 urlpatterns = [
-    # 환자용 경로 안내 API - /api/v1 prefix를 따라가도록 수정 (URL 충돌 방지를 위해 경로 변경)
-    path('api/v1/navigation/scan/', views.nfc_scan_navigate, name='nfc-scan-navigate'),
-    path('api/v1/navigation/complete/', views.navigation_complete, name='navigation-complete'),
-    path('api/v1/hospital/map/<str:floor_id>/', views.get_hospital_map, name='hospital-map'),
-    path('api/v1/routes/search/', views.search_routes, name='routes-search'),
+    # 환자용 경로 안내 API (main urls.py에서 api/v1/navigation/ prefix 이미 포함)
+    path('scan/', views.nfc_scan_navigate, name='nfc-scan-navigate'),
+    path('complete/', views.navigation_complete, name='navigation-complete'),
+    path('../hospital/map/<str:floor_id>/', views.get_hospital_map, name='hospital-map'),
+    path('../routes/search/', views.search_routes, name='routes-search'),
     
     # 개선된 지도 메타데이터 API
-    path('api/v1/navigation/maps/', views.get_maps_metadata, name='maps-metadata'),
+    path('maps/', views.get_maps_metadata, name='maps-metadata'),
     
     # 진료과/시설 존 API (비로그인 사용자용)
-    path('api/v1/navigation/zones/', views.department_zones_list, name='department-zones-list'),
-    path('api/v1/navigation/zones/<int:zone_id>/', views.department_zone_detail, name='department-zone-detail'),
+    path('zones/', views.department_zones_list, name='department-zones-list'),
+    path('zones/<int:zone_id>/', views.department_zone_detail, name='department-zone-detail'),
     
     # SVG 맵 파일 제공 API
-    path('api/v1/maps/<str:map_name>/', views.serve_map_svg, name='serve-map-svg'),
+    path('../maps/<str:map_name>/', views.serve_map_svg, name='serve-map-svg'),
     
     # 최적화된 경로 계산 API
-    path('api/v1/navigation/route-optimized/', views.calculate_optimized_route_view, name='optimized-route-calculation'),
-    path('api/v1/navigation/clear-cache/', views.clear_route_cache_view, name='clear-route-cache'),
+    path('route-optimized/', views.calculate_optimized_route_view, name='optimized-route-calculation'),
+    path('clear-cache/', views.clear_route_cache_view, name='clear-route-cache'),
     
     # 기본 경로 계산 API (navigation.js와 호환)
-    path('api/v1/navigation/path/', views.calculate_route_api, name='calculate-route'),
-    path('api/v1/navigation/route-by-tags/', views.calculate_route_by_tags_api, name='calculate-route-by-tags'),
+    path('path/', views.calculate_route_api, name='calculate-route'),
+    path('route-by-tags/', views.calculate_route_by_tags_api, name='calculate-route-by-tags'),
     
     # 관리자용 ViewSet (REST framework)
     path('api/navigation/', include(router.urls)),

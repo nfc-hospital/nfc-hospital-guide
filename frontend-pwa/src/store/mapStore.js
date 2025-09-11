@@ -238,7 +238,7 @@ const useMapStore = create(
 
           // 5️⃣ 경로 계산 API 호출 (실제 시작점 사용)
           const { calculateRoute } = await import('../api/navigation');
-          const response = await calculateRoute(actualStartNodeId, endNodeId);
+          const response = await calculateRoute(startNodeId, endNodeId);
           
           // 6️⃣ 성공 처리
           const routeData = response?.data?.data || response?.data || response;

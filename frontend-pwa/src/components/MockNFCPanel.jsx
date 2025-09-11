@@ -6,19 +6,45 @@ import { useAuth } from '../context/AuthContext';
 import useJourneyStore from '../store/journeyStore';
 import useMapStore from '../store/mapStore';
 import useLocationStore from '../store/locationStore';
+import { MAJOR_FACILITIES, MAJOR_DEPARTMENTS, DIAGNOSTIC_FACILITIES } from '../data/facilityManagement';
 
-// NFC 태그 관련 API 함수들
+// 실제 지도에 존재하는 시설들만 필터링 (node_id가 있는 것들)
+function getValidMapFacilities() {
+  const allFacilities = [
+    ...MAJOR_FACILITIES,
+    ...MAJOR_DEPARTMENTS, 
+    ...DIAGNOSTIC_FACILITIES
+  ];
+  
+  // node_id가 존재하는 시설들만 필터링
+  const validFacilities = allFacilities.filter(facility => facility.node_id);
+  
+  // MockNFC용 태그 형태로 변환
+  return validFacilities.map(facility => ({
+    tag_id: `mock-${facility.id}`,
+    code: `nfc-${facility.id}-mock`,
+    location_name: facility.name,
+    description: facility.description || facility.name,
+    building: facility.building,
+    floor: facility.floor,
+    room: facility.room,
+    position: facility.coordinates || { x: facility.x_coord, y: facility.y_coord },
+    node_id: facility.node_id,
+    icon: facility.icon,
+    category: facility.category,
+    mapFile: facility.mapFile,
+    is_active: true
+  }));
+}
+
+// NFC 태그 관련 API 함수들 (이제 가상 데이터 사용)
 async function fetchNFCTags() {
   try {
-    const response = await fetch('/api/v1/nfc/tags/');
-    const result = await response.json();
-    
-    if (result.success) {
-      return result.data;
-    } else {
-      console.error('NFC 태그 목록 조회 실패:', result.message);
-      return [];
-    }
+    // 실제 지도에 존재하는 시설들만 반환
+    const validFacilities = getValidMapFacilities();
+    console.log('📋 유효한 시설 목록 로드:', validFacilities.length, '개');
+    console.log('📋 시설 목록:', validFacilities.map(f => ({ name: f.location_name, node_id: f.node_id, category: f.category })));
+    return validFacilities;
   } catch (error) {
     console.error('NFC 태그 목록 조회 중 오류:', error);
     return [];
@@ -27,6 +53,29 @@ async function fetchNFCTags() {
 
 async function fetchNFCLocation(tagId) {
   try {
+    // Mock 태그인 경우 시설 데이터에서 직접 조회
+    if (tagId.startsWith('mock-')) {
+      const facilityId = tagId.replace('mock-', '');
+      const validFacilities = getValidMapFacilities();
+      const facility = validFacilities.find(f => f.tag_id === tagId);
+      
+      if (facility) {
+        return {
+          location_name: facility.location_name,
+          building: facility.building,
+          floor: facility.floor,
+          room: facility.room,
+          position: facility.position,
+          node_id: facility.node_id,
+          map_id: facility.mapFile ? facility.mapFile.replace('.svg', '') : 'main_1f'
+        };
+      } else {
+        console.error('Mock 시설을 찾을 수 없음:', facilityId);
+        return null;
+      }
+    }
+    
+    // 실제 API 호출 (기존 태그용)
     const response = await fetch(`/api/v1/nfc/tags/${tagId}/location/`);
     const result = await response.json();
     
@@ -154,41 +203,16 @@ export default function MockNFCPanel() {
         console.log('📍 위치 정보 조회됨:', locationData);
         console.log('📍 이전 currentLocation 상태:', currentLocation);
         
-        // 🔧 node_id Fallback 로직 추가
-        let actualNodeId = locationData.node_id;
-        let fallbackUsed = false;
+        // ✅ 검증된 시설들만 표시되므로 node_id가 항상 존재
+        const actualNodeId = locationData.node_id;
+        const fallbackUsed = false;
         
         if (!actualNodeId) {
-          console.warn('⚠️ API에서 node_id가 null - Fallback 로직 시작');
-          
-          // facilityManagement.js에서 태그 코드 기반으로 node_id 찾기
-          const { ALL_FACILITIES } = await import('../data/facilityManagement');
-          
-          // 태그 코드나 위치명으로 매칭 시도
-          const matchedFacility = ALL_FACILITIES.find(facility => 
-            tag.code.toLowerCase().includes(facility.name.toLowerCase()) ||
-            facility.name.toLowerCase().includes(locationData.location_name?.toLowerCase() || '') ||
-            (tag.code === 'nfc-pharmacy-1f001' && facility.id === 'pharmacy') ||
-            (tag.code.includes('pharmacy') && facility.id === 'pharmacy') ||
-            (tag.code.includes('emergency') && facility.id === 'emergency') ||
-            (tag.code.includes('reception') && facility.id === 'administration') ||
-            (tag.code.includes('info') && facility.id === 'info-desk')
-          );
-          
-          if (matchedFacility?.node_id) {
-            actualNodeId = matchedFacility.node_id;
-            fallbackUsed = true;
-            console.log('✅ Fallback 성공:', {
-              tagCode: tag.code,
-              matchedFacility: matchedFacility.name,
-              fallbackNodeId: actualNodeId
-            });
-          } else {
-            console.error('❌ Fallback 실패 - 매칭되는 시설을 찾을 수 없음:', {
-              tagCode: tag.code,
-              locationName: locationData.location_name
-            });
-          }
+          console.error('❌ 예상치 못한 node_id 누락:', {
+            tagCode: tag.code,
+            locationName: locationData.location_name
+          });
+          throw new Error('시설 정보에 node_id가 없습니다.');
         }
         
         // 2. LocationStore에 좌표 기반 위치 설정
@@ -293,71 +317,34 @@ export default function MockNFCPanel() {
         
         updateCurrentLocation(mapLocationInfo);
         
-        // 4. 테스트용 목적지 설정 및 경로 자동 계산 (실제 node_id 사용)
-        // facilityManagement.js에서 실제 시설 데이터 사용
-        const { MAJOR_DEPARTMENTS, MAJOR_FACILITIES } = await import('../data/facilityManagement');
+        // 4. 테스트용 목적지 설정 및 경로 자동 계산 (검증된 시설만 사용)
+        const validFacilities = getValidMapFacilities();
         
-        const testDestinations = [
-          // 내과 (실제 존재하는 시설)
-          MAJOR_DEPARTMENTS.find(d => d.id === 'internal-medicine') || 
-          { 
-            title: '내과', 
-            name: '내과',
-            x_coord: 215, 
-            y_coord: 290, 
-            room: '내과 진료실',
-            node_id: null // fallback 시 MapStore에서 처리
-          },
-          // 약국 (실제 존재하는 시설)  
-          MAJOR_FACILITIES.find(f => f.id === 'pharmacy') || 
-          {
-            title: '약국',
-            name: '약국', 
-            x_coord: 780, 
-            y_coord: 280, 
-            room: '원내약국',
-            node_id: '650fa82e-595b-4232-b27f-ee184b4fce14' // 약국 실제 node_id
-          },
-          // 안내데스크 (실제 존재하는 시설)
-          MAJOR_FACILITIES.find(f => f.id === 'info-desk') ||
-          {
-            title: '안내데스크',
-            name: '안내데스크',
-            x_coord: 450, 
-            y_coord: 200, 
-            room: '안내데스크',
-            node_id: '497071c2-a868-408c-9595-3cb597b15bae' // 안내데스크 실제 node_id
-          }
-        ];
-        
-        console.log('🎯 테스트 목적지 로드 완료:', testDestinations.map(d => ({
-          name: d.name || d.title,
-          node_id: d.node_id,
-          hasNodeId: !!d.node_id
-        })));
-        
-        // 현재 위치와 다른 목적지를 무작위로 선택
+        // 현재 위치와 다른 목적지를 선택 (모든 시설이 유효한 node_id 보유)
         const currentX = locationData.position.x;
         const currentY = locationData.position.y;
         
-        const availableDestinations = testDestinations.filter(dest => {
-          const destX = dest.coordinates?.x || dest.x_coord || 0;
-          const destY = dest.coordinates?.y || dest.y_coord || 0;
-          return Math.abs(destX - currentX) > 50 || Math.abs(destY - currentY) > 50;
+        const availableDestinations = validFacilities.filter(facility => {
+          const destX = facility.position.x;
+          const destY = facility.position.y;
+          // 현재 위치와 다르고, 최소 50px 이상 떨어진 시설들
+          return facility.tag_id !== tag.tag_id && 
+                 (Math.abs(destX - currentX) > 50 || Math.abs(destY - currentY) > 50);
         });
         
         const testDestination = availableDestinations.length > 0 
           ? availableDestinations[0] 
-          : testDestinations[0];
+          : validFacilities[0]; // 백업용
         
         console.log('🎯 테스트 목적지 설정:', {
-          name: testDestination.name || testDestination.title,
+          name: testDestination.location_name,
           node_id: testDestination.node_id,
           hasNodeId: !!testDestination.node_id,
-          coordinates: testDestination.coordinates || { x: testDestination.x_coord, y: testDestination.y_coord }
+          coordinates: testDestination.position,
+          category: testDestination.category
         });
         
-        // MapStore에 목적지 전달하여 경로 계산
+        // MapStore에 목적지 전달하여 경로 계산 (오프라인 모드 포함)
         try {
           await updateRouteBasedOnLocation(mapLocationInfo, testDestination);
           
@@ -377,14 +364,30 @@ export default function MockNFCPanel() {
           
           if (hasRoute && !hasError) {
             console.log('✅ MockNFC 테스트 경로 계산 성공!');
+            toast.success(`${testDestination.location_name}까지 경로 계산 완료`, {
+              icon: '🗺️',
+              duration: 2000
+            });
           } else if (hasError) {
             console.warn('⚠️ MockNFC 테스트 경로 계산 오류:', mapState.routeError);
+            toast(`경로 계산 실패: ${mapState.routeError}`, {
+              icon: '⚠️',
+              duration: 3000
+            });
           } else {
             console.warn('⚠️ MockNFC 테스트 경로가 생성되지 않음');
+            toast('경로 정보가 생성되지 않았습니다', {
+              icon: '📍',
+              duration: 2000
+            });
           }
           
         } catch (error) {
           console.error('❌ MockNFC 테스트 경로 계산 실패:', error);
+          toast(`오프라인 모드: ${testDestination.location_name} 목적지 설정됨`, {
+            icon: '📴',
+            duration: 2000
+          });
         }
         
         // 5. 가상 NDEF 메시지 생성 (기존 API와의 호환성을 위해)
@@ -414,72 +417,50 @@ export default function MockNFCPanel() {
           ]
         };
         
-        // 6. 기존 scanNFCTag API 호출 (기존 여정 로직 활용)
-        const result = await scanNFCTag(tag.code, mockNDEFMessage);
-        
-        console.log('📡 API 응답:', result);
-        
-        if (result.success) {
-          toast.success(`${locationData.location_name} 스캔 완료!`, {
+        // 6. 오프라인 모드로 MockNFC 처리 (API 호출 생략)
+        try {
+          // API 호출 시도하되, 실패시 오프라인 모드로 전환
+          const result = await scanNFCTag(tag.code, mockNDEFMessage);
+          console.log('📡 API 응답:', result);
+          
+          if (result.success) {
+            toast.success(`${locationData.location_name} API 연동 스캔 완료!`, {
+              icon: '🏷️',
+              duration: 2000
+            });
+          } else {
+            throw new Error('API 응답 실패');
+          }
+        } catch (apiError) {
+          console.log('📴 API 호출 실패, 오프라인 모드로 전환:', apiError.message);
+          
+          // 오프라인 모드: API 없이도 MockNFC 동작
+          toast.success(`${locationData.location_name} 오프라인 스캔 완료!`, {
             icon: '🏷️',
             duration: 2000
           });
-          
-          // journeyStore 업데이트 (비로그인 사용자도 지원)
-          const journeyResult = await fetchJourneyData(tag.code);
-          
-          // 비로그인 사용자의 경우 간단한 성공 처리
-          if (journeyResult?.isGuest) {
-            console.log('👤 비로그인 사용자 MockNFC 스캔 완료');
-            
-            // 🔍 최종 LocationStore 상태 확인
-            const finalState = useLocationStore.getState();
-            const validation = finalState.getStateValidation();
-            
-            if (validation.hasCurrentNodeId && validation.nodeIdLocationConsistent) {
-              toast.success(`${tag.description} 위치 설정 완료! 🎯 경로 계산 준비됨`, {
-                icon: '📍',
-                duration: 3000
-              });
-              console.log('✅ 비로그인 사용자 - LocationStore 상태 완벽 설정:', {
-                nodeId: finalState.currentNodeId,
-                location: validation.currentState.locationName,
-                readyForRouting: true
-              });
-            } else {
-              toast(`${tag.description} 위치 설정됨 (부분)`, {
-                icon: '⚠️',
-                duration: 2000
-              });
-              console.warn('⚠️ 비로그인 사용자 - LocationStore 상태 부분 설정:', validation);
-            }
-            
-            return; // 추가 네비게이션 없이 종료
-          }
-          
-          // 응답 데이터 처리 (인증된 사용자만)
-          const responseData = result.data;
-          
-          if (responseData.exam_info?.exam_id) {
-            setTimeout(() => {
-              navigate(`/exam/${responseData.exam_info.exam_id}`);
-            }, 1500);
-          }
-          
-          if (responseData.next_action?.route) {
-            setTimeout(() => {
-              navigate(responseData.next_action.route);
-            }, 1500);
-          }
-        } else if (result.offline) {
-          toast('오프라인 모드 - 로컬 처리만 수행', {
-            icon: '📴',
-            duration: 2000
-          });
-        } else {
-          toast.error(result.error || '태그 스캔 실패', {
+        }
+        
+        // 🔍 최종 LocationStore 상태 확인 (API 성공/실패와 관계없이)
+        const finalState = useLocationStore.getState();
+        const validation = finalState.getStateValidation();
+        
+        if (validation.hasCurrentNodeId && validation.nodeIdLocationConsistent) {
+          toast.success(`${tag.description} 위치 설정 완료! 🎯 경로 계산 준비됨`, {
+            icon: '📍',
             duration: 3000
           });
+          console.log('✅ MockNFC - LocationStore 상태 완벽 설정:', {
+            nodeId: finalState.currentNodeId,
+            location: validation.currentState.locationName,
+            readyForRouting: true
+          });
+        } else {
+          toast(`${tag.description} 위치 설정됨 (부분)`, {
+            icon: '⚠️',
+            duration: 2000
+          });
+          console.warn('⚠️ MockNFC - LocationStore 상태 부분 설정:', validation);
         }
         
       } else {
@@ -577,10 +558,22 @@ export default function MockNFCPanel() {
                     border border-gray-300
                   `}
                 >
-                  <div className="text-xs opacity-75">{tag.code}</div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-lg">{tag.icon}</span>
+                    <span className={`text-xs px-1 py-0.5 rounded ${
+                      tag.category === 'emergency' ? 'bg-red-100 text-red-600' :
+                      tag.category === 'department' ? 'bg-blue-100 text-blue-600' :
+                      tag.category === 'diagnostic' ? 'bg-purple-100 text-purple-600' :
+                      'bg-green-100 text-green-600'
+                    }`}>
+                      {tag.category === 'emergency' ? '응급' :
+                       tag.category === 'department' ? '진료' :
+                       tag.category === 'diagnostic' ? '검사' : '편의'}
+                    </span>
+                  </div>
                   <div className="font-semibold">{tag.location_name}</div>
                   <div className="text-xs mt-1 opacity-75">
-                    {tag.building} {tag.floor}F
+                    {tag.building} {tag.floor} • {tag.room}
                   </div>
                   
                   {selectedTag === tag.tag_id && (
@@ -601,9 +594,41 @@ export default function MockNFCPanel() {
           )}
           
           <div className="mt-3 pt-3 border-t border-gray-200">
-            <p className="text-xs text-gray-400">
-              💡 실제 NFC 태그처럼 작동합니다
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-gray-400">
+                💡 실제 지도상 존재하는 시설만 표시
+              </p>
+              <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                총 {nfcTags.length}개 시설
+              </span>
+            </div>
+            {nfcTags.length > 0 && (
+              <div className="flex flex-wrap gap-1 text-xs">
+                {(() => {
+                  const counts = nfcTags.reduce((acc, tag) => {
+                    const category = tag.category || 'other';
+                    acc[category] = (acc[category] || 0) + 1;
+                    return acc;
+                  }, {});
+                  
+                  return Object.entries(counts).map(([category, count]) => (
+                    <span key={category} className={`px-2 py-1 rounded-full ${
+                      category === 'emergency' ? 'bg-red-50 text-red-600' :
+                      category === 'department' ? 'bg-blue-50 text-blue-600' :
+                      category === 'diagnostic' ? 'bg-purple-50 text-purple-600' :
+                      category === 'facility' ? 'bg-green-50 text-green-600' :
+                      'bg-gray-50 text-gray-600'
+                    }`}>
+                      {category === 'emergency' ? '응급' :
+                       category === 'department' ? '진료' :
+                       category === 'diagnostic' ? '검사' :
+                       category === 'facility' ? '편의' :
+                       category} {count}
+                    </span>
+                  ));
+                })()}
+              </div>
+            )}
           </div>
         </div>
       )}
