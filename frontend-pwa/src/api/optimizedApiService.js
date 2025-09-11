@@ -1,71 +1,10 @@
-import axios from 'axios';
+import { api } from './client';
 import { cacheUtils } from '../hooks/useOptimizedAPI';
 
 // 통합 API 서비스 - 배치 처리 및 캐싱 최적화
 class OptimizedApiService {
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-    this.client = this.createClient();
-  }
-
-  createClient() {
-    const client = axios.create({
-      baseURL: this.baseURL,
-      timeout: 30000,
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    });
-
-    // 요청 인터셉터 - JWT 토큰 자동 추가
-    client.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('access_token');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
-
-    // 응답 인터셉터 - 토큰 갱신 처리
-    client.interceptors.response.use(
-      (response) => response,
-      async (error) => {
-        const originalRequest = error.config;
-
-        if (error.response?.status === 401 && !originalRequest._retry) {
-          originalRequest._retry = true;
-          
-          try {
-            const refreshToken = localStorage.getItem('refresh_token');
-            if (refreshToken) {
-              const response = await axios.post(`${this.baseURL}/auth/token/refresh/`, {
-                refresh: refreshToken
-              });
-              
-              const { access } = response.data;
-              localStorage.setItem('access_token', access);
-              
-              // 관련 캐시 무효화
-              cacheUtils.invalidate('auth|profile|schedule|queue');
-              
-              return client(originalRequest);
-            }
-          } catch (refreshError) {
-            localStorage.removeItem('access_token');
-            localStorage.removeItem('refresh_token');
-            window.location.href = '/login';
-            return Promise.reject(refreshError);
-          }
-        }
-
-        return Promise.reject(error);
-      }
-    );
-
-    return client;
+    this.client = api; // 공통 client 사용
   }
 
   // 통합 환자 대시보드 데이터 (배치 처리)
@@ -147,7 +86,7 @@ class OptimizedApiService {
     
     try {
       // 공개 정보 먼저 확인 (캐시 활용)
-      const publicInfo = await this.client.post('/nfc/public-info', {
+      const publicInfo = await this.client.post('/nfc/public-info/', {
         tag_uid: tagData.tag_uid || tagData.uid,
         code: tagData.code
       });

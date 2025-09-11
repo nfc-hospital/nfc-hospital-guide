@@ -3,7 +3,7 @@ import { getCSRFToken, debugCSRFToken } from '../utils/csrf';
 
 // API 클라이언트 생성
 const apiClient = axios.create({
-  baseURL: '/api/v1',  // Vite 프록시가 처리
+  baseURL: '/api/v1/',  // Vite 프록시가 처리
   timeout: 60000,  // 타임아웃을 60초로 증가 (대기열 데이터가 많을 경우 대비)
   headers: {
     'Content-Type': 'application/json',
@@ -14,6 +14,15 @@ const apiClient = axios.create({
 // 요청 인터셉터 - JWT 토큰 및 CSRF 토큰 자동 추가
 apiClient.interceptors.request.use(
   (config) => {
+    // 🐛 디버깅: 요청 세부정보 로깅
+    console.log(`🚀 API 요청 시작:`, {
+      method: config.method?.toUpperCase(),
+      url: config.url,
+      baseURL: config.baseURL,
+      fullURL: `${config.baseURL}${config.url}`,
+      data: config.data
+    });
+    
     // JWT 토큰 추가 (공개 API 제외)
     const publicEndpoints = ['/nfc/public-info', '/navigation/zones', '/navigation/maps'];
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url.includes(endpoint));
@@ -45,6 +54,7 @@ apiClient.interceptors.request.use(
     return config;
   },
   (error) => {
+    console.error('❌ API 요청 인터셉터 에러:', error);
     return Promise.reject(error);
   }
 );
@@ -52,10 +62,31 @@ apiClient.interceptors.request.use(
 // 응답 인터셉터 - 에러 처리
 apiClient.interceptors.response.use(
   (response) => {
+    // 🐛 디버깅: 성공 응답 로깅
+    console.log(`✅ API 응답 성공:`, {
+      status: response.status,
+      url: response.config.url,
+      method: response.config.method?.toUpperCase(),
+      dataType: typeof response.data,
+      hasData: !!response.data
+    });
+    
     // 성공 응답 처리
     return response.data;
   },
   async (error) => {
+    // 🐛 디버깅: 에러 응답 상세 로깅
+    console.error(`❌ API 응답 에러:`, {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      method: error.config?.method?.toUpperCase(),
+      message: error.message,
+      responseData: error.response?.data,
+      isNetworkError: !error.response,
+      errorCode: error.code
+    });
+    
     const originalRequest = error.config;
 
     // 토큰 갱신 관련 요청인 경우 재시도하지 않음

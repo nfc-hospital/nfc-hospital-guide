@@ -61,5 +61,5 @@ urlpatterns = [
     path('congestion-aware-route/', views.calculate_optimized_route_view, name='congestion-aware-route'),
     
     # 관리자용 ViewSet (REST framework)
-    path('api/', include(router.urls)),
+    path('', include(router.urls)),
 ]

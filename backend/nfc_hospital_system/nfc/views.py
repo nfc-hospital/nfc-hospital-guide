@@ -52,9 +52,17 @@ def nfc_public_scan(request):
     공개 정보만 제공 (위치 안내, 기본 정보)
     """
     try:
+        # 🐛 디버깅: 요청 데이터 상세 로깅
+        logger.info(f"🚀 nfc_public_scan 호출됨")
+        logger.info(f"📋 request.data: {request.data}")
+        logger.info(f"📋 request.method: {request.method}")
+        
         # 요청 데이터 검증
         tag_id = request.data.get('tag_id')
+        logger.info(f"🔍 파싱된 tag_id: {tag_id}")
+        
         if not tag_id:
+            logger.warning("❌ tag_id 누락")
             return APIResponse.error(
                 message="태그 ID가 필요합니다.",
                 code="TAG_ID_REQUIRED",
@@ -64,16 +72,22 @@ def nfc_public_scan(request):
         # 태그 찾기 (더 유연하게)
         tag = None
         
+        logger.info(f"🔍 태그 찾기 시작: {tag_id}")
+        
         # 먼저 tag_id로 검색
         if len(tag_id) == 36 and '-' in tag_id:
             try:
+                logger.info(f"🔍 UUID 형식으로 tag_id 검색: {tag_id}")
                 tag = NFCTag.objects.get(tag_id=tag_id, is_active=True)
+                logger.info(f"✅ tag_id로 태그 찾음: {tag.code}")
             except NFCTag.DoesNotExist:
                 # tag_id로 못 찾으면 tag_uid로도 시도
                 try:
+                    logger.info(f"🔍 UUID 형식으로 tag_uid 검색: {tag_id}")
                     tag = NFCTag.objects.get(tag_uid=tag_id, is_active=True)
+                    logger.info(f"✅ tag_uid로 태그 찾음: {tag.code}")
                 except NFCTag.DoesNotExist:
-                    pass
+                    logger.warning(f"❌ UUID 형식이지만 tag_id, tag_uid 모두 못 찾음: {tag_id}")
         
         # UUID 형식이 아니면 tag_uid 또는 code로 검색
         if not tag:

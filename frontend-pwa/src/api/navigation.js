@@ -3,16 +3,7 @@
  * 경로 계산, NFC 태그 정보, 병원 지도 관련 API 호출 함수들
  */
 
-import axios from 'axios';
-
-// 기본 API 설정
-const api = axios.create({
-  baseURL: '/api/v1',
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
+import { api } from './client';
 
 // 공통 에러 처리 함수
 const handleApiError = (error, operation) => {
@@ -69,7 +60,7 @@ const handleApiError = (error, operation) => {
  */
 export const getNfcTags = async () => {
   try {
-    const response = await api.get('nfc/tags/');
+    const response = await api.get('/nfc/tags/');
     
     if (response.data.success) {
       return {
@@ -101,7 +92,7 @@ export const getNfcLocation = async (tagId) => {
       throw new Error('태그 ID가 필요합니다.');
     }
     
-    const response = await api.get(`nfc/tags/${tagId}/location/`);
+    const response = await api.get(`/nfc/tags/${tagId}/location/`);
     
     if (response.data.success) {
       return {
@@ -147,7 +138,7 @@ export const calculateRoute = async (startNodeId, endNodeId, options = {}) => {
       is_accessible: options.isAccessible || false
     };
     
-    const response = await api.post('navigation/path/', requestData);
+    const response = await api.post('/navigation/path/', requestData);
     
     if (response.data.success) {
       const pathData = response.data.data;
@@ -197,7 +188,7 @@ export const calculateRouteByTags = async (startTagCode, endTagCode, options = {
       is_accessible: options.isAccessible || false
     };
     
-    const response = await api.post('navigation/route-by-tags/', requestData);
+    const response = await api.post('/navigation/route-by-tags/', requestData);
     
     if (response.data.success) {
       const pathData = response.data.data;

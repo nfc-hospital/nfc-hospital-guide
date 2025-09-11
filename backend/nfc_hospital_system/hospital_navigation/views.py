@@ -1089,13 +1089,21 @@ def calculate_route_api(request):
     }
     """
     try:
+        # 🐛 디버깅: 요청 데이터 상세 로깅
+        logger.info(f"🚀 calculate_route_api 호출됨")
+        logger.info(f"📋 request.data: {request.data}")
+        logger.info(f"📋 request.method: {request.method}")
+        
         # 요청 데이터 검증
         start_node_id = request.data.get('start_node_id')
         end_node_id = request.data.get('end_node_id')
         avoid_stairs = request.data.get('avoid_stairs', False)
         is_accessible = request.data.get('is_accessible', False)
         
+        logger.info(f"🔍 파싱된 데이터: start={start_node_id}, end={end_node_id}, avoid_stairs={avoid_stairs}, is_accessible={is_accessible}")
+        
         if not start_node_id or not end_node_id:
+            logger.warning("❌ 필수 파라미터 누락")
             return APIResponse.error(
                 message="start_node_id and end_node_id are required",
                 code="MISSING_PARAMETERS",
@@ -1106,9 +1114,17 @@ def calculate_route_api(request):
         
         # 노드 조회
         try:
+            logger.info(f"🔍 start_node_id로 노드 찾는 중: {start_node_id}")
             start_node = NavigationNode.objects.get(node_id=start_node_id)
+            logger.info(f"✅ start_node 찾음: {start_node.name} ({start_node.node_id})")
+            
+            logger.info(f"🔍 end_node_id로 노드 찾는 중: {end_node_id}")
             end_node = NavigationNode.objects.get(node_id=end_node_id)
+            logger.info(f"✅ end_node 찾음: {end_node.name} ({end_node.node_id})")
         except NavigationNode.DoesNotExist as e:
+            logger.error(f"❌ 노드를 찾을 수 없음: {str(e)}")
+            logger.error(f"❌ start_node_id: {start_node_id}")
+            logger.error(f"❌ end_node_id: {end_node_id}")
             return APIResponse.error(
                 message=f"노드를 찾을 수 없습니다: {str(e)}",
                 code="NODE_NOT_FOUND",

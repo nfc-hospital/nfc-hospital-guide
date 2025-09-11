@@ -42,9 +42,7 @@ urlpatterns = [
 
     # 환자 상태 관리 API (추가)
 
-    # NFC 태깅 관련 API
-    # URL: /api/v1/queue/nfc/public-info/
-    path('nfc/public-info/', views.nfc_public_info, name='nfc-public-info'),
+    # NFC 태깅 관련 API (중복 제거: nfc 앱에서 처리)
     
     # URL: /api/v1/queue/nfc/checkin/
     path('nfc/checkin/', views.nfc_checkin, name='nfc-checkin'),

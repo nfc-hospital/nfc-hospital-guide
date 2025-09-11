@@ -1,15 +1,9 @@
-import axios from 'axios';
-
-// 프로덕션 환경에서는 현재 도메인 사용
-const API_URL = import.meta.env.VITE_API_URL || 
-  (window.location.hostname === 'localhost' 
-    ? 'http://localhost:8000/api/v1' 
-    : `${window.location.protocol}//${window.location.host}/api/v1`);
+import { api } from './client';
 
 // 시설별 경로 가져오기 (단순화된 버전)
 export const getFacilityRoute = async (facilityName) => {
   try {
-    const response = await axios.get(`${API_URL}/nfc/facility-routes/by_facility/`, {
+    const response = await api.get('/nfc/facility-routes/by_facility/', {
       params: { facility_name: facilityName }
     });
     
@@ -71,7 +65,7 @@ export const getDemoRoute = (facilityName) => {
 export const saveRoute = async (facilityName, nodes, edges, mapId = 'main_1f') => {
   try {
     // DB에 저장 시도
-    const response = await axios.post(`${API_URL}/nfc/facility-routes/save_route/`, {
+    const response = await api.post('/nfc/facility-routes/save_route/', {
       facility_name: facilityName,
       nodes: nodes,
       edges: edges,
@@ -117,7 +111,7 @@ const facilityMapping = {
 // 모든 시설 경로 가져오기 (단순화된 버전)
 export const getAllFacilityRoutes = async () => {
   try {
-    const response = await axios.get(`${API_URL}/nfc/facility-routes/`);
+    const response = await api.get('/nfc/facility-routes/');
     console.log('✅ 전체 경로 목록 API 응답:', response.data);
     
     // response.data가 배열인지 확인
@@ -141,12 +135,12 @@ export const getAllFacilityRoutes = async () => {
 export const clearRoute = async (facilityName) => {
   try {
     // DB에서 삭제하려면 ID가 필요하므로, 먼저 조회
-    const response = await axios.get(`${API_URL}/nfc/facility-routes/by_facility/`, {
+    const response = await api.get('/nfc/facility-routes/by_facility/', {
       params: { facility_name: facilityName }
     });
     
     if (response.data && response.data.id) {
-      await axios.delete(`${API_URL}/nfc/facility-routes/${response.data.id}/`);
+      await api.delete(`/nfc/facility-routes/${response.data.id}/`);
       console.log('DB에서 경로 삭제 성공');
     }
   } catch (error) {
