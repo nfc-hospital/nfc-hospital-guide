@@ -6,6 +6,7 @@ import MapNavigator from '../components/MapNavigator'; // 경로 표시를 위�
 import AppHeader from '../components/common/AppHeader';
 import { useAuth } from '../context/AuthContext';
 import useMapStore from '../store/mapStore'; // mapStore import
+import useLocationStore from '../store/locationStore'; // locationStore import for debugging
 import { 
   MapPinIcon,
   MapIcon,
@@ -41,13 +42,14 @@ export default function PublicHome() {
   
   // mapStore에서 필요한 상태와 함수 가져오기
   const { 
-    navigateToFacility,
+    calculateRouteToFacility, // ✅ 새로운 통합 핵심 함수
+    navigateToFacility,       // 하위 호환성 유지
     activeRoute,
     navigationRoute,
     currentMapId,
-    routeError,           // ✅ 새로운 경로 오류 상태
-    isRouteLoading,       // ✅ 경로 계산 로딩 상태
-    clearRouteError       // ✅ 오류 초기화 함수
+    routeError,               // ✅ 새로운 경로 오류 상태
+    isRouteLoading,           // ✅ 경로 계산 로딩 상태
+    clearRouteError           // ✅ 오류 초기화 함수
   } = useMapStore();
   
   // facilityManagement.js에서 가져온 실제 부서들 사용
@@ -195,12 +197,25 @@ export default function PublicHome() {
   }, []);
 
   // 시설 선택 핸들러 (원래 로직 복원)
-  // ✅ node_id 사전 검증이 포함된 시설 선택 함수
+  // ✅ 최종 단순화된 시설 선택 함수 (직접 호출) - 강화된 모니터링 버전
   const handleFacilitySelect = useCallback(async (facility) => {
     console.log('🏢 시설 선택:', facility);
     setSelectedFacility(facility);
     setError(''); // 기존 에러 메시지 초기화
     clearRouteError(); // 경로 에러 초기화
+    
+    // 🔍 LocationStore 상태 진단 (경로 계산 전)
+    const locationState = useLocationStore.getState();
+    const preValidation = locationState.getStateValidation();
+    
+    console.log('🔍 경로 계산 전 LocationStore 상태 진단:', {
+      hasCurrentNodeId: preValidation.hasCurrentNodeId,
+      hasValidPosition: preValidation.hasValidPosition,
+      nodeIdLocationConsistent: preValidation.nodeIdLocationConsistent,
+      isRecentScan: preValidation.isRecentScan,
+      currentState: preValidation.currentState,
+      timeSinceLastScan: preValidation.timeSinceLastScan
+    });
     
     // ✅ node_id 사전 검증
     if (!facility.node_id) {
@@ -214,17 +229,62 @@ export default function PublicHome() {
       nodeId: facility.node_id
     });
     
-    // ✅ 단순한 목적지 정보만 전달 - 복잡한 좌표 변환 로직 제거
-    await navigateToFacility({
-      node_id: facility.node_id,
-      name: facility.name,
-      title: facility.name,
-      building: facility.building,
-      floor: facility.floor,
-      room: facility.room,
-      description: facility.description
-    });
-  }, [navigateToFacility, clearRouteError]);
+    // 🚀 경로 계산 시작 타임스탬프
+    const startTime = performance.now();
+    console.log('⏱️ 경로 계산 시작:', new Date().toISOString());
+    
+    try {
+      // ✅ 새로운 통합 핵심 함수 직접 호출 (최단 데이터 흐름)
+      await calculateRouteToFacility(facility);
+      
+      // 📊 성공 후 상태 및 성능 분석
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      
+      const postValidation = useLocationStore.getState().getStateValidation();
+      const mapState = useMapStore.getState();
+      
+      console.log('✅ 경로 계산 완료 분석:', {
+        duration: `${duration.toFixed(2)}ms`,
+        routeSuccess: !!mapState.activeRoute,
+        hasRouteError: !!mapState.routeError,
+        routeErrorMessage: mapState.routeError,
+        locationStateAfter: {
+          hasCurrentNodeId: postValidation.hasCurrentNodeId,
+          nodeIdLocationConsistent: postValidation.nodeIdLocationConsistent,
+          hasRouteCoordinates: mapState.activeRoute?.nodes?.length > 0
+        },
+        routeInfo: mapState.activeRoute ? {
+          nodeCount: mapState.activeRoute.nodes?.length || 0,
+          distance: mapState.activeRoute.total_distance || 0,
+          estimatedTime: mapState.activeRoute.estimated_time || 0
+        } : null
+      });
+      
+      // 🎯 성공적인 경로 생성 확인
+      if (mapState.activeRoute && mapState.activeRoute.nodes?.length > 0) {
+        console.log('🎉 경로 표시 준비 완료:', {
+          facility: facility.name,
+          routeGenerated: true,
+          readyForNavigation: true
+        });
+      } else if (mapState.routeError) {
+        console.warn('⚠️ 경로 계산 후 오류 상태:', mapState.routeError);
+      }
+      
+    } catch (error) {
+      const endTime = performance.now();
+      const duration = endTime - startTime;
+      
+      console.error('❌ 경로 계산 실패 분석:', {
+        duration: `${duration.toFixed(2)}ms`,
+        error: error.message || error,
+        facility: facility.name,
+        locationStateAtFailure: preValidation.currentState
+      });
+    }
+    
+  }, [calculateRouteToFacility, clearRouteError]);
 
   // 음성 안내 기능 (TTS)
   const handleVoiceGuide = useCallback((facility) => {
@@ -317,37 +377,65 @@ export default function PublicHome() {
         </header>
 
         <main className="max-w-7xl mx-auto px-4 py-4 sm:py-8">
-          {/* ✅ 경로 계산 오류 메시지 UI */}
+          {/* ✅ 향상된 경로 계산 오류 메시지 UI */}
           {routeError && (
-            <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 mb-6 animate-in slide-in-from-top duration-300">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <span className="text-red-600 text-lg">⚠️</span>
+            <div className="bg-red-50 border-2 border-red-200 rounded-2xl p-5 mb-6 shadow-lg animate-in slide-in-from-top duration-300">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <span className="text-red-600 text-2xl">⚠️</span>
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-red-800 font-semibold text-sm">경로 계산 오류</h3>
-                  <p className="text-red-700 text-sm mt-1">{routeError}</p>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-red-800 font-bold text-lg mb-2">경로를 찾을 수 없습니다</h3>
+                  <p className="text-red-700 text-base leading-relaxed mb-4">{routeError}</p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => handleFacilitySelect(selectedFacility)}
+                      className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl font-semibold text-base hover:bg-blue-700 transition-all duration-300 shadow-md hover:shadow-lg"
+                      disabled={isRouteLoading}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      <span>다시 시도</span>
+                    </button>
+                    <button
+                      onClick={clearRouteError}
+                      className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-base hover:bg-gray-200 transition-all duration-300"
+                    >
+                      <span>닫기</span>
+                    </button>
+                  </div>
                 </div>
                 <button
                   onClick={clearRouteError}
-                  className="text-red-400 hover:text-red-600 transition-colors"
+                  className="text-red-400 hover:text-red-600 transition-colors p-1 flex-shrink-0"
                 >
-                  ✕
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
             </div>
           )}
 
-          {/* ✅ 경로 계산 로딩 상태 UI */}
+          {/* ✅ 향상된 경로 계산 로딩 상태 UI */}
           {isRouteLoading && (
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6 animate-in slide-in-from-top duration-300">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-300 border-t-blue-600"></div>
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-5 mb-6 shadow-lg animate-in slide-in-from-top duration-300">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <div className="animate-spin rounded-full h-6 w-6 border-3 border-blue-300 border-t-blue-600"></div>
                 </div>
-                <div>
-                  <p className="text-blue-800 font-semibold text-sm">경로 계산 중...</p>
-                  <p className="text-blue-600 text-xs">잠시만 기다려주세요.</p>
+                <div className="flex-1">
+                  <p className="text-blue-800 font-bold text-lg mb-1">경로를 계산하고 있습니다</p>
+                  <p className="text-blue-600 text-base">{selectedFacility?.name}까지의 최적 경로를 찾고 있어요.</p>
+                  <div className="flex items-center gap-2 mt-3">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    </div>
+                    <span className="text-blue-500 text-sm font-medium">잠시만 기다려주세요</span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -177,8 +177,8 @@ export default function NFCReader({ onTagScanned, autoStart = true }) {
             
           } else if (scanResult.offline) {
             // 오프라인 모드
-            toast.warning('오프라인 모드로 작동 중입니다.', {
-              icon: '📡',
+            toast('오프라인 모드로 작동 중입니다.', {
+              icon: '📴',
               duration: 3000
             });
             

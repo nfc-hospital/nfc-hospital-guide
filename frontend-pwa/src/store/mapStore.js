@@ -186,7 +186,150 @@ const useMapStore = create(
         }
       },
 
-      // ✅ 새로운 핵심 함수: 목적지로의 경로 계산 (단일 책임)
+      // ✅ 최종 통합 핵심 함수: 시설까지의 경로 계산 (모든 로직 통합)
+      calculateRouteToFacility: async (destinationFacility) => {
+        console.log('🎯 시설 경로 계산 시작:', destinationFacility);
+        
+        // 1️⃣ 로딩 상태 시작 및 상태 초기화
+        set({ 
+          isRouteLoading: true, 
+          routeError: null, 
+          activeRoute: null,
+          navigationMode: 'explore',
+          destinationLocation: destinationFacility 
+        });
+
+        try {
+          // 2️⃣ 현재 위치는 오직 locationStore에서만 조회 (단일 진실 공급원)
+          const startNodeId = useLocationStore.getState().currentNodeId;
+          const endNodeId = destinationFacility.node_id;
+          const destinationName = destinationFacility.name || destinationFacility.title || '목적지';
+          
+          console.log('📍 경로 계산 노드:', { 
+            시작: startNodeId, 
+            목적지: endNodeId, 
+            목적지명: destinationName 
+          });
+          
+          // 3️⃣ 사전 검증 - 현재 위치
+          if (!startNodeId) {
+            set({
+              routeError: "현재 위치를 알 수 없습니다. NFC를 먼저 스캔해주세요.",
+              isRouteLoading: false
+            });
+            console.warn('⚠️ 현재 위치가 설정되지 않음');
+            return;
+          }
+
+          // 4️⃣ 사전 검증 - 목적지
+          if (!endNodeId) {
+            set({
+              routeError: "목적지 정보가 올바르지 않습니다.",
+              isRouteLoading: false
+            });
+            console.warn('⚠️ 목적지 노드 ID가 유효하지 않음:', endNodeId);
+            return;
+          }
+
+          console.log('🚀 API 호출 시작:', { 
+            from: startNodeId, 
+            to: endNodeId 
+          });
+
+          // 5️⃣ 경로 계산 API 호출 (실제 시작점 사용)
+          const { calculateRoute } = await import('../api/navigation');
+          const response = await calculateRoute(actualStartNodeId, endNodeId);
+          
+          // 6️⃣ 성공 처리
+          const routeData = response?.data?.data || response?.data || response;
+          
+          if (routeData?.coordinates && Array.isArray(routeData.coordinates)) {
+            console.log('✅ 경로 데이터 수신 성공:', {
+              coordinatesCount: routeData.coordinates.length,
+              distance: routeData.distance,
+              estimatedTime: routeData.estimatedTime
+            });
+
+            // coordinates 배열에서 nodes 정보 추출
+            const nodes = routeData.coordinates.map((point, index) => ({
+              id: `node_${index}`,
+              x: point.x,
+              y: point.y,
+              name: index === 0 ? '출발지' : 
+                    index === routeData.coordinates.length - 1 ? destinationName : 
+                    `경유지 ${index}`,
+              floor: 1,
+              building: '본관',
+              map_id: 'main_1f'
+            }));
+
+            // edges 생성 (연속된 노드들을 연결)
+            const edges = [];
+            for (let i = 0; i < nodes.length - 1; i++) {
+              edges.push([nodes[i].id, nodes[i + 1].id]);
+            }
+
+            // 7️⃣ 상태 업데이트 (최종)
+            set({
+              activeRoute: {
+                nodes: nodes,
+                edges: edges,
+                total_distance: routeData.distance || 0,
+                estimated_time: routeData.estimatedTime || 0,
+                floors_involved: [1],
+                has_floor_transitions: false
+              },
+              navigationRoute: {
+                nodes: nodes,
+                edges: edges,
+                route_data: routeData
+              },
+              routeError: fallbackUsed ? `경로 계산 성공 (기본 시작점 사용)` : null,
+              isRouteLoading: false
+            });
+
+            // 8️⃣ LocationStore와 동기화 (경로 정보)
+            try {
+              const locationStore = useLocationStore.getState();
+              locationStore.setRoute(
+                routeData.coordinates || [],
+                endNodeId,
+                destinationName
+              );
+              console.log('🔄 LocationStore와 MapStore 경로 동기화 완료');
+            } catch (syncError) {
+              console.error('LocationStore 동기화 실패:', syncError);
+              // 동기화 실패해도 경로 표시는 유지
+            }
+
+            console.log('✅ 시설 경로 계산 및 설정 완료', {
+              fallbackUsed: fallbackUsed,
+              startNodeId: actualStartNodeId,
+              destinationName: destinationName,
+              routeLength: routeData.coordinates?.length || 0
+            });
+            
+            // Fallback 사용 시 추가 알림
+            if (fallbackUsed) {
+              console.log('🔔 경로 계산 완료 알림: 기본 출발점(안내데스크)에서 목적지까지 경로가 계산되었습니다.');
+            }
+          } else {
+            throw new Error('유효한 경로 데이터를 받지 못했습니다.');
+          }
+
+        } catch (error) {
+          // 9️⃣ 실패 처리
+          console.error('❌ 시설 경로 계산 실패:', error);
+          set({
+            routeError: "경로 계산에 실패했습니다. 잠시 후 다시 시도해주세요.",
+            activeRoute: null,
+            navigationRoute: null,
+            isRouteLoading: false
+          });
+        }
+      },
+
+      // ✅ 기존 함수 (하위 호환성 유지, 새 함수로 리다이렉트)
       calculateRouteToDestination: async (destinationNodeId, destinationName = '목적지') => {
         console.log('🎯 경로 계산 시작:', { destinationNodeId, destinationName });
         
@@ -412,9 +555,9 @@ const useMapStore = create(
         });
       },
       
-      // ✅ 단순화된 경로 업데이트 함수 (새로운 calculateRouteToDestination 사용)
+      // ✅ 단순화된 경로 업데이트 함수 (새로운 통합 함수 사용)
       updateRouteBasedOnLocation: async (newLocation, customDestination = null) => {
-        console.log('🔄 위치 기반 경로 업데이트 시작:', { newLocation, customDestination });
+        console.log('🔄 updateRouteBasedOnLocation 호출, 새 함수로 리다이렉트');
         
         try {
           // 1. 목적지 결정: customDestination이 있으면 우선 사용, 없으면 journeyStore에서 가져오기
@@ -436,11 +579,8 @@ const useMapStore = create(
             return;
           }
           
-          // 2. 새로운 단일 책임 함수로 경로 계산
-          await get().calculateRouteToDestination(
-            destination.node_id || destination.destination_node_id,
-            destination.title || destination.name || '목적지'
-          );
+          // 2. 새로운 통합 핵심 함수로 직접 호출
+          await get().calculateRouteToFacility(destination);
           
         } catch (error) {
           console.error('❌ 위치 기반 경로 업데이트 실패:', error);
@@ -462,21 +602,12 @@ const useMapStore = create(
         set({ navigationMode: mode });
       },
       
-      // ✅ 단순화된 시설 네비게이션 (새로운 calculateRouteToDestination 사용)
+      // ✅ 단순화된 시설 네비게이션 (새로운 통합 함수 사용)
       navigateToFacility: async (facility) => {
-        console.log('🏢 시설 탐색 모드로 전환:', facility);
+        console.log('🏢 navigateToFacility 호출, 새 함수로 리다이렉트:', facility);
         
-        // 탐색 모드로 전환하고 목적지 설정
-        set({ 
-          navigationMode: 'explore',
-          destinationLocation: facility 
-        });
-        
-        // 새로운 단일 책임 함수로 직접 경로 계산
-        await get().calculateRouteToDestination(
-          facility.node_id,
-          facility.name || facility.title
-        );
+        // 새로운 통합 핵심 함수로 직접 호출
+        await get().calculateRouteToFacility(facility);
       },
 
       // 경로 진행 상황 업데이트

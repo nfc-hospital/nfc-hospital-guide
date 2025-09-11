@@ -154,11 +154,49 @@ export default function MockNFCPanel() {
         console.log('📍 위치 정보 조회됨:', locationData);
         console.log('📍 이전 currentLocation 상태:', currentLocation);
         
+        // 🔧 node_id Fallback 로직 추가
+        let actualNodeId = locationData.node_id;
+        let fallbackUsed = false;
+        
+        if (!actualNodeId) {
+          console.warn('⚠️ API에서 node_id가 null - Fallback 로직 시작');
+          
+          // facilityManagement.js에서 태그 코드 기반으로 node_id 찾기
+          const { ALL_FACILITIES } = await import('../data/facilityManagement');
+          
+          // 태그 코드나 위치명으로 매칭 시도
+          const matchedFacility = ALL_FACILITIES.find(facility => 
+            tag.code.toLowerCase().includes(facility.name.toLowerCase()) ||
+            facility.name.toLowerCase().includes(locationData.location_name?.toLowerCase() || '') ||
+            (tag.code === 'nfc-pharmacy-1f001' && facility.id === 'pharmacy') ||
+            (tag.code.includes('pharmacy') && facility.id === 'pharmacy') ||
+            (tag.code.includes('emergency') && facility.id === 'emergency') ||
+            (tag.code.includes('reception') && facility.id === 'administration') ||
+            (tag.code.includes('info') && facility.id === 'info-desk')
+          );
+          
+          if (matchedFacility?.node_id) {
+            actualNodeId = matchedFacility.node_id;
+            fallbackUsed = true;
+            console.log('✅ Fallback 성공:', {
+              tagCode: tag.code,
+              matchedFacility: matchedFacility.name,
+              fallbackNodeId: actualNodeId
+            });
+          } else {
+            console.error('❌ Fallback 실패 - 매칭되는 시설을 찾을 수 없음:', {
+              tagCode: tag.code,
+              locationName: locationData.location_name
+            });
+          }
+        }
+        
         // 2. LocationStore에 좌표 기반 위치 설정
         console.log('📍 setCoordinateLocation 호출 전 - 전달할 데이터:', {
-          nodeId: locationData.node_id,
+          nodeId: actualNodeId,
           position: locationData.position, 
           mapId: locationData.map_id,
+          fallbackUsed: fallbackUsed,
           additionalInfo: {
             location_name: locationData.location_name,
             building: locationData.building,
@@ -167,47 +205,79 @@ export default function MockNFCPanel() {
           }
         });
         
-        setCoordinateLocation(
-          locationData.node_id,
-          locationData.position,
-          locationData.map_id,
-          {
-            location_name: locationData.location_name,
-            building: locationData.building,
-            floor: locationData.floor,
-            room: locationData.room
-          }
-        );
-        console.log('📍 setCoordinateLocation 호출 후');
-        
-        // ✅ 상태 업데이트 검증 및 강제 리렌더링
-        setTimeout(() => {
-          const updatedState = useLocationStore.getState();
-          console.log('📍 업데이트 후 LocationStore 상태:', {
-            currentNodeId: updatedState.currentNodeId,
-            currentPosition: updatedState.currentPosition,
-            currentLocation: updatedState.currentLocation,
-            lastScanTime: updatedState.lastScanTime
-          });
+        // 🔧 Promise 기반 상태 검증 및 설정 (actualNodeId 사용)
+        const locationSetSuccess = await new Promise((resolve) => {
+          const success = setCoordinateLocation(
+            actualNodeId, // fallback된 nodeId 사용
+            locationData.position,
+            locationData.map_id,
+            {
+              location_name: locationData.location_name,
+              building: locationData.building,
+              floor: locationData.floor,
+              room: locationData.room
+            }
+          );
           
-          // currentNodeId가 제대로 설정되지 않았으면 재시도
-          if (!updatedState.currentNodeId && locationData.node_id) {
-            console.warn('⚠️ currentNodeId 설정 실패, 재시도 중...');
-            setCoordinateLocation(
-              locationData.node_id,
-              locationData.position,
-              locationData.map_id,
-              {
-                location_name: locationData.location_name,
-                building: locationData.building,
-                floor: locationData.floor,
-                room: locationData.room
-              }
-            );
-          } else if (updatedState.currentNodeId) {
-            console.log('✅ currentNodeId 설정 성공:', updatedState.currentNodeId);
+          if (!success) {
+            console.error('❌ setCoordinateLocation 즉시 실패');
+            resolve(false);
+            return;
           }
-        }, 100);
+          
+          // 상태 업데이트 검증 (100ms 후)
+          setTimeout(() => {
+            const updatedState = useLocationStore.getState();
+            const validation = updatedState.getStateValidation();
+            
+            console.log('🔍 MockNFC 스캔 후 상태 검증:', {
+              ...validation,
+              fallbackUsed: fallbackUsed,
+              actualNodeId: actualNodeId
+            });
+            
+            const isSuccessful = validation.hasCurrentNodeId && validation.nodeIdLocationConsistent;
+            
+            if (isSuccessful) {
+              console.log('✅ LocationStore 상태 설정 성공 확인:', {
+                nodeId: updatedState.currentNodeId,
+                locationName: validation.currentState.locationName,
+                position: validation.currentState.position,
+                fallbackUsed: fallbackUsed
+              });
+              resolve(true);
+            } else {
+              console.warn('⚠️ LocationStore 상태 설정 불완전, 재시도 중...');
+              
+              // 재시도 (actualNodeId로)
+              const retrySuccess = setCoordinateLocation(
+                actualNodeId,
+                locationData.position,
+                locationData.map_id,
+                {
+                  location_name: locationData.location_name,
+                  building: locationData.building,
+                  floor: locationData.floor,
+                  room: locationData.room
+                }
+              );
+              
+              setTimeout(() => {
+                const finalState = useLocationStore.getState();
+                const finalValidation = finalState.getStateValidation();
+                const finalSuccess = finalValidation.hasCurrentNodeId && finalValidation.nodeIdLocationConsistent;
+                
+                if (finalSuccess) {
+                  console.log('✅ 재시도 성공:', finalState.currentNodeId);
+                } else {
+                  console.error('❌ 재시도도 실패, 최종 상태:', finalValidation);
+                }
+                
+                resolve(finalSuccess);
+              }, 100);
+            }
+          }, 100);
+        });
         
         // 3. 기존 MapStore도 업데이트 (호환성 유지)
         const mapLocationInfo = {
@@ -223,30 +293,99 @@ export default function MockNFCPanel() {
         
         updateCurrentLocation(mapLocationInfo);
         
-        // 4. 테스트용 목적지 설정 및 경로 자동 계산
-        // 현재 위치와 다른 노드로 경로를 생성하여 시각화 테스트
+        // 4. 테스트용 목적지 설정 및 경로 자동 계산 (실제 node_id 사용)
+        // facilityManagement.js에서 실제 시설 데이터 사용
+        const { MAJOR_DEPARTMENTS, MAJOR_FACILITIES } = await import('../data/facilityManagement');
+        
         const testDestinations = [
-          { title: '내과 진료실 1', x_coord: 215, y_coord: 290, room: '내과 진료실 1' },
-          { title: '약국', x_coord: 530, y_coord: 320, room: '약국' },
-          { title: '간호사실', x_coord: 450, y_coord: 410, room: '간호사실' }
+          // 내과 (실제 존재하는 시설)
+          MAJOR_DEPARTMENTS.find(d => d.id === 'internal-medicine') || 
+          { 
+            title: '내과', 
+            name: '내과',
+            x_coord: 215, 
+            y_coord: 290, 
+            room: '내과 진료실',
+            node_id: null // fallback 시 MapStore에서 처리
+          },
+          // 약국 (실제 존재하는 시설)  
+          MAJOR_FACILITIES.find(f => f.id === 'pharmacy') || 
+          {
+            title: '약국',
+            name: '약국', 
+            x_coord: 780, 
+            y_coord: 280, 
+            room: '원내약국',
+            node_id: '650fa82e-595b-4232-b27f-ee184b4fce14' // 약국 실제 node_id
+          },
+          // 안내데스크 (실제 존재하는 시설)
+          MAJOR_FACILITIES.find(f => f.id === 'info-desk') ||
+          {
+            title: '안내데스크',
+            name: '안내데스크',
+            x_coord: 450, 
+            y_coord: 200, 
+            room: '안내데스크',
+            node_id: '497071c2-a868-408c-9595-3cb597b15bae' // 안내데스크 실제 node_id
+          }
         ];
+        
+        console.log('🎯 테스트 목적지 로드 완료:', testDestinations.map(d => ({
+          name: d.name || d.title,
+          node_id: d.node_id,
+          hasNodeId: !!d.node_id
+        })));
         
         // 현재 위치와 다른 목적지를 무작위로 선택
         const currentX = locationData.position.x;
         const currentY = locationData.position.y;
         
-        const availableDestinations = testDestinations.filter(dest => 
-          Math.abs(dest.x_coord - currentX) > 50 || Math.abs(dest.y_coord - currentY) > 50
-        );
+        const availableDestinations = testDestinations.filter(dest => {
+          const destX = dest.coordinates?.x || dest.x_coord || 0;
+          const destY = dest.coordinates?.y || dest.y_coord || 0;
+          return Math.abs(destX - currentX) > 50 || Math.abs(destY - currentY) > 50;
+        });
         
         const testDestination = availableDestinations.length > 0 
           ? availableDestinations[0] 
           : testDestinations[0];
         
-        console.log('🎯 테스트 목적지 설정:', testDestination);
+        console.log('🎯 테스트 목적지 설정:', {
+          name: testDestination.name || testDestination.title,
+          node_id: testDestination.node_id,
+          hasNodeId: !!testDestination.node_id,
+          coordinates: testDestination.coordinates || { x: testDestination.x_coord, y: testDestination.y_coord }
+        });
         
         // MapStore에 목적지 전달하여 경로 계산
-        await updateRouteBasedOnLocation(mapLocationInfo, testDestination);
+        try {
+          await updateRouteBasedOnLocation(mapLocationInfo, testDestination);
+          
+          // 🔍 경로 계산 결과 검증
+          const mapState = useMapStore.getState();
+          const hasRoute = !!(mapState.activeRoute && mapState.activeRoute.nodes?.length > 0);
+          const hasError = !!mapState.routeError;
+          
+          console.log('📊 테스트 경로 계산 결과:', {
+            success: hasRoute && !hasError,
+            hasRoute: hasRoute,
+            hasError: hasError,
+            routeError: mapState.routeError,
+            nodeCount: mapState.activeRoute?.nodes?.length || 0,
+            routeDistance: mapState.activeRoute?.total_distance || 0
+          });
+          
+          if (hasRoute && !hasError) {
+            console.log('✅ MockNFC 테스트 경로 계산 성공!');
+          } else if (hasError) {
+            console.warn('⚠️ MockNFC 테스트 경로 계산 오류:', mapState.routeError);
+          } else {
+            console.warn('⚠️ MockNFC 테스트 경로가 생성되지 않음');
+          }
+          
+        } catch (error) {
+          console.error('❌ MockNFC 테스트 경로 계산 실패:', error);
+        }
         
         // 5. 가상 NDEF 메시지 생성 (기존 API와의 호환성을 위해)
         const jsonData = JSON.stringify({
@@ -292,10 +431,29 @@ export default function MockNFCPanel() {
           // 비로그인 사용자의 경우 간단한 성공 처리
           if (journeyResult?.isGuest) {
             console.log('👤 비로그인 사용자 MockNFC 스캔 완료');
-            toast.success(`${tag.description} 위치로 설정됨`, {
-              icon: '📍',
-              duration: 2000
-            });
+            
+            // 🔍 최종 LocationStore 상태 확인
+            const finalState = useLocationStore.getState();
+            const validation = finalState.getStateValidation();
+            
+            if (validation.hasCurrentNodeId && validation.nodeIdLocationConsistent) {
+              toast.success(`${tag.description} 위치 설정 완료! 🎯 경로 계산 준비됨`, {
+                icon: '📍',
+                duration: 3000
+              });
+              console.log('✅ 비로그인 사용자 - LocationStore 상태 완벽 설정:', {
+                nodeId: finalState.currentNodeId,
+                location: validation.currentState.locationName,
+                readyForRouting: true
+              });
+            } else {
+              toast(`${tag.description} 위치 설정됨 (부분)`, {
+                icon: '⚠️',
+                duration: 2000
+              });
+              console.warn('⚠️ 비로그인 사용자 - LocationStore 상태 부분 설정:', validation);
+            }
+            
             return; // 추가 네비게이션 없이 종료
           }
           
@@ -314,7 +472,7 @@ export default function MockNFCPanel() {
             }, 1500);
           }
         } else if (result.offline) {
-          toast.warning('오프라인 모드 - 로컬 처리만 수행', {
+          toast('오프라인 모드 - 로컬 처리만 수행', {
             icon: '📴',
             duration: 2000
           });
