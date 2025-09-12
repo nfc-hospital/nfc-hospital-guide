@@ -395,25 +395,47 @@ const MapNavigator = ({
           const pathData = [];
           let currentPath = [];
           
-          // 엣지를 따라 경로 구성
+          // 90도 직각 경로 생성 함수 (초기 로드용)
+          const generateOrthogonalPathInitial = (fromNode, toNode) => {
+            const fx = fromNode.x;
+            const fy = fromNode.y;
+            const tx = toNode.x;
+            const ty = toNode.y;
+            
+            const dx = Math.abs(tx - fx);
+            const dy = Math.abs(ty - fy);
+            
+            // 90도 직각 이동만 허용 (대각선 이동을 L자로 변환)
+            if (dx > 5 && dy > 5) {
+              // 대각선 이동을 두 단계로 나눔: 먼저 수평, 그다음 수직
+              return `M ${fx} ${fy} L ${tx} ${fy} L ${tx} ${ty}`;
+            } else {
+              // 이미 수평 또는 수직 이동이면 그대로 연결
+              return `M ${fx} ${fy} L ${tx} ${ty}`;
+            }
+          };
+
+          // 엣지를 따라 90도 직각 경로 구성 (초기 로드)
           corridorEdges.forEach(([from, to], index) => {
             const fromNode = corridorNodes.find(n => n.id === from);
             const toNode = corridorNodes.find(n => n.id === to);
             
             if (fromNode && toNode) {
-              const line = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'line');
-              line.setAttribute('x1', fromNode.x);
-              line.setAttribute('y1', fromNode.y);
-              line.setAttribute('x2', toNode.x);
-              line.setAttribute('y2', toNode.y);
-              line.setAttribute('stroke', '#2563eb'); // bg-blue-600과 동일
-              line.setAttribute('stroke-width', '3');
-              line.setAttribute('stroke-dasharray', '12,6');
-              line.setAttribute('opacity', '0.8');
+              const pathString = generateOrthogonalPathInitial(fromNode, toNode);
+              
+              const path = svgDoc.createElementNS('http://www.w3.org/2000/svg', 'path');
+              path.setAttribute('d', pathString);
+              path.setAttribute('stroke', '#2563eb'); // bg-blue-600과 동일
+              path.setAttribute('stroke-width', '3');
+              path.setAttribute('stroke-dasharray', '12,6');
+              path.setAttribute('fill', 'none');
+              path.setAttribute('stroke-linecap', 'round');
+              path.setAttribute('stroke-linejoin', 'round');
+              path.setAttribute('opacity', '0.8');
               
               // 마지막 선분에 화살표 추가
               if (index === corridorEdges.length - 1) {
-                line.setAttribute('marker-end', 'url(#arrowhead)');
+                path.setAttribute('marker-end', 'url(#arrowhead)');
               }
               
               // 애니메이션 추가 (점선이 움직이는 효과)
@@ -423,12 +445,12 @@ const MapNavigator = ({
               animate.setAttribute('to', '-18');  // 음수로 설정하여 정방향 이동
               animate.setAttribute('dur', '1.5s');
               animate.setAttribute('repeatCount', 'indefinite');
-              line.appendChild(animate);
+              path.appendChild(animate);
               
               // 추가: 선 자체에 클래스 추가 (CSS 애니메이션 대비)
-              line.setAttribute('class', 'path-line-animated');
+              path.setAttribute('class', 'path-line-animated');
               
-              pathGroup.appendChild(line);
+              pathGroup.appendChild(path);
             }
           });
           
@@ -634,25 +656,47 @@ const MapNavigator = ({
         defs.appendChild(marker);
       }
       
-      // 엣지를 따라 경로 구성
+      // 90도 직각 경로 생성 함수
+      const generateOrthogonalPath = (fromNode, toNode) => {
+        const fx = fromNode.x;
+        const fy = fromNode.y;
+        const tx = toNode.x;
+        const ty = toNode.y;
+        
+        const dx = Math.abs(tx - fx);
+        const dy = Math.abs(ty - fy);
+        
+        // 90도 직각 이동만 허용 (대각선 이동을 L자로 변환)
+        if (dx > 5 && dy > 5) {
+          // 대각선 이동을 두 단계로 나눔: 먼저 수평, 그다음 수직
+          return `M ${fx} ${fy} L ${tx} ${fy} L ${tx} ${ty}`;
+        } else {
+          // 이미 수평 또는 수직 이동이면 그대로 연결
+          return `M ${fx} ${fy} L ${tx} ${ty}`;
+        }
+      };
+
+      // 엣지를 따라 90도 직각 경로 구성
       corridorEdges.forEach(([from, to], index) => {
         const fromNode = corridorNodes.find(n => n.id === from);
         const toNode = corridorNodes.find(n => n.id === to);
         
         if (fromNode && toNode) {
-          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-          line.setAttribute('x1', fromNode.x);
-          line.setAttribute('y1', fromNode.y);
-          line.setAttribute('x2', toNode.x);
-          line.setAttribute('y2', toNode.y);
-          line.setAttribute('stroke', '#2563eb'); // bg-blue-600과 동일
-          line.setAttribute('stroke-width', '3');
-          line.setAttribute('stroke-dasharray', '12,6');
-          line.setAttribute('opacity', '0.8');
+          const pathString = generateOrthogonalPath(fromNode, toNode);
+          
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', pathString);
+          path.setAttribute('stroke', '#2563eb'); // bg-blue-600과 동일
+          path.setAttribute('stroke-width', '3');
+          path.setAttribute('stroke-dasharray', '12,6');
+          path.setAttribute('fill', 'none');
+          path.setAttribute('stroke-linecap', 'round');
+          path.setAttribute('stroke-linejoin', 'round');
+          path.setAttribute('opacity', '0.8');
           
           // 마지막 선분에 화살표 추가
           if (index === corridorEdges.length - 1) {
-            line.setAttribute('marker-end', 'url(#arrowhead)');
+            path.setAttribute('marker-end', 'url(#arrowhead)');
           }
           
           // 애니메이션 추가 (점선이 움직이는 효과)
@@ -662,9 +706,9 @@ const MapNavigator = ({
           animate.setAttribute('to', '-18');  // 음수로 설정하여 정방향 이동
           animate.setAttribute('dur', '1.5s');
           animate.setAttribute('repeatCount', 'indefinite');
-          line.appendChild(animate);
+          path.appendChild(animate);
           
-          pathGroup.appendChild(line);
+          pathGroup.appendChild(path);
         }
       });
       

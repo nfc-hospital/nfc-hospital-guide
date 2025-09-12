@@ -371,73 +371,64 @@ class SVGCorridorAnalyzer:
         print(f"[OK] 복도 분석 완료: {len(self.navigation_points)}개 네비게이션 포인트 생성")
         
     def _identify_main_corridors(self) -> None:
-        """주요 복도 구간 식별 - 더 실용적인 접근법"""
-        print("[DEBUG] 복도 분석 시작...")
+        """주요 복도 구간 식별 - 90도 직각 경로만 생성"""
+        print("[DEBUG] 90도 직각 복도 분석 시작...")
         
-        # 모든 방의 위치를 분석하여 실제 병원 레이아웃에 맞는 연결 생성
-        # 1층 평면도 기준으로 실제 복도 상황을 고려
+        # 수평/수직 복도 축 정의 (격자 기반 레이아웃)
+        horizontal_corridors = [
+            250,  # 북쪽 복도 (진단검사의학과/채혈실)
+            350,  # 중앙 복도 (메인 통로)
+            480   # 남쪽 복도 (원무과/헌혈실)
+        ]
         
-        # 중앙 복도 축 정의 (실제 SVG 분석 기반)
-        main_corridor_y = 350  # 응급실 하단 ~ 편의시설 사이의 주복도
-        north_corridor_y = 250  # 진단검사의학과/채혈실 하단 복도
+        vertical_corridors = [
+            200,  # 서쪽 복도 (응급실)
+            400,  # 중앙 세로 복도
+            500,  # 동쪽 복도 (편의시설)
+            680   # 최동쪽 복도 (은행/채혈실)
+        ]
         
-        # 각 방의 복도 접근점 계산
-        for room in self.rooms:
-            # 방 중심에서 가장 가까운 복도로의 연결점 생성
-            room_center_x = room.x + room.width / 2
-            room_center_y = room.y + room.height / 2
-            
-            # 복도 연결점 결정
-            if room_center_y < 300:  # 북쪽 방들 (진단검사의학과, 채혈실, 응급실)
-                corridor_y = north_corridor_y
-            else:  # 남쪽 방들 (편의시설, 원무과, 헌혈실)
-                corridor_y = main_corridor_y
-                
-            # 방에서 복도로의 수직 연결
-            if room.door_y:
-                # 실제 문 위치가 있으면 그것 사용
-                corridor_connect_x = room.door_x or room_center_x
-            else:
-                corridor_connect_x = room_center_x
-                
-            # 수직 복도 구간 생성 (방에서 메인 복도로)
-            if abs(room_center_y - corridor_y) > 10:  # 10px 이상 떨어져 있으면
-                corridor = CorridorSegment(
-                    start_x=corridor_connect_x,
-                    start_y=min(room_center_y, corridor_y),
-                    end_x=corridor_connect_x,
-                    end_y=max(room_center_y, corridor_y),
-                    width=30,  # 복도 폭
-                    direction='vertical'
+        # 수평 복도 구간들 생성
+        for y in horizontal_corridors:
+            corridor = CorridorSegment(
+                start_x=50,    # 서쪽 끝
+                start_y=y,
+                end_x=850,     # 동쪽 끝
+                end_y=y,
+                width=40,
+                direction='horizontal'
+            )
+            self.corridor_segments.append(corridor)
+            print(f"[DEBUG] 수평복도 생성: y={y}")
+        
+        # 수직 복도 구간들 생성
+        for x in vertical_corridors:
+            corridor = CorridorSegment(
+                start_x=x,
+                start_y=50,    # 북쪽 끝
+                end_x=x,
+                end_y=550,     # 남쪽 끝
+                width=40,
+                direction='vertical'
+            )
+            self.corridor_segments.append(corridor)
+            print(f"[DEBUG] 수직복도 생성: x={x}")
+        
+        # 격자 교차점들 생성 (수평선과 수직선이 만나는 모든 지점)
+        junction_points = []
+        for x in vertical_corridors:
+            for y in horizontal_corridors:
+                junction = NavigationPoint(
+                    x=x, 
+                    y=y, 
+                    point_type='junction', 
+                    name=f"교차점_{int(x)}_{int(y)}"
                 )
-                self.corridor_segments.append(corridor)
-                print(f"[DEBUG] 수직복도 생성: {room.name} → 메인복도")
-        
-        # 메인 수평 복도들 생성
-        main_corridors = [
-            # 북쪽 수평 복도 (진단검사의학과 ↔ 채혈실)
-            CorridorSegment(380, north_corridor_y, 750, north_corridor_y, 40, 'horizontal'),
-            
-            # 중앙 수평 복도 (응급실 ↔ 편의시설)  
-            CorridorSegment(200, main_corridor_y, 740, main_corridor_y, 50, 'horizontal'),
-            
-            # 남쪽 수평 복도 (헌혈실 ↔ 원무과)
-            CorridorSegment(140, 480, 480, 480, 30, 'horizontal')
-        ]
-        
-        self.corridor_segments.extend(main_corridors)
-        print(f"[DEBUG] 총 {len(self.corridor_segments)}개 복도 구간 생성")
-        
-        # 주요 교차점 생성
-        junction_points = [
-            # 중앙 교차점 (메인 복도들이 만나는 지점)
-            NavigationPoint(400, main_corridor_y, 'junction', '중앙교차점'),
-            NavigationPoint(500, north_corridor_y, 'junction', '북쪽교차점'),
-            NavigationPoint(300, 480, 'junction', '남쪽교차점')
-        ]
+                junction_points.append(junction)
+                print(f"[DEBUG] 격자교차점 생성: ({x}, {y})")
         
         self.navigation_points.extend(junction_points)
-        print(f"[DEBUG] {len(junction_points)}개 교차점 생성")
+        print(f"[DEBUG] 총 {len(self.corridor_segments)}개 직각복도, {len(junction_points)}개 교차점 생성")
                         
     def _find_corridor_intersections(self) -> None:
         """복도 교차점 찾기"""
@@ -460,28 +451,75 @@ class SVGCorridorAnalyzer:
         self.navigation_points.extend(intersections)
         
     def _create_room_entrance_points(self) -> None:
-        """방 입구 연결점 생성"""
+        """방 입구 연결점 생성 + 가장 가까운 복도 격자점과 연결"""
+        horizontal_corridors = [250, 350, 480]
+        vertical_corridors = [200, 400, 500, 680]
+        
         for room in self.rooms:
             if room.door_x and room.door_y:
                 # 실제 문 위치 사용
-                entrance = NavigationPoint(
-                    x=room.door_x,
-                    y=room.door_y,
-                    point_type='room_entrance',
-                    name=f"{room.name}_입구",
-                    connected_rooms=[room.name]
-                )
+                entrance_x = room.door_x
+                entrance_y = room.door_y
             else:
-                # 문 위치가 없으면 방 중앙 하단 사용
-                entrance = NavigationPoint(
-                    x=room.x + room.width / 2,
-                    y=room.y + room.height,
-                    point_type='room_entrance',
-                    name=f"{room.name}_입구",
-                    connected_rooms=[room.name]
+                # 문 위치가 없으면 방 중심 사용
+                entrance_x = room.x + room.width / 2
+                entrance_y = room.y + room.height / 2
+            
+            # 방 입구점 생성
+            entrance = NavigationPoint(
+                x=entrance_x,
+                y=entrance_y,
+                point_type='room_entrance',
+                name=f"{room.name}_입구",
+                connected_rooms=[room.name]
+            )
+            self.navigation_points.append(entrance)
+            
+            # 가장 가까운 복도 격자점 찾기
+            closest_grid_point = self._find_closest_grid_point(
+                entrance_x, entrance_y, horizontal_corridors, vertical_corridors
+            )
+            
+            if closest_grid_point:
+                # 중간 경유점이 필요한지 확인
+                waypoints = self._create_waypoints_to_grid(
+                    entrance_x, entrance_y, closest_grid_point[0], closest_grid_point[1]
                 )
                 
-            self.navigation_points.append(entrance)
+                for waypoint in waypoints:
+                    self.navigation_points.append(waypoint)
+                    
+    def _find_closest_grid_point(self, x: float, y: float, h_corridors: list, v_corridors: list) -> tuple:
+        """가장 가까운 복도 격자점 찾기"""
+        min_distance = float('inf')
+        closest_point = None
+        
+        for grid_x in v_corridors:
+            for grid_y in h_corridors:
+                distance = abs(x - grid_x) + abs(y - grid_y)  # 맨하탄 거리
+                if distance < min_distance:
+                    min_distance = distance
+                    closest_point = (grid_x, grid_y)
+                    
+        return closest_point
+        
+    def _create_waypoints_to_grid(self, start_x: float, start_y: float, grid_x: float, grid_y: float) -> list:
+        """방 입구에서 격자점까지의 90도 직각 경유점들 생성"""
+        waypoints = []
+        
+        # 두 단계로 나누어서 이동: 먼저 수평 이동, 그다음 수직 이동
+        if abs(start_x - grid_x) > 10 and abs(start_y - grid_y) > 10:
+            # 중간 경유점 필요 (L자 경로)
+            waypoint = NavigationPoint(
+                x=grid_x,  # 목적지 x좌표로 먼저 이동
+                y=start_y,  # 시작 y좌표 유지
+                point_type='junction',
+                name=f"경유점_{int(grid_x)}_{int(start_y)}"
+            )
+            waypoints.append(waypoint)
+            print(f"[DEBUG] 경유점 생성: {waypoint.name} at ({waypoint.x}, {waypoint.y})")
+            
+        return waypoints
             
     def generate_navigation_graph(self) -> Dict[str, any]:
         """네비게이션 그래프 생성"""
@@ -498,23 +536,32 @@ class SVGCorridorAnalyzer:
                 'connected_rooms': point.connected_rooms
             })
             
-        # 엣지 생성 (더 적극적인 연결 정책)
+        # 엣지 생성 (90도 직각 연결만 허용)
         for i, point1 in enumerate(self.navigation_points):
             for j, point2 in enumerate(self.navigation_points[i+1:], i+1):
-                distance = math.sqrt(
-                    (point1.x - point2.x) ** 2 + (point1.y - point2.y) ** 2
-                )
+                # 90도 직각 이동 검증
+                dx = abs(point1.x - point2.x)
+                dy = abs(point1.y - point2.y)
                 
-                # 거리 기반 연결 (300픽셀 이하면 연결)
+                # 수평 또는 수직 이동만 허용 (둘 중 하나는 0에 가까워야 함)
+                is_orthogonal = (dx < 5 and dy > 0) or (dy < 5 and dx > 0)
+                
+                if not is_orthogonal:
+                    continue  # 대각선 연결은 건너뛰기
+                
+                # 맨하탄 거리 계산
+                distance = dx + dy
+                
+                # 거리 기준 필터링 (너무 먼 직각 연결 제외)
                 should_connect = False
                 
-                if distance < 150:  # 가까운 노드들은 무조건 연결
+                if distance < 100:  # 가까운 직각 연결
                     should_connect = True
-                elif distance < 300:  # 중간 거리는 경로가 명확하면 연결
-                    should_connect = self._is_reasonable_path(point1, point2)
+                elif distance < 200:  # 중간 거리 직각 연결
+                    should_connect = self._is_clear_orthogonal_path(point1, point2)
                     
                 if should_connect:
-                    walk_time = max(10, int(distance * 0.6))  # 보행 시간 계산 (더 빠르게)
+                    walk_time = max(10, int(distance * 0.8))  # 맨하탄 거리 기반 시간
                     
                     edges.append({
                         'from_node': point1.name,
@@ -523,7 +570,7 @@ class SVGCorridorAnalyzer:
                         'walk_time': walk_time,
                         'edge_type': 'corridor'
                     })
-                    print(f"[DEBUG] 엣지 생성: {point1.name} ↔ {point2.name} ({distance:.1f}m)")
+                    print(f"[DEBUG] 직각엣지 생성: {point1.name} ↔ {point2.name} ({distance:.1f}m, {'수평' if dy < 5 else '수직'})")
                     
         return {
             'nodes': nodes,
@@ -553,8 +600,7 @@ class SVGCorridorAnalyzer:
         return True
         
     def _is_reasonable_path(self, point1: NavigationPoint, point2: NavigationPoint) -> bool:
-        """두 점 사이에 합리적인 경로가 있는지 판단"""
-        # 거리 기반 + 방향 기반 판단
+        """두 점 사이에 합리적인 경로가 있는지 판단 (레거시 메서드)"""
         dx = abs(point1.x - point2.x)
         dy = abs(point1.y - point2.y)
         
@@ -562,11 +608,37 @@ class SVGCorridorAnalyzer:
         if dx < 50 or dy < 50:  # 거의 같은 축에 있음
             return True
             
-        # 대각선이지만 합리적인 범위
-        if dx < 200 and dy < 200:
-            return True
-            
         return False
+        
+    def _is_clear_orthogonal_path(self, point1: NavigationPoint, point2: NavigationPoint) -> bool:
+        """두 점 사이의 90도 직각 경로가 막히지 않았는지 확인"""
+        dx = abs(point1.x - point2.x)
+        dy = abs(point1.y - point2.y)
+        
+        # 수평 이동인지 수직 이동인지 판단
+        if dx < 5:  # 수직 이동
+            # 두 점 사이의 수직선이 방들과 교차하는지 확인
+            min_y = min(point1.y, point2.y)
+            max_y = max(point1.y, point2.y)
+            
+            for room in self.rooms:
+                # 수직선이 방의 좌우 경계 사이를 지나가고, 방의 상하 경계와 겹치는지 확인
+                if (room.x <= point1.x <= room.x + room.width and
+                    not (max_y < room.y or min_y > room.y + room.height)):
+                    return False
+                    
+        elif dy < 5:  # 수평 이동
+            # 두 점 사이의 수평선이 방들과 교차하는지 확인
+            min_x = min(point1.x, point2.x)
+            max_x = max(point1.x, point2.x)
+            
+            for room in self.rooms:
+                # 수평선이 방의 상하 경계 사이를 지나가고, 방의 좌우 경계와 겹치는지 확인
+                if (room.y <= point1.y <= room.y + room.height and
+                    not (max_x < room.x or min_x > room.x + room.width)):
+                    return False
+                    
+        return True
         
     def _line_intersects_rect(self, x1: float, y1: float, x2: float, y2: float,
                              rect_x: float, rect_y: float, rect_w: float, rect_h: float) -> bool:

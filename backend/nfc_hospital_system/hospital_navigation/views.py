@@ -42,7 +42,24 @@ logger = logging.getLogger(__name__)
 
 
 class RouteCalculationService:
-    """경로 계산 서비스 - Dijkstra 알고리즘 사용"""
+    """경로 계산 서비스 - 90도 직각 경로만 허용하는 A* 알고리즘 사용"""
+    
+    @staticmethod
+    def manhattan_distance(node1: NavigationNode, node2: NavigationNode) -> float:
+        """맨하탄 거리 계산 (대각선 이동 금지)"""
+        return abs(node1.x_coord - node2.x_coord) + abs(node1.y_coord - node2.y_coord)
+    
+    @staticmethod
+    def is_orthogonal_movement(from_node: NavigationNode, to_node: NavigationNode) -> bool:
+        """
+        두 노드 간 이동이 90도 직각(상하좌우)인지 확인
+        대각선 이동은 허용하지 않음
+        """
+        dx = abs(from_node.x_coord - to_node.x_coord)
+        dy = abs(from_node.y_coord - to_node.y_coord)
+        
+        # 수평 이동 또는 수직 이동만 허용 (둘 중 하나는 0이어야 함)
+        return (dx == 0 and dy > 0) or (dy == 0 and dx > 0)
     
     @staticmethod
     def find_shortest_path(
@@ -53,15 +70,21 @@ class RouteCalculationService:
         avoid_crowded: bool = False
     ) -> Tuple[List[str], List[str], float, int]:
         """
-        최단 경로 계산
+        90도 직각 경로만 허용하는 A* 알고리즘을 사용한 최단 경로 계산
         Returns: (path_nodes, path_edges, total_distance, estimated_time)
         """
         if start_node == end_node:
             return ([str(start_node.node_id)], [], 0, 0)
         
-        # 그래프 구축
+        # 그래프 구축 - 90도 직각 이동만 허용
         graph = defaultdict(list)
         edges_dict = {}
+        nodes_dict = {}
+        
+        # 모든 노드 정보 수집
+        all_nodes = NavigationNode.objects.select_related('map')
+        for node in all_nodes:
+            nodes_dict[str(node.node_id)] = node
         
         # 엣지 필터링 조건
         edge_filter = models.Q()
@@ -78,11 +101,17 @@ class RouteCalculationService:
                 continue
             
             # 혼잡 구역 회피 (혼잡도 0.7 이상)
-            if avoid_crowded and edge.avg_congestion > 0.7:
+            if avoid_crowded and hasattr(edge, 'avg_congestion') and edge.avg_congestion > 0.7:
                 continue
             
-            # 양방향 엣지 처리
-            weight = edge.walk_time  # 시간 기준 최적화
+            # 90도 직각 이동 검증
+            if not RouteCalculationService.is_orthogonal_movement(edge.from_node, edge.to_node):
+                continue  # 대각선 연결은 건너뛰기
+            
+            # 맨하탄 거리 기반 가중치 계산
+            manhattan_dist = RouteCalculationService.manhattan_distance(edge.from_node, edge.to_node)
+            weight = manhattan_dist  # 거리 기반 가중치 사용
+            
             graph[str(edge.from_node.node_id)].append(
                 (str(edge.to_node.node_id), weight, str(edge.edge_id))
             )
@@ -93,18 +122,20 @@ class RouteCalculationService:
                     (str(edge.from_node.node_id), weight, str(edge.edge_id))
                 )
         
-        # Dijkstra 알고리즘
+        # A* 알고리즘 (맨하탄 휴리스틱)
         start_id = str(start_node.node_id)
         end_id = str(end_node.node_id)
         
-        distances = {start_id: 0}
-        previous_nodes = {}
-        previous_edges = {}
-        priority_queue = [(0, start_id)]
+        # A* 데이터 구조
+        open_set = [(0, start_id)]  # (f_score, node_id)
+        came_from = {}
+        came_from_edge = {}
+        g_score = {start_id: 0}
+        f_score = {start_id: RouteCalculationService.manhattan_distance(start_node, end_node)}
         visited = set()
         
-        while priority_queue:
-            current_distance, current_node = heapq.heappop(priority_queue)
+        while open_set:
+            current_f, current_node = heapq.heappop(open_set)
             
             if current_node in visited:
                 continue
@@ -114,17 +145,35 @@ class RouteCalculationService:
             if current_node == end_id:
                 break
             
+            current_node_obj = nodes_dict.get(current_node)
+            if not current_node_obj:
+                continue
+            
             for neighbor, weight, edge_id in graph[current_node]:
-                distance = current_distance + weight
+                if neighbor in visited:
+                    continue
                 
-                if neighbor not in distances or distance < distances[neighbor]:
-                    distances[neighbor] = distance
-                    previous_nodes[neighbor] = current_node
-                    previous_edges[neighbor] = edge_id
-                    heapq.heappush(priority_queue, (distance, neighbor))
+                neighbor_node_obj = nodes_dict.get(neighbor)
+                if not neighbor_node_obj:
+                    continue
+                
+                # g_score 계산 (실제 비용)
+                tentative_g = g_score[current_node] + weight
+                
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    # 더 좋은 경로 발견
+                    came_from[neighbor] = current_node
+                    came_from_edge[neighbor] = edge_id
+                    g_score[neighbor] = tentative_g
+                    
+                    # h_score (휴리스틱) - 맨하탄 거리
+                    h_score = RouteCalculationService.manhattan_distance(neighbor_node_obj, end_node)
+                    f_score[neighbor] = tentative_g + h_score
+                    
+                    heapq.heappush(open_set, (f_score[neighbor], neighbor))
         
         # 경로 복원
-        if end_id not in previous_nodes:
+        if end_id not in came_from and end_id != start_id:
             # 경로를 찾을 수 없음
             return ([], [], 0, 0)
         
@@ -134,9 +183,9 @@ class RouteCalculationService:
         
         while current != start_id:
             path_nodes.append(current)
-            if current in previous_edges:
-                path_edges.append(previous_edges[current])
-            current = previous_nodes[current]
+            if current in came_from_edge:
+                path_edges.append(came_from_edge[current])
+            current = came_from[current]
         
         path_nodes.append(start_id)
         path_nodes.reverse()

@@ -113,8 +113,11 @@ class Command(BaseCommand):
                 self.stdout.write(f'   🔄 노드 업데이트: {node.name}')
 
     def _save_edges_to_database(self, edges):
-        """네비게이션 엣지를 데이터베이스에 저장"""
-        self.stdout.write('🔗 네비게이션 엣지 저장 중...')
+        """90도 직각 경로로만 네비게이션 엣지를 데이터베이스에 저장"""
+        self.stdout.write('🔗 90도 직각 네비게이션 엣지 저장 중...')
+        
+        orthogonal_edges_count = 0
+        diagonal_edges_skipped = 0
         
         for edge_data in edges:
             try:
@@ -125,15 +128,31 @@ class Command(BaseCommand):
                     node_id=self._generate_node_id(edge_data['to_node'])
                 )
                 
+                # 90도 직각 이동 검증
+                dx = abs(from_node.x_coord - to_node.x_coord)
+                dy = abs(from_node.y_coord - to_node.y_coord)
+                
+                # 수평 또는 수직 이동만 허용 (둘 중 하나는 5 이하여야 함)
+                is_orthogonal = (dx <= 5 and dy > 0) or (dy <= 5 and dx > 0)
+                
+                if not is_orthogonal:
+                    diagonal_edges_skipped += 1
+                    self.stdout.write(f'   ⚠️  대각선 엣지 건너뜀: {from_node.name} ↔ {to_node.name} (dx={dx:.1f}, dy={dy:.1f})')
+                    continue
+                
+                # 맨하탄 거리로 거리 재계산
+                manhattan_distance = dx + dy
+                manhattan_walk_time = max(10, int(manhattan_distance * 0.8))
+                
                 # 양방향 엣지 생성
                 edge1, created1 = NavigationEdge.objects.get_or_create(
                     from_node=from_node,
                     to_node=to_node,
                     defaults={
-                        'distance': round(edge_data['distance'], 2),
-                        'walk_time': edge_data['walk_time'],
+                        'distance': round(manhattan_distance, 2),
+                        'walk_time': manhattan_walk_time,
                         'edge_type': 'corridor',
-                        'is_accessible': True  # 모든 경로를 접근 가능으로 설정
+                        'is_accessible': True
                     }
                 )
                 
@@ -141,18 +160,22 @@ class Command(BaseCommand):
                     from_node=to_node,
                     to_node=from_node,
                     defaults={
-                        'distance': round(edge_data['distance'], 2),
-                        'walk_time': edge_data['walk_time'],
+                        'distance': round(manhattan_distance, 2),
+                        'walk_time': manhattan_walk_time,
                         'edge_type': 'corridor',
                         'is_accessible': True
                     }
                 )
                 
                 if created1 or created2:
-                    self.stdout.write(f'   ✅ 엣지 생성: {from_node.name} ↔ {to_node.name} ({edge_data["distance"]:.1f}m)')
+                    direction = "수평" if dy <= 5 else "수직"
+                    orthogonal_edges_count += 1
+                    self.stdout.write(f'   ✅ 직각엣지 생성: {from_node.name} ↔ {to_node.name} ({manhattan_distance:.1f}m, {direction})')
                 
             except NavigationNode.DoesNotExist as e:
                 self.stdout.write(f'   ❌ 노드를 찾을 수 없음: {e}')
+        
+        self.stdout.write(f'✅ 90도 직각 엣지 저장 완료: {orthogonal_edges_count}개 생성, {diagonal_edges_skipped}개 건너뜀')
 
     def _generate_node_id(self, name: str) -> uuid.UUID:
         """노드 이름에서 UUID 생성 (결정론적)"""

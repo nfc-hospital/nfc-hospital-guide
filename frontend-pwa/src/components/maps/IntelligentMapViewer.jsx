@@ -132,16 +132,38 @@ const IntelligentMapViewer = ({
     );
   }, [routeData, currentFloor]);
 
-  // Generate SVG path string
+  // 90도 직각 경로 생성 헬퍼 함수
+  const generateOrthogonalPath = (coordinates) => {
+    if (!coordinates || coordinates.length < 2) return '';
+    
+    let pathString = `M ${coordinates[0].coordinates.x} ${coordinates[0].coordinates.y}`;
+    
+    for (let i = 1; i < coordinates.length; i++) {
+      const current = coordinates[i].coordinates;
+      const previous = coordinates[i - 1].coordinates;
+      
+      const dx = Math.abs(current.x - previous.x);
+      const dy = Math.abs(current.y - previous.y);
+      
+      // 90도 직각 이동만 허용 (대각선 이동을 L자로 변환)
+      if (dx > 5 && dy > 5) {
+        // 대각선 이동을 두 단계로 나눔: 먼저 수평, 그다음 수직
+        pathString += ` L ${current.x} ${previous.y}`;
+        pathString += ` L ${current.x} ${current.y}`;
+      } else {
+        // 이미 수평 또는 수직 이동이면 그대로 연결
+        pathString += ` L ${current.x} ${current.y}`;
+      }
+    }
+    
+    return pathString;
+  };
+
+  // Generate SVG path string with 90-degree orthogonal paths
   const pathString = useMemo(() => {
     if (currentFloorPath.length < 2) return '';
     
-    const commands = currentFloorPath.map((point, index) => {
-      const command = index === 0 ? 'M' : 'L';
-      return `${command} ${point.coordinates.x} ${point.coordinates.y}`;
-    });
-    
-    return commands.join(' ');
+    return generateOrthogonalPath(currentFloorPath);
   }, [currentFloorPath]);
 
   // Handle floor change
