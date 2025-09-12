@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
+import '../../styles/IntelligentMapViewer.css';
 
 const IntelligentMapViewer = ({ 
   startNodeId, 

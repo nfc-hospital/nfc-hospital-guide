@@ -71,6 +71,18 @@ apiClient.interceptors.response.use(
       hasData: !!response.data
     });
     
+    // 🔍 DEBUG: Navigation API 응답 상세 로깅
+    if (response.config.url?.includes('/navigation/path/')) {
+      console.log('🗺️ Navigation API RAW 응답:', {
+        success: response.data?.success,
+        message: response.data?.message,
+        data_keys: response.data?.data ? Object.keys(response.data.data) : null,
+        coordinates_in_data: !!response.data?.data?.coordinates,
+        coordinates_direct: !!response.data?.coordinates,
+        full_response_data: JSON.stringify(response.data, null, 2)
+      });
+    }
+    
     // 성공 응답 처리
     return response.data;
   },

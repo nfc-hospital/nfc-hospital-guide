@@ -106,7 +106,7 @@ def nfc_public_scan(request):
             logger.error(f"FINAL ERROR 태그를 찾을 수 없음: {tag_id}")
             # 디버깅을 위해 실제 태그 목록 출력
             all_tags = NFCTag.objects.filter(is_active=True).values('tag_id', 'tag_uid', 'code')
-            logger.info(f"DEBUG 활성 태그 목록: {list(all_tags.all())}")
+            logger.info(f"DEBUG 활성 태그 목록: {list(all_tags)}")
             
             return APIResponse.error(
                 message="존재하지 않거나 비활성화된 NFC 태그입니다.",

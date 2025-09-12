@@ -16,7 +16,7 @@ export const MAJOR_FACILITIES = [
     mapFile: 'main_1f.svg', // public/images/maps/ 하위 파일
     svgId: 'dept-emergency', // SVG 내부에서 강조할 element ID
     coordinates: { x: 220, y: 280 },
-    node_id: '558d94af-a1cf-4b89-95c2-8e948d33e230', // ✅ 응급의료센터 NavigationNode ID
+    node_id: '188f6ed1-65a4-5b04-a2a9-be2a5406de84', // ✅ 응급의료센터 NavigationNode ID (SVG 자동생성)
     color: {
       primary: 'bg-red-500',
       light: 'bg-red-50',
@@ -36,7 +36,7 @@ export const MAJOR_FACILITIES = [
     mapFile: 'main_1f.svg',
     svgId: 'store-pharmacy',
     coordinates: { x: 780, y: 280 },
-    node_id: '650fa82e-595b-4232-b27f-ee184b4fce14', // ✅ 약국 NavigationNode ID
+    node_id: '409e37a4-aa63-5ada-9a27-017902feb440', // ✅ 약국 NavigationNode ID
     color: {
       primary: 'bg-emerald-500',
       light: 'bg-emerald-50',

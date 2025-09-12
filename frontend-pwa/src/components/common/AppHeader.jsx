@@ -6,11 +6,24 @@ import useJourneyStore from '../../store/journeyStore';
 
 export default function AppHeader({ hideLogin = false }) {
   const navigate = useNavigate();
-  const { isAuthenticated, logout } = useAuth();
+  
+  // AuthProvider 초기화 확인
+  let isAuthenticated = false;
+  let logout = null;
+  
+  try {
+    const authContext = useAuth();
+    isAuthenticated = authContext.isAuthenticated;
+    logout = authContext.logout;
+  } catch (error) {
+    // AuthProvider가 아직 초기화되지 않은 경우 기본값 사용
+    console.warn('AuthProvider not ready, using default values');
+  }
+  
   const { user } = useJourneyStore();
 
   const handleAuthAction = () => {
-    if (isAuthenticated) {
+    if (isAuthenticated && logout) {
       logout();
       navigate('/');
     } else {

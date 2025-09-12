@@ -199,7 +199,13 @@ export default function PublicHome() {
   // 시설 선택 핸들러 (원래 로직 복원)
   // ✅ 최종 단순화된 시설 선택 함수 (직접 호출) - 강화된 모니터링 버전
   const handleFacilitySelect = useCallback(async (facility) => {
-    console.log('🏢 시설 선택:', facility);
+    console.log('🏢 시설 선택 상세 분석:', {
+      id: facility.id,
+      name: facility.name,
+      node_id: facility.node_id,
+      category: facility.category,
+      전체_객체: facility
+    });
     setSelectedFacility(facility);
     setError(''); // 기존 에러 메시지 초기화
     clearRouteError(); // 경로 에러 초기화

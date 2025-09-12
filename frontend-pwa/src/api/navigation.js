@@ -140,8 +140,9 @@ export const calculateRoute = async (startNodeId, endNodeId, options = {}) => {
     
     const response = await api.post('/navigation/path/', requestData);
     
-    if (response.data.success) {
-      const pathData = response.data.data;
+    // client.js 인터셉터가 이미 response.data를 반환하므로 직접 접근
+    if (response.success) {
+      const pathData = response.data;  // 이미 data 필드가 추출된 상태
       
       return {
         success: true,
@@ -154,12 +155,12 @@ export const calculateRoute = async (startNodeId, endNodeId, options = {}) => {
           nodes: pathData.nodes || [],
           edges: pathData.edges || []
         },
-        message: '경로 계산이 완료되었습니다.'
+        message: response.message || '경로 계산이 완료되었습니다.'
       };
     } else {
       return {
         success: false,
-        error: response.data.message || '경로 계산 실패',
+        error: response.message || '경로 계산 실패',
         data: null
       };
     }
@@ -190,8 +191,9 @@ export const calculateRouteByTags = async (startTagCode, endTagCode, options = {
     
     const response = await api.post('/navigation/route-by-tags/', requestData);
     
-    if (response.data.success) {
-      const pathData = response.data.data;
+    // client.js 인터셉터가 이미 response.data를 반환하므로 직접 접근
+    if (response.success) {
+      const pathData = response.data;  // 이미 data 필드가 추출된 상태
       
       return {
         success: true,
@@ -204,12 +206,12 @@ export const calculateRouteByTags = async (startTagCode, endTagCode, options = {
           nodes: pathData.nodes || [],
           edges: pathData.edges || []
         },
-        message: '태그 기반 경로 계산이 완료되었습니다.'
+        message: response.message || '태그 기반 경로 계산이 완료되었습니다.'
       };
     } else {
       return {
         success: false,
-        error: response.data.message || '태그 기반 경로 계산 실패',
+        error: response.message || '태그 기반 경로 계산 실패',
         data: null
       };
     }

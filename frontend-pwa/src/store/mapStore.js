@@ -204,6 +204,8 @@ const useMapStore = create(
           const startNodeId = useLocationStore.getState().currentNodeId;
           const endNodeId = destinationFacility.node_id;
           const destinationName = destinationFacility.name || destinationFacility.title || '목적지';
+          let fallbackUsed = false;  // fallback 사용 여부 추적
+          let actualStartNodeId = startNodeId;  // 실제 사용된 시작 노드 ID
           
           console.log('📍 경로 계산 노드:', { 
             시작: startNodeId, 
@@ -240,10 +242,44 @@ const useMapStore = create(
           const { calculateRoute } = await import('../api/navigation');
           const response = await calculateRoute(startNodeId, endNodeId);
           
-          // 6️⃣ 성공 처리
-          const routeData = response?.data?.data || response?.data || response;
+          // 6️⃣ 성공 처리 - API 응답 구조 상세 분석
+          console.log('🔍 DEBUG API 응답 전체 구조:', {
+            response_success: response?.success,
+            response_has_data: !!response?.data,
+            response_data_keys: response?.data ? Object.keys(response.data) : null,
+            coordinates_exists: !!response?.data?.coordinates,
+            coordinates_is_array: Array.isArray(response?.data?.coordinates),
+            coordinates_length: response?.data?.coordinates?.length || 0,
+            response_error: response?.error,
+            response_message: response?.message,
+            full_response_json: JSON.stringify(response, null, 2)
+          });
+
+          // 백엔드 응답이 중첩되어 있을 가능성 체크
+          console.log('🔍 DEBUG 중첩 데이터 분석:', {
+            response_data_data_exists: !!response?.data?.data,
+            response_data_data_keys: response?.data?.data ? Object.keys(response.data.data) : null,
+            nested_coordinates_exists: !!response?.data?.data?.coordinates,
+            nested_coordinates_length: response?.data?.data?.coordinates?.length || 0
+          });
           
-          if (routeData?.coordinates && Array.isArray(routeData.coordinates)) {
+          // 다양한 데이터 구조 대응
+          let routeData = null;
+          if (response?.data?.coordinates) {
+            // 직접 data에 coordinates가 있는 경우
+            routeData = response.data;
+            console.log('✅ 직접 구조 사용: response.data');
+          } else if (response?.data?.data?.coordinates) {
+            // 중첩된 data.data에 coordinates가 있는 경우
+            routeData = response.data.data;
+            console.log('✅ 중첩 구조 사용: response.data.data');
+          } else {
+            // 둘 다 없으면 원래대로
+            routeData = response.data;
+            console.log('⚠️ 기본값 사용: response.data');
+          }
+          
+          if (response.success && routeData?.coordinates?.length > 0) {
             console.log('✅ 경로 데이터 수신 성공:', {
               coordinatesCount: routeData.coordinates.length,
               distance: routeData.distance,
