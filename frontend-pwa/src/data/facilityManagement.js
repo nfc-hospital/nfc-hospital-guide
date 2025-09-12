@@ -35,7 +35,7 @@ export const MAJOR_FACILITIES = [
     room: '원내약국',
     mapFile: 'main_1f.svg',
     svgId: 'store-pharmacy',
-    coordinates: { x: 780, y: 280 },
+    coordinates: { x: 530, y: 460 }, // ✅ NavigationNode 좌표와 일치
     node_id: '409e37a4-aa63-5ada-9a27-017902feb440', // ✅ 약국 NavigationNode ID
     color: {
       primary: 'bg-emerald-500',
@@ -54,9 +54,9 @@ export const MAJOR_FACILITIES = [
     floor: '1층',
     room: '원무과',
     mapFile: 'main_1f.svg',
-    svgId: 'room-storage', // 원무과 위치
-    coordinates: { x: 450, y: 240 },
-    node_id: '260fa931-7998-464c-a487-37851f29f8b1', // ✅ 원무과 NavigationNode ID
+    svgId: 'room-storage',
+    coordinates: { x: 380, y: 560 }, // ✅ NavigationNode 좌표와 일치
+    node_id: 'b14fea41-016f-56b1-9493-a4db1da0bad3', // ✅ 원무과_입구 NavigationNode ID
     color: {
       primary: 'bg-amber-500',
       light: 'bg-amber-50',
@@ -74,9 +74,9 @@ export const MAJOR_FACILITIES = [
     floor: '1층',
     room: '안내데스크',
     mapFile: 'main_1f.svg',
-    svgId: 'room-storage', // 안내데스크도 원무과 근처
-    coordinates: { x: 450, y: 200 },
-    node_id: '497071c2-a868-408c-9595-3cb597b15bae', // ✅ 백엔드 NavigationNode ID
+    svgId: 'room-storage',
+    coordinates: { x: 400, y: 350 }, // ✅ 중앙교차점 근처로 설정 (안내데스크 위치)
+    node_id: 'b3c54f66-110d-5b07-85d6-df68c3bd5a73', // ✅ 중앙교차점 NavigationNode ID
     color: {
       primary: 'bg-purple-500',
       light: 'bg-purple-50',
@@ -99,7 +99,8 @@ export const CONVENIENCE_FACILITIES = [
     room: '편의점',
     mapFile: 'main_1f.svg',
     svgId: 'store-convenience',
-    coordinates: { x: 570, y: 280 },
+    coordinates: { x: 530, y: 350 }, // ✅ NavigationNode 좌표와 일치
+    node_id: '5f350639-413d-5428-9ff4-792082209380', // ✅ 교차점_530_350 NavigationNode ID
     color: {
       primary: 'bg-blue-500',
       light: 'bg-blue-50',
@@ -118,7 +119,8 @@ export const CONVENIENCE_FACILITIES = [
     room: '카페',
     mapFile: 'main_1f.svg',
     svgId: 'store-cafe',
-    coordinates: { x: 570, y: 360 },
+    coordinates: { x: 380, y: 480 }, // ✅ NavigationNode 좌표와 일치
+    node_id: 'f49e3359-3d44-511b-97f3-b354e731b58b', // ✅ 교차점_380_480 NavigationNode ID
     color: {
       primary: 'bg-orange-500',
       light: 'bg-orange-50',
@@ -137,7 +139,8 @@ export const CONVENIENCE_FACILITIES = [
     room: '은행',
     mapFile: 'main_1f.svg',
     svgId: 'store-bank',
-    coordinates: { x: 680, y: 280 },
+    coordinates: { x: 680, y: 460 }, // ✅ NavigationNode 좌표와 일치
+    node_id: '24640c15-6af8-57b7-9b86-5273370a260f', // ✅ 은행_입구 NavigationNode ID
     color: {
       primary: 'bg-green-500',
       light: 'bg-green-50',
@@ -233,8 +236,9 @@ export const DIAGNOSTIC_FACILITIES = [
     floor: '1층',
     room: '진단검사의학과',
     mapFile: 'main_1f.svg',
-    svgId: 'dept-laboratory', // 실제 존재하는 ID
-    coordinates: { x: 480, y: 160 },
+    svgId: 'dept-laboratory',
+    coordinates: { x: 480, y: 220 }, // ✅ NavigationNode 좌표와 일치
+    node_id: '68e7ba27-d46c-5a4f-b1bd-45062c325509', // ✅ 진단검사의학과_입구 NavigationNode ID
     category: 'diagnostic'
   },
   {
@@ -246,8 +250,9 @@ export const DIAGNOSTIC_FACILITIES = [
     floor: '1층',
     room: '채혈실',
     mapFile: 'main_1f.svg',
-    svgId: 'room-blood-collection', // 실제 존재하는 ID
-    coordinates: { x: 675, y: 160 },
+    svgId: 'room-blood-collection',
+    coordinates: { x: 680, y: 220 }, // ✅ NavigationNode 좌표와 일치
+    node_id: '9ff1e084-24e9-5a47-8432-f9f0b2b17d08', // ✅ 채혈실_입구 NavigationNode ID
     category: 'diagnostic'
   },
   {
