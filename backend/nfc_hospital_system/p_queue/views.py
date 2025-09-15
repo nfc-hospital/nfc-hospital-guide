@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions, viewsets
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.db.models import F, Count, Avg, Max, Min, Q, Sum
@@ -15,6 +16,7 @@ import logging
 from .models import Queue, QueueStatusLog, PatientState
 from .serializers import QueueSerializer, MyPositionSerializer, QueueStatusUpdateSerializer
 from .services import PatientJourneyService, InvalidActionError
+from common.state_definitions import *
 from appointments.models import Appointment, Exam
 from appointments.serializers import AppointmentSerializer
 from authentication.models import User
@@ -947,168 +949,43 @@ def nfc_public_info(request):
         )
 
 class PatientCurrentStateView(APIView):
-    """
-    환자 현재 상태 조회 API (클래스 기반 뷰)
-    GET /api/v1/patient/current-state/
-    """
-    permission_classes = [permissions.IsAuthenticated]
+    """V2: 서비스 계층 사용"""
+    permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        try:
-            user = request.user
-            
-            # PatientState 조회 또는 생성
-            try:
-                patient_state = PatientState.objects.get(user=user)
-            except PatientState.DoesNotExist:
-                # 기존 Queue 상태에서 생성
-                latest_queue = Queue.objects.filter(user=user).order_by('-updated_at').first()
-                if latest_queue:
-                    state_mapping = {
-                        'waiting': 'WAITING',
-                        'called': 'CALLED',
-                        'in_progress': 'IN_PROGRESS',
-                        'completed': 'COMPLETED',
-                        'cancelled': 'REGISTERED'
-                    }
-                    patient_state = PatientState.objects.create(
-                        user=user,
-                        current_state=state_mapping.get(latest_queue.state, 'REGISTERED'),
-                        current_exam=latest_queue.exam.exam_id if latest_queue.exam else None,
-                        is_logged_in=True
-                    )
-                else:
-                    patient_state = PatientState.objects.create(
-                        user=user,
-                        current_state='REGISTERED',
-                        is_logged_in=True
-                    )
-            
-            # 오늘 예약 조회
-            today = timezone.now().date()
-            today_appointments = Appointment.objects.filter(
-                user=user,
-                scheduled_date=today
-            ).select_related('exam').order_by('scheduled_time')
-            
-            # 현재 대기열 조회
-            current_queues = Queue.objects.filter(
-                user=user,
-                state__in=['waiting', 'called', 'in_progress']
-            ).select_related('exam')
-            
-            return APIResponse.success(
-                data={
-                    'patient_state': {
-                        'current_state': patient_state.current_state,
-                        'current_location': patient_state.current_location,
-                        'current_exam': patient_state.current_exam,
-                        'is_logged_in': patient_state.is_logged_in,
-                        'updated_at': patient_state.updated_at.isoformat()
-                    },
-                    'today_appointments': AppointmentSerializer(today_appointments, many=True).data,
-                    'current_queues': QueueSerializer(current_queues, many=True).data,
-                    'next_action': get_next_action_guide(patient_state)
-                },
-                message="환자 상태를 조회했습니다."
+        service = PatientJourneyService(request.user)
+        return Response(service.get_current_state())
+
+class PatientJourneyViewSet(viewsets.ViewSet):
+    """V2: 통합 액션 기반 상태 관리"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['GET'])
+    def current_state(self, request):
+        service = PatientJourneyService(request.user)
+        return Response(service.get_current_state())
+    
+    @action(detail=False, methods=['POST'])
+    def perform_action(self, request):
+        # NFC 체크인, 상태 변경 등 모든 액션 통합
+        action_type = request.data.get('action_type')
+        payload = request.data.get('payload', {})
+        
+        if not action_type:
+            return Response(
+                {'error': 'action_type is required'},
+                status=status.HTTP_400_BAD_REQUEST
             )
-            
-        except Exception as e:
-            logger.error(f"Patient state error: {str(e)}")
-            return APIResponse.error(
-                message="환자 상태 조회 중 오류가 발생했습니다.",
-                code="PATIENT_STATE_ERROR",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-@api_view(['GET'])
-@permission_classes([permissions.IsAuthenticated])
-def patient_current_state(request):
-    """
-    환자 현재 상태 조회 (로그인 후)
-    GET /p-queue/patient/current-state
-    """
-    try:
-        user = request.user
         
-        # PatientState 조회
+        service = PatientJourneyService(request.user)
         try:
-            patient_state = PatientState.objects.select_related('current_exam').get(user=user)
-        except PatientState.DoesNotExist:
-            # PatientState가 없으면 기존 Queue에서 생성
-            latest_queue = Queue.objects.filter(user=user).order_by('-updated_at').first()
-            if latest_queue:
-                # Queue 상태를 PatientState로 변환
-                state_mapping = {
-                    'waiting': 'WAITING',
-                    'called': 'CALLED',
-                    'in_progress': 'IN_PROGRESS',
-                    'completed': 'COMPLETED',
-                    'cancelled': 'REGISTERED'
-                }
-                
-                patient_state = PatientState.objects.create(
-                    user=user,
-                    current_state=state_mapping.get(latest_queue.state, 'REGISTERED'),
-                    current_exam=latest_queue.exam,  # 이제 직접 Exam 객체 할당 가능
-                    is_logged_in=True
-                )
-            else:
-                # 큐도 없으면 기본 상태로 생성
-                patient_state = PatientState.objects.create(
-                    user=user,
-                    current_state='REGISTERED',
-                    is_logged_in=True
-                )
-        
-        # 오늘 일정 조회 - Appointment 모델 사용
-        today = timezone.now().date()
-        today_appointments = Appointment.objects.filter(
-            user=user,
-            scheduled_date=today
-        ).select_related('exam').order_by('scheduled_time')
-        
-        # 기존 Queue 정보도 함께 제공 (호환성)
-        current_queue = Queue.objects.filter(
-            user=user,
-            state__in=['waiting', 'called', 'in_progress']
-        ).first()
-        
-        return APIResponse.success(
-            data={
-                'patient_state': {
-                    'current_state': patient_state.current_state,
-                    'current_location': patient_state.current_location,
-                    'current_exam_id': patient_state.current_exam.exam_id if patient_state.current_exam else None,
-                    'current_exam_name': patient_state.current_exam.title if patient_state.current_exam else None,
-                    'current_exam_department': patient_state.current_exam.department if patient_state.current_exam else None,
-                    'is_logged_in': patient_state.is_logged_in,
-                    'emr_department': patient_state.emr_department,
-                    'updated_at': patient_state.updated_at.isoformat()
-                },
-                'current_queue': QueueSerializer(current_queue).data if current_queue else None,
-                'today_schedules': [{
-                    'sequence_order': idx + 1,
-                    'exam_id': appt.exam.exam_id,
-                    'exam_name': appt.exam.title,
-                    'emr_department': appt.exam.department,
-                    'status': appt.status,
-                    'scheduled_time': appt.scheduled_time.strftime('%H:%M') if appt.scheduled_time else None
-                } for idx, appt in enumerate(today_appointments)],
-                'next_action': get_next_action_guide(patient_state)
-            },
-            message="환자 상태를 조회했습니다."
-        )
-        
-    except Exception as e:
-        logger.error(f"Patient state error: {str(e)}")
-        return APIResponse.error(
-            message="환자 상태 조회 중 오류가 발생했습니다.",
-            code="PATIENT_STATE_ERROR",
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
+            result = service.perform_action(action_type, payload)
+            return Response(result)
+        except InvalidActionError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 # nfc_checkin 함수 수정 부분
 @api_view(['POST'])
@@ -1560,37 +1437,3 @@ def nurse_patients_by_state(request):
             code="PATIENTS_BY_STATE_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
-
-
-class PatientJourneyViewSet(viewsets.ViewSet):
-    """환자 여정 상태 관리 API"""
-    permission_classes = [permissions.IsAuthenticated]
-    
-    @action(detail=False, methods=['GET'])
-    def current_state(self, request):
-        """현재 환자 상태 조회"""
-        service = PatientJourneyService(request.user)
-        return Response(service.get_current_state())
-    
-    @action(detail=False, methods=['POST'])
-    def perform_action(self, request):
-        """액션 수행을 통한 상태 전이"""
-        action_type = request.data.get('action_type')
-        payload = request.data.get('payload', {})
-        
-        if not action_type:
-            return Response(
-                {'error': 'action_type is required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        service = PatientJourneyService(request.user)
-        try:
-            result = service.perform_action(action_type, payload)
-            return Response(result)
-        except InvalidActionError as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-    

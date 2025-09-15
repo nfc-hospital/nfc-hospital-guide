@@ -57,7 +57,7 @@ class Queue(models.Model):
     state = models.CharField(
         max_length=20,
         choices=STATE_CHOICES,
-        default='waiting',
+        default=QueueDetailState.WAITING.value,  # 'waiting'
         verbose_name='대기열 상태'
     )
 
@@ -357,7 +357,14 @@ class PatientState(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='patient_state')
     
     STATE_CHOICES = [(state.value, state.value) for state in PatientJourneyState]
-    current_state = models.CharField(max_length=20, choices=STATE_CHOICES, default='UNREGISTERED')
+
+    current_state = models.CharField(
+        max_length=20,
+        choices=STATE_CHOICES,
+        default=PatientJourneyState.UNREGISTERED.value,
+        verbose_name='현재 상태'
+    )
+    
     current_location = models.ForeignKey(
         'nfc.NFCTag',
         on_delete=models.SET_NULL,

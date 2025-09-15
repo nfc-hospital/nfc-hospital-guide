@@ -134,9 +134,11 @@ class Appointment(models.Model):
     """
 
     STATUS_CHOICES = [
+        ('scheduled', '예정'),
         ('waiting', '대기중'),
-        ('ongoing', '진행중'),
-        ('done', '완료'),
+        ('in_progress', '진행중'),
+        ('completed', '완료'),
+        ('cancelled', '취소'),
         ('delayed', '지연'),
     ]
 
@@ -165,7 +167,7 @@ class Appointment(models.Model):
     )
 
     status = models.CharField(
-        max_length=10,
+        max_length=20,
         choices=STATUS_CHOICES,
         default='waiting',
         verbose_name='상태'
