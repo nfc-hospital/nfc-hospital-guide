@@ -15,33 +15,33 @@ print(f"DB_NAME: {config('DB_NAME', default='nfc_hospital_db')}")
 print(f"DB_USER: {config('DB_USER', default='root')}")
 
 # 개발용 데이터베이스 (임시로 SQLite 사용)
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
-# 원본 MySQL 설정 (MySQL 설정 후 활성화)
 # DATABASES = {
 #     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': config('DB_NAME', default='nfc_hospital_db'),
-#         'USER': config('DB_USER', default='root'),
-#         'PASSWORD': config('DB_PASSWORD', default=''),
-#         'HOST': config('DB_HOST', default='localhost'),
-#         'PORT': config('DB_PORT', default='3306'),
-#         'OPTIONS': {
-#             'charset': 'utf8mb4',
-#             'sql_mode': 'STRICT_TRANS_TABLES',
-#             'connect_timeout': 20,
-#             'read_timeout': 30,
-#             'write_timeout': 30,
-#             'autocommit': True,
-#         },
-#         'CONN_MAX_AGE': 0,  # 연결 풀링 비활성화
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
+
+# 원본 MySQL 설정 (MySQL 설정 후 활성화)
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': config('DB_NAME', default='nfc_hospital_db'),
+        'USER': config('DB_USER', default='root'),
+        'PASSWORD': config('DB_PASSWORD', default=''),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='3306'),
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+            'sql_mode': 'STRICT_TRANS_TABLES',
+            'connect_timeout': 20,
+            'read_timeout': 30,
+            'write_timeout': 30,
+            'autocommit': True,
+        },
+        'CONN_MAX_AGE': 0,  # 연결 풀링 비활성화
+    }
+}
 
 PASSWORD_HASHERS = [
     'authentication.hashers.ScryptPasswordHasher', # <-- 새로 정의한 해셔를 가장 먼저 등록
