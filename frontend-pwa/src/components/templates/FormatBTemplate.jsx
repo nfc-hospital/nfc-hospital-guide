@@ -514,15 +514,21 @@ const FormatBTemplate = ({
           <div className="bg-emerald-50 rounded-2xl p-4 text-center border border-emerald-200">
             <p className="text-sm text-emerald-600 font-medium mb-1">소요시간</p>
             <p className="text-2xl font-bold text-emerald-700">
-              {safeTotalDuration >= 60 ?
+              {completionStats?.totalDurationText ||
+               (safeTotalDuration >= 60 ?
                 `${Math.floor(safeTotalDuration / 60)}시간 ${safeTotalDuration % 60}분` :
-                `${safeTotalDuration}분`
+                `${safeTotalDuration}분`)
               }
             </p>
           </div>
           <div className="bg-emerald-50 rounded-2xl p-4 text-center border border-emerald-200">
             <p className="text-sm text-emerald-600 font-medium mb-1">완료 검사</p>
-            <p className="text-2xl font-bold text-emerald-700">{safeCompletedCount}개</p>
+            <p className="text-2xl font-bold text-emerald-700">
+              {completionStats?.completedCount !== undefined ?
+                `${completionStats.completedCount}/${completionStats.totalCount}` :
+                `${safeCompletedCount}개`
+              }
+            </p>
           </div>
         </div>
 

@@ -257,17 +257,69 @@ const useJourneyStore = create(
         getCompletionStats: () => {
           const schedule = get().getTodaysScheduleForUI();
           // completed 또는 examined 상태를 모두 완료로 처리
-          const completed = schedule.filter(s => 
+          const completed = schedule.filter(s =>
             s.status === 'completed' || s.status === 'examined'
           );
           const total = schedule.length;
-          
+
           return {
             completedCount: completed.length,
             totalCount: total,
             completedAppointments: completed,
             remainingCount: total - completed.length,
             progressPercentage: total > 0 ? Math.round((completed.length / total) * 100) : 0
+          };
+        },
+
+        // 🆕 실제 백엔드 데이터 기반 여정 요약 통계 (테스트 데이터 대신 사용)
+        getJourneySummary: () => {
+          const { todaysAppointments } = get();
+
+          if (!todaysAppointments || todaysAppointments.length === 0) {
+            return {
+              completedCount: 0,
+              totalCount: 0,
+              completedAppointments: [],
+              totalDuration: 0,
+              totalDurationText: '0시간 0분'
+            };
+          }
+
+          // 완료된 검사 필터링 (completed, examined, done 상태 모두 완료로 처리)
+          const completedTasks = todaysAppointments.filter(
+            apt => ['completed', 'examined', 'done'].includes(apt.status)
+          );
+
+          // 총 소요시간 계산 (실제 시간 기반)
+          let totalMinutes = 0;
+
+          completedTasks.forEach(apt => {
+            if (apt.started_at && apt.completed_at) {
+              // 실제 시작/완료 시간이 있으면 그것을 사용
+              const startTime = new Date(apt.started_at);
+              const endTime = new Date(apt.completed_at);
+              const durationMs = endTime.getTime() - startTime.getTime();
+              const durationMinutes = Math.round(durationMs / (1000 * 60));
+              totalMinutes += durationMinutes;
+            } else {
+              // 실제 시간이 없으면 평균 소요시간 사용
+              totalMinutes += apt.exam?.average_duration || 30;
+            }
+          });
+
+          // 시간을 "X시간 Y분" 형태로 변환
+          const hours = Math.floor(totalMinutes / 60);
+          const minutes = totalMinutes % 60;
+          const totalDurationText = hours > 0
+            ? `${hours}시간 ${minutes}분`
+            : `${minutes}분`;
+
+          return {
+            completedCount: completedTasks.length,
+            totalCount: todaysAppointments.length,
+            completedAppointments: completedTasks,
+            totalDuration: totalMinutes,
+            totalDurationText: totalDurationText
           };
         },
 
@@ -487,11 +539,17 @@ const useJourneyStore = create(
               // 환자인 경우에만 여정 데이터 로드
               console.log('🔄 환자 여정 데이터 로딩 중...');
               try {
-                // 개별 API 호출로 환자 데이터 가져오기 
+                // 개별 API 호출로 환자 데이터 가져오기
                 const [scheduleRes, queuesRes] = await Promise.all([
-                  // /schedule/today API 사용 (Home.jsx와 동일)
-                  api.get('/schedule/today').catch(() => ({ data: { appointments: [] } })),
-                  queueAPI.getMyQueue().catch(() => ({ data: [] }))
+                  // 📊 실제 백엔드 API 엔드포인트 사용 (/api/v1/appointments/today)
+                  api.get('/appointments/today').catch((error) => {
+                    console.error('❌ 당일 예약 API 호출 실패:', error);
+                    return { data: { appointments: [] } };
+                  }),
+                  queueAPI.getMyQueue().catch((error) => {
+                    console.error('❌ 대기열 API 호출 실패:', error);
+                    return { data: [] };
+                  })
                 ]);
 
                 // 디버깅 로그 추가
@@ -511,115 +569,16 @@ const useJourneyStore = create(
                 console.log('🔍 실제 API appointments 데이터:', appointments);
                 console.log('🔍 appointments.length:', appointments.length);
                 
-                // 개발 환경에서 테스트 데이터 추가
-                const currentPatientState = get().patientState;
-                if (import.meta.env.DEV && appointments.length === 0) {
-                  console.log('🧪 개발 환경: 테스트 데이터 추가 (상태:', currentPatientState, ')');
-                  
-                  // PAYMENT 상태일 때는 완료된 검사 데이터
-                  const isPaymentState = currentPatientState === 'PAYMENT';
-                  
-                  appointments = [
-                    {
-                      appointment_id: 'dev-001',
-                      exam: {
-                        exam_id: 'blood_test',
-                        title: '혈액검사',
-                        building: '본관',
-                        floor: '1',
-                        room: '채혈실',
-                        department: '진단검사의학과',
-                        average_duration: 15,
-                        x_coord: 507,
-                        y_coord: 230,
-                        preparations: [
-                          {
-                            prep_id: 1,
-                            type: 'fasting',
-                            title: '검사 전날 밤 10시 이후 금식',
-                            description: '정확한 검사를 위해 전날 밤 10시 이후 음식물 섭취를 중단해주세요.',
-                            is_required: true
-                          },
-                          {
-                            prep_id: 2,
-                            type: 'documents',
-                            title: '신분증 및 건강보험증 지참',
-                            description: '본인 확인을 위해 신분증과 건강보험증을 반드시 지참해주세요.',
-                            is_required: true
-                          }
-                        ],
-                        location_tag: { code: 'TAG002' }  // 2층 내과 진료실 (채혈실)
-                      },
-                      scheduled_at: new Date().toISOString(),
-                      status: isPaymentState ? 'completed' : 'scheduled'
-                    },
-                    {
-                      appointment_id: 'dev-002',
-                      exam: {
-                        exam_id: 'urine_test',
-                        title: '소변검사',
-                        building: '본관',
-                        floor: '1',
-                        room: '검체채취실',
-                        department: '진단검사의학과',
-                        average_duration: 10,
-                        x_coord: 507,
-                        y_coord: 190,
-                        preparations: [
-                          {
-                            prep_id: 5,
-                            type: 'hydration',
-                            title: '충분한 수분 섭취',
-                            description: '검사 2시간 전부터 물을 충분히 마셔주세요. 소변 채취가 원활해집니다.',
-                            is_required: false
-                          },
-                          {
-                            prep_id: 6,
-                            type: 'collection',
-                            title: '중간뇨 채취',
-                            description: '처음 나오는 소변은 버리고 중간 부분의 소변을 채취해주세요.',
-                            is_required: true
-                          }
-                        ],
-                        location_tag: { code: 'TAG002' }  // 2층 내과 진료실 (검체채취실)
-                      },
-                      scheduled_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-                      status: isPaymentState ? 'completed' : 'scheduled'
-                    },
-                    {
-                      appointment_id: 'dev-003',
-                      exam: {
-                        exam_id: 'xray_chest',
-                        title: '흉부 X-ray',
-                        building: '본관',
-                        floor: '2',
-                        room: '영상의학과',
-                        department: '영상의학과',
-                        average_duration: 10,
-                        x_coord: 400,
-                        y_coord: 300,
-                        preparations: [
-                          {
-                            prep_id: 7,
-                            type: 'clothing',
-                            title: '금속 제거',
-                            description: '정확한 영상 촬영을 위해 목걸이, 귀걸이 등 금속 액세서리를 제거해주세요.',
-                            is_required: true
-                          },
-                          {
-                            prep_id: 8,
-                            type: 'general',
-                            title: '임신 가능성 확인',
-                            description: '임신 가능성이 있는 경우 반드시 의료진에게 알려주세요.',
-                            is_required: false
-                          }
-                        ],
-                        location_tag: { code: 'TAG003' }  // 2층 X-Ray실
-                      },
-                      scheduled_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-                      status: isPaymentState ? 'completed' : 'scheduled'
-                    }
-                  ];
+                // 🔥 테스트 데이터 주입 제거 - 실제 백엔드 데이터만 사용
+                console.log('📊 실제 백엔드 appointments 데이터:', appointments);
+                console.log('📊 appointments 개수:', appointments.length);
+
+                if (appointments.length === 0) {
+                  console.warn('⚠️ 백엔드에서 당일 예약 데이터가 없습니다. API 연결 상태를 확인하세요.');
+                  console.warn('   - API URL: /api/v1/appointments/today');
+                  console.warn('   - 백엔드 서버가 실행 중인지 확인하세요');
+                  console.warn('   - 사용자 인증이 올바른지 확인하세요');
+                  console.warn('   - 사용자에게 당일 예약이 있는지 확인하세요');
                 }
                 
                 // Appointment 상태도 정규화 (ongoing -> in_progress)

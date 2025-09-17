@@ -164,77 +164,65 @@ const JourneyContainer = ({ taggedLocation }) => {
   const currentState = patientState?.current_state || patientState || PatientJourneyState.FINISHED;
   const { Template, Content, screenType } = getJourneyComponents(currentState);
 
-  // 🔧 테스트용 데이터 주입 (실제 데이터가 없을 때)
-  if (!todaysAppointments || todaysAppointments.length === 0) {
-    console.warn('⚠️ No appointments data, injecting test data...');
-    const testAppointments = [
-      {
-        appointment_id: 'test_1',
-        status: 'completed',
-        exam: { title: '혈액검사', average_duration: 15, department: '진단검사의학과' },
-        scheduled_at: '09:00'
-      },
-      {
-        appointment_id: 'test_2',
-        status: 'completed',
-        exam: { title: '심전도검사', average_duration: 10, department: '순환기내과' },
-        scheduled_at: '09:30'
-      },
-      {
-        appointment_id: 'test_3',
-        status: 'in_progress',
-        exam: { title: 'X-Ray', average_duration: 20, department: '영상의학과' },
-        scheduled_at: '10:00'
-      }
-    ];
+  // 🆕 실제 백엔드 데이터 사용 (테스트 데이터 제거) - 안정적인 selector 사용
+  const journeySummary = React.useMemo(() => {
+    if (!todaysAppointments || todaysAppointments.length === 0) {
+      console.log('📊 JourneyContainer: 당일 예약 데이터가 없습니다');
+      return {
+        completedCount: 0,
+        totalCount: 0,
+        completedAppointments: [],
+        totalDuration: 0,
+        totalDurationText: '0분'
+      };
+    }
 
-    // 테스트 데이터로 completionStats 재계산
-    const completed = testAppointments.filter(apt => apt.status === 'completed');
-    const testCompletionStats = {
-      completedCount: completed.length,
-      totalCount: testAppointments.length,
-      completedAppointments: completed
-    };
+    console.log('📊 JourneyContainer: 실제 백엔드 데이터 처리 중...', todaysAppointments.length, '개 예약');
 
-    const testTotalDuration = completed.reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
-
-    return (
-      <React.Suspense fallback={<div>Loading...</div>}>
-        <Template
-          screenType={screenType}
-          patientState={currentState}
-          taggedLocation={taggedLocation}
-          progressBar={<ProgressBar appointments={testAppointments} />}
-          mainContent={<Content />}
-          status={getStatusText(currentState)}
-          nextSchedule={getNextScheduleText(testAppointments)}
-          summaryCards={getSummaryCards(testAppointments, testCompletionStats, testTotalDuration)}
-          todaysAppointments={testAppointments}
-          todaySchedule={testAppointments.map((apt, index) => ({
-            id: apt.appointment_id,
-            examName: apt.exam?.title || `검사 ${index + 1}`,
-            location: apt.exam?.department || '위치 미정',
-            status: apt.status,
-            description: apt.exam?.description,
-            duration: apt.exam?.average_duration || 30,
-            scheduled_at: apt.scheduled_at,
-            exam: apt.exam
-          }))}
-          completionStats={testCompletionStats}
-          completedAppointments={completed}
-          totalDuration={testTotalDuration}
-          completedCount={testCompletionStats.completedCount}
-        />
-      </React.Suspense>
+    // 완료된 검사 필터링 (completed, examined, done 상태 모두 완료로 처리)
+    const completedTasks = todaysAppointments.filter(
+      apt => ['completed', 'examined', 'done'].includes(apt.status)
     );
-  }
+
+    // 총 소요시간 계산 (실제 시간 기반)
+    let totalMinutes = 0;
+
+    completedTasks.forEach(apt => {
+      if (apt.started_at && apt.completed_at) {
+        // 실제 시작/완료 시간이 있으면 그것을 사용
+        const startTime = new Date(apt.started_at);
+        const endTime = new Date(apt.completed_at);
+        const durationMs = endTime.getTime() - startTime.getTime();
+        const durationMinutes = Math.round(durationMs / (1000 * 60));
+        totalMinutes += durationMinutes;
+      } else {
+        // 실제 시간이 없으면 평균 소요시간 사용
+        totalMinutes += apt.exam?.average_duration || 30;
+      }
+    });
+
+    // 시간을 "X시간 Y분" 형태로 변환
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const totalDurationText = hours > 0
+      ? `${hours}시간 ${minutes}분`
+      : `${minutes}분`;
+
+    return {
+      completedCount: completedTasks.length,
+      totalCount: todaysAppointments.length,
+      completedAppointments: completedTasks,
+      totalDuration: totalMinutes,
+      totalDurationText: totalDurationText
+    };
+  }, [todaysAppointments]);
 
   // 로딩 상태 처리
   if (isLoading) {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
-  // 🎯 완전 단순화된 렌더링: 조립만 담당
+  // 🎯 완전 단순화된 렌더링: 실제 백엔드 데이터 사용
   return (
     <React.Suspense fallback={<div>Loading...</div>}>
       <Template
@@ -245,16 +233,16 @@ const JourneyContainer = ({ taggedLocation }) => {
         progressBar={<ProgressBar appointments={todaysAppointments} />}
         // ✅ Content 컴포넌트 전달
         mainContent={<Content />}
-        // ✅ FormatBTemplate에 필요한 핵심 props 전달
+        // ✅ FormatBTemplate에 필요한 핵심 props 전달 (실제 백엔드 데이터 사용)
         status={getStatusText(currentState)}
         nextSchedule={getNextScheduleText(todaysAppointments)}
-        summaryCards={getSummaryCards(todaysAppointments, completionStats, totalDuration)}
+        summaryCards={getSummaryCards(todaysAppointments, journeySummary, journeySummary.totalDuration)}
         todaysAppointments={todaysAppointments}
         todaySchedule={todaySchedule}
-        completionStats={completionStats}
-        completedAppointments={completionStats.completedAppointments}
-        totalDuration={totalDuration}
-        completedCount={completionStats.completedCount}
+        completionStats={journeySummary}
+        completedAppointments={journeySummary.completedAppointments}
+        totalDuration={journeySummary.totalDuration}
+        completedCount={journeySummary.completedCount}
       />
     </React.Suspense>
   );
