@@ -63,7 +63,7 @@ pnpm type:convert         # OpenAPI 스키마를 TypeScript로 변환
 - **실시간 통신**: Django Channels 4.0.0 + Redis
 - **인증**: SimpleJWT 5.3.0 (커스텀 인증 포함)
 - **API 문서화**: drf-spectacular (Swagger/OpenAPI)
-- **주요 앱**: authentication, appointments, p_queue, nfc, admin_dashboard, integrations
+- **주요 앱**: authentication, appointments, p_queue, nfc, admin_dashboard, integrations, common (상태 정의 중앙화)
 
 ### 프론트엔드 아키텍처
 - **PWA 프레임워크**: React 18.2 + Vite 5.1 + TypeScript
@@ -79,6 +79,7 @@ pnpm type:convert         # OpenAPI 스키마를 TypeScript로 변환
 - **대기열 시스템**: Queue ↔ Appointment ↔ Exam (실시간 상태 추적). Queue 모델이 대기열의 모든 상태를 관리하는 단일 진실 원천(Single Source of Truth) 역할을 합니다.
 - **NFC 통합**: NFCTag ↔ TagLog ↔ User (위치 매핑)
 - **EMR 연동**: EmrSyncStatus ↔ PatientState (외부 시스템 동기화). 당일 일정은 Appointment 모델에서 직접 조회하여 사용합니다.
+- **상태 정의 중앙화**: `common/state_definitions.py`에서 모든 상태 정의를 중앙 관리하며, `p_queue/services.py`의 PatientJourneyService가 상태 전이 로직을 처리합니다.
 
 ## API 명세서 v3.0.0 기반 개발 지침
 
@@ -90,30 +91,34 @@ pnpm type:convert         # OpenAPI 스키마를 TypeScript로 변환
 - **EMR 연동**: READ-ONLY, 가상 DB를 통한 동기화만 지원
 
 ### 환자 상태 모델 (9단계 여정)
-환자의 병원 내 전체 여정을 나타내는 상태값:
+환자의 병원 내 전체 여정을 나타내는 상태값 (PatientJourneyState):
 ```
 UNREGISTERED  → 병원 도착 전, 예약 정보만 있는 상태
 ARRIVED       → 병원 도착 후 NFC 태그했으나 접수/로그인 전
 REGISTERED    → 접수/로그인 완료 후 첫 안내를 받은 상태
 WAITING       → 특정 검사/진료를 위해 대기열에 등록된 상태
 CALLED        → 의료진에 의해 호출된 상태
-ONGOING       → 검사/진료가 진행 중인 상태
+IN_PROGRESS   → 검사/진료가 진행 중인 상태 (v2 리팩토링으로 ONGOING에서 변경)
 COMPLETED     → 검사/진료가 완료된 상태
 PAYMENT       → 수납 대기 또는 수납 완료 상태
 FINISHED      → 모든 여정이 끝나고 귀가 안내를 받은 상태
 ```
 
+**참고**: 모든 상태 정의는 `common/state_definitions.py`에서 중앙 관리되며, Frontend와 Backend 간 일관성을 보장합니다.
+
 ### 대기열 상세 상태 (queue.state)
-특정 대기열 내에서의 세부 상태:
+특정 대기열 내에서의 세부 상태 (QueueDetailState):
 ```
-waiting    → 대기 중
-called     → 호출됨
-ongoing    → 진행 중 (검사실/진료실 입장)
-completed  → 완료
-delayed    → 지연
-no_show    → 미방문/이탈 (No-Show)
-cancelled  → 취소
+waiting      → 대기 중
+called       → 호출됨
+in_progress  → 진행 중 (검사실/진료실 입장, v2 리팩토링으로 ongoing에서 변경)
+completed    → 완료
+delayed      → 지연
+no_show      → 미방문/이탈 (No-Show)
+cancelled    → 취소
 ```
+
+**참고**: 상태 명명 일관성을 위해 `ongoing`은 모두 `in_progress`로 통일되었습니다.
 
 ## API 엔드포인트 구조 (명세서 v3 기준)
 
@@ -283,6 +288,8 @@ System:      /api/v1/virtual-db/, 내부 동기화 API
 - **시리얼라이저**: 모든 API 엔드포인트에 검증 포함 시리얼라이저 사용
 - **권한 클래스**: 역할 기반 권한 시스템 구현 (IsAuthenticated + 커스텀 RBAC)
 - **실시간 업데이트**: Django Signal → WebSocket consumer 패턴 사용
+- **상태 관리**: PatientJourneyService 서비스 계층 사용 (Single Source of Truth)
+- **이벤트 기반**: Frontend는 상태 직접 변경 대신 액션/이벤트만 전송
 
 ### React 컴포넌트 패턴
 - **API 연동**: 커스텀 훅 (useAPI, useWebSocket, useAuth) 사용
@@ -290,6 +297,8 @@ System:      /api/v1/virtual-db/, 내부 동기화 API
 - **상태 관리**: 적절한 로딩 및 오류 상태 구현
 - **UI 패턴**: 복잡한 UI에는 컴파운드 컴포넌트 패턴 사용
 - **스타일링**: Tailwind 유틸리티 클래스만 사용, 커스텀 CSS 지양
+- **상태 동기화**: Backend에서 받은 상태를 그대로 사용 (Frontend에서 상태 변환 금지)
+- **액션 전송**: 상태 변경 시 Backend의 `/api/v1/patient-journey/action` 엔드포인트 활용
 
 ### 인증 플로우
 1. **간편 로그인**: 전화번호 뒷자리 4자리 + 생년월일 6자리

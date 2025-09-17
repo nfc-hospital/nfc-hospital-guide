@@ -111,7 +111,14 @@ def fetch_patient_context(user_id):
         # 내부 API 호출 (서버 간 통신이므로 특별한 인증 토큰 사용)
         internal_api_key = os.getenv('INTERNAL_API_KEY', 'internal-secret-key')
         url = f"{DJANGO_API_URL}/api/v1/queue/internal/patient-context/{user_id}/"
-        print(f"DEBUG: Fetching patient context from: {url}")
+        
+        # 🚀 상세한 디버깅 로그
+        print("\n" + "="*60)
+        print(f"🚀 [챗봇→Django] API 호출 시작")
+        print(f"   URL: {url}")
+        print(f"   User ID: {user_id}")
+        print(f"   API Key: {internal_api_key[:10]}..." if internal_api_key else "   API Key: None")
+        print("="*60)
         
         response = requests.get(
             url,
@@ -119,17 +126,37 @@ def fetch_patient_context(user_id):
             timeout=5
         )
         
+        print(f"📡 Django 응답 상태 코드: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
-            print(f"DEBUG: Patient context fetched successfully, state: {data.get('patient_state')}")
+            print(f"✅ Django에서 환자 데이터 수신 성공")
+            print(f"   - Patient state: {data.get('patient_state', 'N/A')}")
+            print(f"   - User name: {data.get('userName', data.get('user', {}).get('name', 'N/A'))}")
+            print(f"   - Queues count: {len(data.get('currentQueues', data.get('current_queues', [])))}")
+            print(f"   - Appointments count: {len(data.get('appointments', data.get('todays_appointments', [])))}")
+            print("="*60 + "\n")
             return data
         else:
-            print(f"DEBUG: Failed to fetch patient context: {response.status_code}")
-            if response.status_code == 404:
-                print(f"DEBUG: User {user_id} not found in Django")
+            print(f"❌ Django API 호출 실패 (HTTP {response.status_code})")
+            try:
+                error_data = response.json()
+                print(f"   오류 응답 내용: {json.dumps(error_data, ensure_ascii=False, indent=2)}")
+            except:
+                print(f"   응답 텍스트 (처음 500자): {response.text[:500]}")
+            print("="*60 + "\n")
             return None
+            
+    except requests.exceptions.Timeout:
+        print(f"⏰ Django API 타임아웃 (5초 초과)")
+        return None
+    except requests.exceptions.ConnectionError:
+        print(f"🔌 Django 서버 연결 실패 - 서버가 실행 중인지 확인하세요")
+        return None
     except Exception as e:
-        print(f"DEBUG: Error fetching patient context: {e}")
+        print(f"💥 예상치 못한 오류: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def build_personalized_prompt(user_info, patient_context):
@@ -137,35 +164,48 @@ def build_personalized_prompt(user_info, patient_context):
     prompt = """당신은 HC_119 병원의 AI 안내원입니다. 간결하고 친절하게 답변하세요.\n\n"""
     
     # 환자 정보 추가
-    if user_info.get('name'):
+    if user_info and user_info.get('name'):
         prompt += f"환자: {user_info['name']}님\n"
     
     if patient_context:
         # 현재 상태
         if patient_context.get('patient_state'):
             state_map = {
+                'UNREGISTERED': '병원 도착 전',
+                'ARRIVED': '병원 도착',
+                'REGISTERED': '접수 완료', 
                 'WAITING': '대기중',
                 'CALLED': '호출됨',
                 'IN_PROGRESS': '진료중',
-                'COMPLETED': '완료'
+                'COMPLETED': '완료',
+                'PAYMENT': '수납 대기',
+                'FINISHED': '모든 절차 완료'
             }
             state = state_map.get(patient_context['patient_state'], patient_context['patient_state'])
             prompt += f"현재 상태: {state}\n"
         
         # 대기 정보
-        if patient_context.get('current_queues'):
+        if patient_context.get('current_queues') and len(patient_context['current_queues']) > 0:
             queue = patient_context['current_queues'][0]
             prompt += f"대기번호: {queue.get('queue_number')}번\n"
             prompt += f"예상 대기시간: {queue.get('estimated_wait_time', '알 수 없음')}분\n"
             if queue.get('exam'):
                 prompt += f"검사: {queue['exam'].get('title')}\n"
+                prompt += f"위치: {queue['exam'].get('building', '본관')} {queue['exam'].get('floor', '')}층 {queue['exam'].get('room', '')}\n"
         
         # 오늘 일정
         if patient_context.get('todays_appointments'):
             apt_count = len(patient_context['todays_appointments'])
             prompt += f"오늘 예약: {apt_count}건\n"
+            # 다음 예약 정보
+            next_apt = next((apt for apt in patient_context['todays_appointments'] 
+                            if apt.get('status') in ['scheduled', 'pending']), None)
+            if next_apt:
+                prompt += f"다음 검사: {next_apt.get('exam', {}).get('title', '검사')} "
+                prompt += f"({next_apt.get('scheduled_at', '')})\n"
     
     prompt += "\n환자의 현재 상황을 고려하여 맞춤형 답변을 제공하세요."
+    prompt += "\n대기 순서나 시간 질문 시 위 정보를 활용하여 구체적으로 답변하세요."
     return prompt
 
 def build_guest_prompt():

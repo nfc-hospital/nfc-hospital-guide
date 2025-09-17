@@ -1,7 +1,10 @@
 from rest_framework import serializers
 from .models import Queue, PatientState, StateTransition
-from appointments.models import Exam
-from appointments.serializers import ExamSerializer
+from appointments.models import Exam, Appointment
+from appointments.serializers import ExamSerializer, AppointmentSerializer
+from authentication.serializers import UserSerializer
+from django.utils import timezone
+from common.state_definitions import PatientJourneyState
 
 class QueueSerializer(serializers.ModelSerializer):
     """
@@ -170,3 +173,129 @@ class StateTransitionSerializer(serializers.ModelSerializer):
         model = StateTransition
         fields = '__all__'
         read_only_fields = ['transition_id', 'created_at']
+
+
+class PatientJourneySerializer(serializers.Serializer):
+    """
+    챗봇 서버에 전달할 환자의 전체 여정 정보를 종합하는 Serializer
+    """
+    # 사용자 정보
+    user = UserSerializer(read_only=True)
+    userName = serializers.CharField(source='user.name', read_only=True)
+    userId = serializers.CharField(source='user.user_id', read_only=True)
+    role = serializers.CharField(source='user.role', read_only=True)
+    patientId = serializers.CharField(source='user.patient_id', read_only=True)
+    
+    # 현재 상태 정보
+    patientState = serializers.CharField(source='current_state', read_only=True)
+    currentState = serializers.CharField(read_only=True)
+    stateDescription = serializers.SerializerMethodField()
+    currentLocation = serializers.CharField(read_only=True)
+    currentLocationDisplay = serializers.SerializerMethodField()
+    
+    # 예약 및 대기열 정보
+    appointments = serializers.SerializerMethodField()
+    currentQueues = serializers.SerializerMethodField()
+    waitInfo = serializers.SerializerMethodField()
+    
+    def get_stateDescription(self, obj):
+        """현재 상태 코드에 대한 한글 설명을 반환합니다."""
+        state_map = {
+            'UNREGISTERED': '병원 도착 전',
+            'ARRIVED': '병원 도착',
+            'REGISTERED': '접수 완료', 
+            'WAITING': '대기중',
+            'CALLED': '호출됨',
+            'IN_PROGRESS': '진료중',
+            'COMPLETED': '완료',
+            'PAYMENT': '수납 대기',
+            'FINISHED': '모든 절차 완료',
+            PatientJourneyState.UNREGISTERED.value: '병원 도착 전',
+            PatientJourneyState.ARRIVED.value: '병원 도착',
+            PatientJourneyState.REGISTERED.value: '접수 완료',
+            PatientJourneyState.WAITING.value: '대기중',
+            PatientJourneyState.CALLED.value: '호출됨',
+            PatientJourneyState.IN_PROGRESS.value: '진료중',
+            PatientJourneyState.COMPLETED.value: '완료',
+            PatientJourneyState.PAYMENT.value: '수납 대기',
+            PatientJourneyState.FINISHED.value: '모든 절차 완료'
+        }
+        current_state = getattr(obj, 'current_state', 'UNREGISTERED')
+        return state_map.get(current_state, current_state)
+    
+    def get_currentLocationDisplay(self, obj):
+        """현재 위치를 읽기 쉬운 형태로 반환합니다."""
+        location = getattr(obj, 'current_location', None)
+        if not location:
+            return '위치 정보 없음'
+        # 실제 구현에서는 Location 모델과 연계
+        location_map = {
+            'main_1f_lobby': '본관 1층 로비',
+            'main_2f_lab': '본관 2층 검사실',
+            'main_3f_radiology': '본관 3층 영상의학과',
+        }
+        return location_map.get(location, location)
+    
+    def get_appointments(self, obj):
+        """오늘 날짜의 모든 예약 정보를 반환합니다."""
+        user = getattr(obj, 'user', None)
+        if not user:
+            return []
+        
+        today = timezone.now().date()
+        today_appointments = Appointment.objects.filter(
+            user=user,
+            scheduled_at__date=today
+        ).select_related('exam').order_by('scheduled_at')
+        
+        return AppointmentSerializer(today_appointments, many=True).data
+    
+    def get_currentQueues(self, obj):
+        """현재 사용자가 등록된 모든 대기열 정보를 반환합니다."""
+        user = getattr(obj, 'user', None)
+        if not user:
+            return []
+        
+        active_queues = Queue.objects.filter(
+            user=user, 
+            state__in=['waiting', 'called', 'in_progress']
+        ).select_related('exam').order_by('created_at')
+        
+        return QueueSerializer(active_queues, many=True).data
+    
+    def get_waitInfo(self, obj):
+        """현재 대기 정보를 요약해서 반환합니다."""
+        user = getattr(obj, 'user', None)
+        if not user:
+            return None
+        
+        active_queue = Queue.objects.filter(
+            user=user,
+            state__in=['waiting', 'called']
+        ).select_related('exam').first()
+        
+        if not active_queue:
+            return None
+        
+        people_ahead = Queue.objects.filter(
+            exam=active_queue.exam,
+            state='waiting',
+            queue_number__lt=active_queue.queue_number
+        ).count()
+        
+        return {
+            'queueNumber': active_queue.queue_number,
+            'estimatedWaitTime': active_queue.estimated_wait_time,
+            'peopleAhead': people_ahead,
+            'examName': active_queue.exam.title if active_queue.exam else '검사',
+            'examLocation': self.get_exam_location(active_queue.exam)
+        }
+    
+    def get_exam_location(self, exam):
+        """검사 위치 정보를 포맷팅합니다."""
+        if not exam:
+            return None
+        location = f"{exam.building or '본관'} {exam.floor or ''}층"
+        if exam.room:
+            location += f" {exam.room}"
+        return location.strip()
