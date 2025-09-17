@@ -514,7 +514,18 @@ const useJourneyStore = create(
                   ];
                 }
                 
-                console.log('📋 최종 appointments:', appointments);
+                // Appointment 상태도 정규화 (ongoing -> in_progress)
+                const normalizeAppointmentStatus = (status) => {
+                  if (status === 'ongoing') return 'in_progress';
+                  return status;
+                };
+                
+                appointments = appointments.map(apt => ({
+                  ...apt,
+                  status: normalizeAppointmentStatus(apt.status)
+                }));
+                
+                console.log('📋 최종 appointments (정규화 후):', appointments);
                 
                 // 2. 큐 API: /api/v1/queue/my-current/  
                 // queuesRes는 axios 인터셉터로 인해 이미 data 부분만 반환됨
@@ -530,7 +541,19 @@ const useJourneyStore = create(
                   currentQueues = [queueData];
                 }
                 
-                console.log('🔍 최종 currentQueues:', currentQueues);
+                // ✅ 상태 정규화 함수 추가 (백엔드가 'ongoing'을 보내더라도 'in_progress'로 변환)
+                const normalizeQueueState = (state) => {
+                  if (state === 'ongoing') return 'in_progress';
+                  return state;
+                };
+                
+                // 큐 데이터 정규화 적용
+                currentQueues = currentQueues.map(q => ({
+                  ...q,
+                  state: normalizeQueueState(q.state)
+                }));
+                
+                console.log('🔍 최종 currentQueues (정규화 후):', currentQueues);
                 
                 // ✅ --- 환자 상태 계산 로직 (큐와 예약 데이터 기반) ---
                 // 환자 여정: UNREGISTERED -> ARRIVED -> REGISTERED -> WAITING -> CALLED -> IN_PROGRESS -> COMPLETED -> PAYMENT -> FINISHED
