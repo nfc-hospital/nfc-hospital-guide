@@ -532,8 +532,8 @@ const FormatBTemplate = ({
           </div>
         </div>
 
-        {/* 수납 완료 영수증 - screenType이 completed이고 showPaymentInfo가 true일 때만 */}
-        {screenType === 'completed' && showPaymentInfo && (
+        {/* 수납 완료 영수증 - FINISHED 상태이거나 showPaymentInfo가 true일 때 표시 */}
+        {(screenType === 'finished' || (screenType === 'completed' && showPaymentInfo)) && (
           <div>
 
           {/* 영수증 */}
@@ -570,7 +570,7 @@ const FormatBTemplate = ({
               </h4>
               
               <div className="space-y-3">
-                {completedAppointments.map((apt, index) => {
+                {safeCompletedAppointments.length > 0 ? safeCompletedAppointments.map((apt, index) => {
                   const cost = apt.cost || apt.exam?.cost || '25000';
                   const numericCost = typeof cost === 'string' ? 
                     parseInt(cost.replace(/[^0-9]/g, '')) : cost;
@@ -600,7 +600,16 @@ const FormatBTemplate = ({
                       </div>
                     </div>
                   );
-                })}
+                }) : (
+                  // 완료된 검사가 없을 때
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-2xl">📋</span>
+                    </div>
+                    <p className="text-gray-500 text-lg mb-2">완료된 검사가 없습니다</p>
+                    <p className="text-gray-400 text-sm">백엔드 데이터를 확인하거나 검사를 완료해주세요</p>
+                  </div>
+                )}
               </div>
             </div>
             
@@ -1111,24 +1120,18 @@ const FormatBTemplate = ({
 
         {/* 탭 내용 */}
         <div className="min-h-[400px]">
-          {screenType === 'finished' ? (
-            /* FINISHED 상태일 때는 mainContent 또는 children를 항상 표시 */
-            <div className="space-y-6">
+          {/* 모든 상태에서 탭별 내용 렌더링 */}
+          {activeTab === 'location' && renderLocationTab()}
+          {activeTab === 'preparation' && renderPreparationTab()}
+          {activeTab === 'completion' && renderCompletionTab()}
+          {activeTab === 'precautions' && renderPrecautionsTab()}
+          {activeTab === 'schedule' && renderScheduleTab()}
+
+          {/* FINISHED 상태가 아닐 때만 추가로 Content 컴포넌트 표시 */}
+          {screenType !== 'finished' && (
+            <div className="mt-6">
               {mainContent || children}
             </div>
-          ) : (
-            <>
-              {activeTab === 'location' && renderLocationTab()}
-              {activeTab === 'preparation' && renderPreparationTab()}
-              {activeTab === 'completion' && renderCompletionTab()}
-              {activeTab === 'precautions' && renderPrecautionsTab()}
-              {activeTab === 'schedule' && renderScheduleTab()}
-
-              {/* 다른 상태에서는 Content 컴포넌트도 함께 표시 */}
-              <div className="mt-6">
-                {mainContent || children}
-              </div>
-            </>
           )}
         </div>
 

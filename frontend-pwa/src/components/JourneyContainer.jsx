@@ -229,8 +229,8 @@ const JourneyContainer = ({ taggedLocation }) => {
         screenType={screenType}
         patientState={currentState}
         taggedLocation={taggedLocation}
-        // ✅ ProgressBar에 필요한 데이터 전달
-        progressBar={<ProgressBar appointments={todaysAppointments} />}
+        // ✅ ProgressBar에 필요한 데이터 전달 (patientState 포함)
+        progressBar={<ProgressBar appointments={todaysAppointments} patientState={currentState} />}
         // ✅ Content 컴포넌트 전달
         mainContent={<Content />}
         // ✅ FormatBTemplate에 필요한 핵심 props 전달 (실제 백엔드 데이터 사용)
@@ -243,6 +243,15 @@ const JourneyContainer = ({ taggedLocation }) => {
         completedAppointments={journeySummary.completedAppointments}
         totalDuration={journeySummary.totalDuration}
         completedCount={journeySummary.completedCount}
+        showPaymentInfo={true}
+        paymentAmount={journeySummary.completedAppointments?.length > 0
+          ? journeySummary.completedAppointments.reduce((total, apt) => {
+              const cost = apt.cost || apt.exam?.cost || 25000;
+              const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : cost;
+              return total + numericCost;
+            }, 0)
+          : 50000 // 기본 금액
+        }
       />
     </React.Suspense>
   );

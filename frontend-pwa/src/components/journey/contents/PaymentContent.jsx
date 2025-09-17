@@ -13,7 +13,22 @@ const PaymentContent = () => {
   const todaysAppointments = useJourneyStore(state => state.todaysAppointments || []);
   const patientState = useJourneyStore(state => state.patientState);
   const locationInfo = useJourneyStore(state => state.locationInfo);
-  const completionStats = useJourneyStore(state => state.getCompletionStats());
+
+  // 🔧 completionStats를 useMemo로 계산 (무한 루프 방지)
+  const completionStats = React.useMemo(() => {
+    if (!todaysAppointments || todaysAppointments.length === 0) {
+      return { completedCount: 0, totalCount: 0 };
+    }
+
+    const completed = todaysAppointments.filter(apt =>
+      apt.status === 'completed' || apt.status === 'examined'
+    );
+
+    return {
+      completedCount: completed.length,
+      totalCount: todaysAppointments.length
+    };
+  }, [todaysAppointments]);
   
   // 개발 모드에서만 데이터 확인
   if (process.env.NODE_ENV === 'development') {

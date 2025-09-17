@@ -248,8 +248,8 @@ const FormatATemplate = ({
           </div>
           
           <div className="relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 pb-12 sm:pb-16">
-            {/* ✅ ProgressBar 컴포넌트 사용 (header가 없을 때만, 중복 방지) */}
-            {progressBar && !header && (
+            {/* ✅ ProgressBar 컴포넌트 사용 (항상 표시) */}
+            {progressBar && (
               <div className="mb-3 sm:mb-4">
                 {progressBar}
               </div>
@@ -347,7 +347,7 @@ const FormatATemplate = ({
             {activeTab === 'location' ? (
               <div className="space-y-4">
                 {/* 위치 정보 - 깔끔한 카드 디자인 */}
-                {locationInfo && (
+                {locationInfo ? (
                   <div className="mb-4">
                     {/* 목적지 정보 - 현재 위치 -> 목적지 형식 */}
                     <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
@@ -374,6 +374,19 @@ const FormatATemplate = ({
                             {locationInfo.name || locationInfo.room || '목적지'}
                           </span>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    {/* 기본 위치 안내 (데이터가 없을 때) */}
+                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                      <div className="text-center">
+                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <span className="text-xl">🏥</span>
+                        </div>
+                        <h4 className="text-lg font-semibold text-gray-900 mb-2">위치 정보를 불러오는 중...</h4>
+                        <p className="text-sm text-gray-600">NFC 태그를 스캔하거나 백엔드 연결을 확인해주세요</p>
                       </div>
                     </div>
                   </div>
@@ -483,7 +496,7 @@ const FormatATemplate = ({
             ) : (
               <div className="space-y-3">
                 {/* 오늘의 일정 아코디언 */}
-                {todaySchedule && todaySchedule.map((schedule, index) => {
+                {todaySchedule && todaySchedule.length > 0 ? todaySchedule.map((schedule, index) => {
                   const isExpanded = expandedItems.includes(index);
                   const isCurrentStep = index === currentStep;
                   
@@ -555,7 +568,16 @@ const FormatATemplate = ({
                       </div>
                     </div>
                   );
-                })}
+                }) : (
+                  // 데이터가 없을 때 기본 내용 표시
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-2xl">📅</span>
+                    </div>
+                    <p className="text-gray-500 text-lg mb-2">오늘 예정된 검사가 없습니다</p>
+                    <p className="text-gray-400 text-sm">백엔드 연결 상태를 확인하거나 예약을 확인해주세요</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
