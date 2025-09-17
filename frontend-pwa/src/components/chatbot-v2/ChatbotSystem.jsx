@@ -258,19 +258,12 @@ const ChatbotSystem = ({ elderlyMode = false }) => {
     setIsTyping(true);
 
     try {
-      // 사용자 컨텍스트 가져오기
-      const context = await getUserContext();
-      
-      // 컨텍스트를 chatbotAPI의 fallback에서 사용할 수 있도록 전달
+      // 프론트엔드는 단순히 질문만 전송
+      // 서버가 JWT 토큰으로 사용자를 식별하고 컨텍스트를 조회함
       const { chatbotAPI: chatbot } = await import('./utils/chatbotAPI');
       
-      const response = await chatbot.sendMessage(text, {
-        currentQueues: currentQueues,
-        todaysAppointments: todaysAppointments,
-        patientState: context.patientState,
-        userInfo: context.userInfo,
-        ...context
-      });
+      // 컨텍스트 전송 제거 - 서버가 직접 조회
+      const response = await chatbot.sendMessage(text);
       
       const botMessage = {
         id: Date.now() + 1,

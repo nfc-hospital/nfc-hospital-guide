@@ -1,6 +1,37 @@
 """
-의료법 준수를 위한 안전장치 모듈
+의료법 준수를 위한 안전장치 및 개인정보 보호 모듈
 """
+import re
+
+def remove_sensitive_info(text):
+    """민감한 개인정보 패턴 제거"""
+    patterns = [
+        # 주민등록번호 패턴
+        (r'\d{6}[-\s]?\d{7}', '[주민번호]'),
+        # 전화번호 패턴
+        (r'01[0-9][-\s]?\d{3,4}[-\s]?\d{4}', '[전화번호]'),
+        (r'02[-\s]?\d{3,4}[-\s]?\d{4}', '[전화번호]'),
+        # 이메일 주소
+        (r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[이메일]'),
+        # 신용카드 번호
+        (r'\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}', '[카드번호]'),
+        # 계좌번호 (일반적인 패턴)
+        (r'\d{10,14}', '[계좌번호]'),
+        # 환자 ID (P로 시작하는 ID)
+        (r'P\d{8,}', '[환자ID]'),
+        # 의료보험번호
+        (r'[가-힣]{1,2}\d{8,10}', '[보험번호]'),
+        # 상세 주소 (동/호수 정보)
+        (r'\d+동\s*\d+호', '[상세주소]'),
+        # IP 주소
+        (r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}', '[IP주소]')
+    ]
+    
+    filtered_text = text
+    for pattern, replacement in patterns:
+        filtered_text = re.sub(pattern, replacement, filtered_text)
+    
+    return filtered_text
 
 def medical_safety_filter(response, question=""):
     """응답 필터링 및 면책조항 추가 - 더 유연한 접근"""
@@ -52,10 +83,14 @@ def medical_safety_filter(response, question=""):
     if not added_disclaimers:
         added_disclaimers.append(disclaimers["general"])
 
+    # 개인정보 필터링 적용
+    filtered_response = remove_sensitive_info(response)
+    
     return {
-        "response": response,
+        "response": filtered_response,
         "disclaimer": "\n".join(added_disclaimers),
-        "blocked": False
+        "blocked": False,
+        "filtered": filtered_response != response  # 필터링 여부 표시
     }
 
 def check_emergency_keywords(question):

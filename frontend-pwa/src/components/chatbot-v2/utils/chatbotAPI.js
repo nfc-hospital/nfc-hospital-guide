@@ -3,16 +3,20 @@ import { RESPONSE_TEMPLATES } from './constants';
 const API_BASE_URL = import.meta.env.VITE_CHATBOT_API_URL || 'http://localhost:5000';
 
 export const chatbotAPI = {
-  async sendMessage(message, context = {}) {
+  async sendMessage(message) {
     try {
+      // JWT 토큰 가져오기
+      const token = localStorage.getItem('access_token');
+      
       const response = await fetch(`${API_BASE_URL}/api/chatbot/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // JWT 토큰이 있으면 Authorization 헤더에 추가
+          ...(token && { 'Authorization': `Bearer ${token}` })
         },
         body: JSON.stringify({
-          question: message,  // 'message'를 'question'으로 변경
-          context,
+          question: message,
           timestamp: new Date().toISOString()
         })
       });
@@ -41,7 +45,7 @@ export const chatbotAPI = {
     } catch (error) {
       console.error('챗봇 API 오류:', error);
       
-      const fallbackResponse = this.getFallbackResponse(message, context);
+      const fallbackResponse = this.getFallbackResponse(message);
       return {
         success: false,
         message: typeof fallbackResponse === 'string' ? fallbackResponse : fallbackResponse.content || '죄송합니다. 응답을 처리할 수 없습니다.',
@@ -51,10 +55,10 @@ export const chatbotAPI = {
     }
   },
 
-  getFallbackResponse(message, context = {}) {
+  getFallbackResponse(message) {
     const lowerMessage = message.toLowerCase();
-    const { currentQueues, todaysAppointments, patientState, userId } = context;
-    const isLoggedIn = !!userId;
+    // 서버 연결 실패 시 기본 응답만 제공
+    const isLoggedIn = !!localStorage.getItem('access_token');
     
     // 병원 정보 관련 질문
     if (lowerMessage.includes('병원') || lowerMessage.includes('연락') || lowerMessage.includes('운영') || 
@@ -64,81 +68,37 @@ export const chatbotAPI = {
 🚨 응급실: 24시간 (02-0000-0119)`;
     }
     
-    // 대기 시간/순서 관련 질문
+    // 대기 시간/순서 관련 질문 - 서버 연결 실패시 일반 응답
     if ((lowerMessage.includes('대기') && (lowerMessage.includes('시간') || lowerMessage.includes('순서'))) || 
         lowerMessage.includes('순서') || 
         (lowerMessage.includes('시간') && !lowerMessage.includes('운영') && !lowerMessage.includes('진료시간')) || 
         lowerMessage.includes('기다')) {
       
-      if (!isLoggedIn) {
-        return '로그인하시면 실시간 대기현황을 확인할 수 있어요.';
-      }
-      
-      if (currentQueues && currentQueues.length > 0) {
-        const activeQueue = currentQueues.find(q => q.state === 'waiting' || q.state === 'called');
-        if (activeQueue) {
-          const waitTime = activeQueue.estimated_wait_time || 15;
-          return `대기번호 ${activeQueue.queue_number}번, 약 ${waitTime}분 남았어요.`;
-        }
-      }
-      return '대기 중인 검사가 없어요.';
+      return isLoggedIn 
+        ? '서버 연결이 불안정합니다. 잠시 후 다시 시도하시거나 원무과(1588-0000)로 문의해주세요.'
+        : '로그인하시면 실시간 대기현황을 확인할 수 있어요.';
     }
     
     // 진료비 관련 질문
     if (lowerMessage.includes('진료비') || lowerMessage.includes('비용') || lowerMessage.includes('수납') || 
         lowerMessage.includes('얼마') || lowerMessage.includes('가격')) {
-      if (!isLoggedIn) {
-        return '로그인하시면 진료비를 확인할 수 있어요. 수납은 1층 원무과예요.';
-      }
-      const completedExams = todaysAppointments?.filter(apt => apt.status === 'completed') || [];
-      if (completedExams.length > 0) {
-        return `완료된 검사 ${completedExams.length}건, 1층 원무과에서 수납하세요.`;
-      }
-      return '아직 완료된 진료가 없어요.';
+      return isLoggedIn
+        ? '서버 연결이 불안정합니다. 1층 원무과에서 확인해주세요.'
+        : '로그인하시면 진료비를 확인할 수 있어요. 수납은 1층 원무과예요.';
     }
     
     // 검사 준비사항 관련 질문
     if ((lowerMessage.includes('준비') && lowerMessage.includes('검사')) || 
         (lowerMessage.includes('검사') && lowerMessage.includes('준비사항'))) {
       
-      if (!isLoggedIn) {
-        return '로그인하시면 맞춤 준비사항 안내해드려요. 일반적으로 혈액검사는 8시간 금식이 필요해요.';
-      }
-      
-      if (todaysAppointments && todaysAppointments.length > 0) {
-        const upcomingExam = todaysAppointments.find(apt => 
-          apt.status === 'scheduled' || apt.status === 'pending' || apt.status === 'waiting'
-        );
-        
-        if (upcomingExam) {
-          const examName = (upcomingExam.exam?.title || '').toLowerCase();
-          if (examName.includes('혈액') || examName.includes('채혈')) {
-            return '8시간 금식 필요해요. 물은 괜찮아요.';
-          } else if (examName.includes('초음파')) {
-            return '검사 전 물을 충분히 드세요.';
-          } else if (examName.includes('ct') || examName.includes('mri')) {
-            return '금속 물품 제거하세요. 조영제 사용 가능성 있어요.';
-          }
-          return '특별한 준비사항 없어요.';
-        }
-      }
-      return '예정된 검사가 없어요. 원무과(1588-0000)에 확인하세요.';
+      return '일반적으로 혈액검사는 8시간 금식이 필요해요. 자세한 준비사항은 원무과(1588-0000)에 확인하세요.';
     }
     
     // 진료 순서 관련 질문
     if (lowerMessage.includes('진료') || lowerMessage.includes('일정')) {
-      if (!isLoggedIn) {
-        return '로그인하시면 오늘 일정을 확인할 수 있어요.';
-      }
-      if (todaysAppointments && todaysAppointments.length > 0) {
-        const next = todaysAppointments.find(a => a.status !== 'completed');
-        if (next) {
-          const time = new Date(next.scheduled_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
-          return `다음: ${next.exam?.title || '검사'} ${time}, ${next.exam?.building || '본관'} ${next.exam?.floor || '2'}층`;
-        }
-        return '오늘 일정이 모두 완료됐어요.';
-      }
-      return '오늘 예약이 없어요.';
+      return isLoggedIn
+        ? '서버 연결이 불안정합니다. 원무과에서 확인해주세요.'
+        : '로그인하시면 오늘 일정을 확인할 수 있어요.';
     }
     
     

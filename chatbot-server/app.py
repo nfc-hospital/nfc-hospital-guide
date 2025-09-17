@@ -3,11 +3,14 @@
 import os
 import sys
 import json
+import jwt
+import requests
 from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 from openai import OpenAI
+from utils.medical_safety_filter import medical_safety_filter, check_emergency_keywords, get_emergency_response
 
 # Windows 콘솔 UTF-8 설정
 if sys.platform == 'win32':
@@ -42,15 +45,140 @@ try:
         print("WARNING: OPENAI_API_KEY not found in environment variables")
         client = None
     else:
-        # OpenAI 클라이언트 버전 문제로 인한 임시 비활성화
-        print("OpenAI client temporarily disabled due to proxy configuration conflict")
-        client = None
+        # OpenAI 클라이언트 초기화
+        try:
+            client = OpenAI(api_key=api_key)
+            print(f"OpenAI client initialized successfully")
+        except Exception as init_error:
+            print(f"Failed to initialize OpenAI client: {init_error}")
+            client = None
         
 except Exception as e:
     print(f"Failed to initialize OpenAI client: {e}")
     import traceback
     traceback.print_exc()
     client = None
+
+# Django와 동일한 JWT 설정
+# Django의 기본 SECRET_KEY와 동일하게 설정
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
+DJANGO_API_URL = os.getenv('DJANGO_API_URL', 'http://localhost:8000')
+
+def get_user_from_token(auth_header):
+    """JWT 토큰에서 사용자 정보 추출"""
+    if not auth_header:
+        print("DEBUG: No Authorization header")
+        return None
+    
+    if not auth_header.startswith('Bearer '):
+        print(f"DEBUG: Invalid Authorization header format: {auth_header[:20]}")
+        return None
+    
+    try:
+        token = auth_header.split(' ')[1]
+        print(f"DEBUG: Token received (first 20 chars): {token[:20]}...")
+        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        
+        # 토큰 타입 확인
+        if payload.get('token_type') != 'access':
+            print(f"DEBUG: Invalid token type: {payload.get('token_type')}")
+            return None
+        
+        user_info = {
+            'user_id': payload.get('user_id'),
+            'role': payload.get('role', 'patient'),
+            'name': payload.get('name')
+        }
+        print(f"DEBUG: Token validated successfully for user: {user_info['user_id']}")
+        return user_info
+        
+    except jwt.ExpiredSignatureError:
+        print("DEBUG: Token expired")
+        return None
+    except jwt.InvalidTokenError as e:
+        print(f"DEBUG: Invalid token: {e}")
+        return None
+    except Exception as e:
+        print(f"DEBUG: Token validation error: {e}")
+        return None
+
+def fetch_patient_context(user_id):
+    """Django API에서 환자 컨텍스트 조회"""
+    try:
+        # 내부 API 호출 (서버 간 통신이므로 특별한 인증 토큰 사용)
+        internal_api_key = os.getenv('INTERNAL_API_KEY', 'internal-secret-key')
+        url = f"{DJANGO_API_URL}/api/v1/queue/internal/patient-context/{user_id}/"
+        print(f"DEBUG: Fetching patient context from: {url}")
+        
+        response = requests.get(
+            url,
+            headers={'X-Internal-Api-Key': internal_api_key},
+            timeout=5
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"DEBUG: Patient context fetched successfully, state: {data.get('patient_state')}")
+            return data
+        else:
+            print(f"DEBUG: Failed to fetch patient context: {response.status_code}")
+            if response.status_code == 404:
+                print(f"DEBUG: User {user_id} not found in Django")
+            return None
+    except Exception as e:
+        print(f"DEBUG: Error fetching patient context: {e}")
+        return None
+
+def build_personalized_prompt(user_info, patient_context):
+    """로그인 사용자용 개인화 프롬프트 생성"""
+    prompt = """당신은 HC_119 병원의 AI 안내원입니다. 간결하고 친절하게 답변하세요.\n\n"""
+    
+    # 환자 정보 추가
+    if user_info.get('name'):
+        prompt += f"환자: {user_info['name']}님\n"
+    
+    if patient_context:
+        # 현재 상태
+        if patient_context.get('patient_state'):
+            state_map = {
+                'WAITING': '대기중',
+                'CALLED': '호출됨',
+                'IN_PROGRESS': '진료중',
+                'COMPLETED': '완료'
+            }
+            state = state_map.get(patient_context['patient_state'], patient_context['patient_state'])
+            prompt += f"현재 상태: {state}\n"
+        
+        # 대기 정보
+        if patient_context.get('current_queues'):
+            queue = patient_context['current_queues'][0]
+            prompt += f"대기번호: {queue.get('queue_number')}번\n"
+            prompt += f"예상 대기시간: {queue.get('estimated_wait_time', '알 수 없음')}분\n"
+            if queue.get('exam'):
+                prompt += f"검사: {queue['exam'].get('title')}\n"
+        
+        # 오늘 일정
+        if patient_context.get('todays_appointments'):
+            apt_count = len(patient_context['todays_appointments'])
+            prompt += f"오늘 예약: {apt_count}건\n"
+    
+    prompt += "\n환자의 현재 상황을 고려하여 맞춤형 답변을 제공하세요."
+    return prompt
+
+def build_guest_prompt():
+    """비로그인 사용자용 일반 프롬프트 생성"""
+    return """당신은 HC_119 병원의 AI 안내원입니다. 간결하고 친절하게 답변하세요.
+
+주의사항:
+- 병원 일반 정보만 제공 가능합니다
+- 개인 정보가 필요한 질문에는 "로그인하시면 확인 가능합니다"로 안내
+- 대기시간, 검사결과 등은 로그인 후 확인 가능함을 안내
+
+병원 정보:
+- 대표전화: 1588-0000
+- 진료시간: 평일 8:30-17:30
+- 응급실: 24시간 운영
+- 주차: 30분 무료, 진료시 50% 할인"""
 
 SYSTEM_PROMPT = """
 당신은 서울대학교병원 안내 직원입니다. 간결하고 친절하게 답변하세요.
@@ -94,50 +222,73 @@ def chatbot_query():
             }), 400
             
         user_question = data['question']
-        context = data.get('context', {})
         
-        # 컨텍스트 정보 구성 (비로그인 사용자 지원)
-        context_info = "\n\n현재 상황:\n"
+        # 긴급 상황 체크
+        if check_emergency_keywords(user_question):
+            emergency_resp = get_emergency_response()
+            return jsonify({
+                "success": True,
+                "data": {
+                    "type": "emergency",
+                    "content": emergency_resp['response'],
+                    "disclaimer": emergency_resp['disclaimer'],
+                    "priority": emergency_resp['priority'],
+                    "authenticated": False,
+                    "response": {
+                        "type": "emergency",
+                        "content": emergency_resp['response'],
+                        "disclaimer": emergency_resp['disclaimer']
+                    }
+                },
+                "timestamp": datetime.now().isoformat()
+            })
         
-        # 로그인 여부 확인
-        is_guest = context.get('is_guest', True) or not context.get('userId')
-        if is_guest:
-            context_info += "- 비로그인 상태 (개인정보 조회 불가)\n"
+        # JWT 토큰에서 사용자 정보 추출
+        auth_header = request.headers.get('Authorization', '')
+        print(f"DEBUG: Received Authorization header: {auth_header[:50] if auth_header else 'None'}...")
+        user = get_user_from_token(auth_header)
+        
+        # 로그인 여부에 따라 다른 처리
+        if user:
+            # 로그인 사용자: Django API에서 실시간 데이터 조회
+            print(f"DEBUG: Authenticated user: {user['user_id']} (role: {user['role']})")
+            patient_context = fetch_patient_context(user['user_id'])
+            system_prompt = build_personalized_prompt(user, patient_context)
+            
+            if patient_context:
+                print(f"DEBUG: Using personalized prompt with patient state: {patient_context.get('patient_state')}")
+            else:
+                print("DEBUG: No patient context available, using basic personalized prompt")
         else:
-            # 로그인 사용자 컨텍스트
-            if context.get('patientState'):
-                state_map = {
-                    'WAITING': '대기중',
-                    'CALLED': '호출됨', 
-                    'ONGOING': '진행중',
-                    'COMPLETED': '완료'
-                }
-                state = state_map.get(context['patientState'], context['patientState'])
-                context_info += f"- 환자 상태: {state}\n"
-            
-            if context.get('currentQueues'):
-                queues = context['currentQueues']
-                if queues and len(queues) > 0:
-                    first_queue = queues[0]
-                    wait_time = first_queue.get('estimated_wait_time', '알 수 없음')
-                    queue_num = first_queue.get('queue_number', '알 수 없음')
-                    context_info += f"- 대기번호: {queue_num}번, 예상시간: {wait_time}분\n"
-            
-            if context.get('todaysAppointments'):
-                apts = context['todaysAppointments']
-                if apts and len(apts) > 0:
-                    next_apt = apts[0]
-                    exam_name = next_apt.get('exam', {}).get('title', '검사')
-                    context_info += f"- 다음 일정: {exam_name}\n"
+            # 비로그인 사용자: 일반 프롬프트 사용
+            system_prompt = build_guest_prompt()
+            print("DEBUG: Guest user (not authenticated) - using guest prompt")
         
         # OpenAI API 키 확인
         if not client:
-            # API 키가 없을 때도 친근한 폴백 응답
+            # API 키가 없을 때 fallback 응답 사용
+            print("WARNING: Using fallback response due to missing OpenAI client")
+            
+            # 질문에 따라 기본 응답 생성
+            question_lower = user_question.lower()
+            if '대기' in question_lower or '순서' in question_lower:
+                if user:
+                    # 로그인한 사용자에게 더 적절한 응답
+                    fallback_message = "현재 대기 중인 검사가 없습니다. 오늘 예약된 검사가 있으시다면 해당 검사실로 가셔서 접수하시면 됩니다."
+                else:
+                    fallback_message = "로그인하시면 실시간 대기현황을 확인할 수 있어요."
+            elif '병원' in question_lower or '시간' in question_lower:
+                fallback_message = "진료시간: 평일 8:30-17:30, 토요일 8:30-12:30\n대표전화: 1588-0000"
+            elif '주차' in question_lower:
+                fallback_message = "지하 1-3층 주차장, 첫 30분 무료, 진료시 50% 할인"
+            else:
+                fallback_message = "무엇을 도와드릴까요? 대기시간, 병원 위치, 진료시간 등을 물어보세요."
+            
             return jsonify({
                 "success": True,
                 "data": {
                     "response": {
-                        "content": "시스템 점검 중이에요. 원무과(1588-0000)로 문의해주세요.",
+                        "content": fallback_message,
                         "type": "fallback"
                     }
                 },
@@ -146,7 +297,7 @@ def chatbot_query():
         
         # Few-shot 예시로 톤 설정
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT + context_info},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": "혈액검사 금식해야 하나요?"},
             {"role": "assistant", "content": "네, 8-12시간 금식 필요해요. 물은 괜찮지만 커피는 안 돼요. 당뇨약 드시면 미리 말씀해주세요!"},
             {"role": "user", "content": "내 대기시간 얼마나 남았어?"},
@@ -180,19 +331,30 @@ def chatbot_query():
         except UnicodeEncodeError:
             print(f"GPT Response: {ai_response[:100].encode('utf-8', 'ignore').decode('utf-8')}...")
         
+        # 의료 안전 및 개인정보 필터링 적용
+        filtered_result = medical_safety_filter(ai_response, user_question)
+        final_response = filtered_result['response']
+        
+        # 필터링 로그
+        if filtered_result.get('filtered'):
+            print("Personal information was filtered from the response")
+        
         return jsonify({
             "success": True,
             "data": {
                 "object": "chat_message",
                 "messageId": f"msg-{datetime.now().timestamp()}",
-                "userId": context.get('userId', 'guest'),
+                "userId": user['user_id'] if user else 'guest',
+                "authenticated": user is not None,
                 "type": "user_query",
                 "content": user_question,
                 "response": {
                     "type": "gpt_response",
-                    "content": ai_response,
+                    "content": final_response,
                     "confidence": 0.9,
-                    "sources": ["openai-gpt-4"]
+                    "sources": ["openai-gpt-4"],
+                    "context_source": "realtime" if user else "general",
+                    "disclaimer": filtered_result.get('disclaimer')
                 }
             },
             "message": "응답 완료",

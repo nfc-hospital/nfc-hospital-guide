@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 from . import test_views
+from . import internal_views
 
 # 새로운 ViewSet 라우터
 router = DefaultRouter()
@@ -68,7 +69,9 @@ urlpatterns = [
     # URL: /api/v1/queue/transitions/analytics/
     path('transitions/analytics/', views.state_transition_analytics, name='state-transition-analytics'),
 
-
+    # 내부 API (챗봇 서버 전용)
+    # URL: /api/v1/internal/patient-context/<user_id>/
+    path('internal/patient-context/<uuid:user_id>/', internal_views.get_patient_context, name='internal-patient-context'),
 ]
 
 # 테스트 환경용 URL (개발 환경에서만 활성화)
