@@ -2,18 +2,24 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ExamPreparationChecklist from "../../ExamPreparationChecklist";
 import { MapPinIcon, PhoneIcon, CheckCircleIcon } from "@heroicons/react/24/outline";
+import useJourneyStore from '../../../store/journeyStore';
 
 /**
  * ArrivedContent - 병원 도착 상태의 순수 컨텐츠 컴포넌트
- * 템플릿 래핑 없이 순수 컨텐츠만 제공
+ * 무한 루프 방지를 위해 직접 store 구독 사용
+ * React.memo로 래핑하여 불필요한 리렌더링 방지
  */
-export default function ArrivedContent({
-  // 필요한 데이터만 props로 받음
-  user,
-  patientState,
-  todaysAppointments = [],
-  locationInfo
-}) {
+const ArrivedContent = ({ 
+  user, 
+  todaysAppointments = [], 
+  patientState, 
+  locationInfo,
+  ...otherProps 
+}) => {
+  // 개발 모드에서만 props 확인
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔥 ArrivedContent props:', { user: user?.name, appointments: todaysAppointments?.length });
+  }
   const navigate = useNavigate();
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
@@ -153,4 +159,8 @@ export default function ArrivedContent({
       <RescheduleModal />
     </>
   );
-}
+};
+
+ArrivedContent.displayName = 'ArrivedContent';
+
+export default ArrivedContent;

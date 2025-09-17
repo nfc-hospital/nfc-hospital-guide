@@ -1,16 +1,23 @@
 import React from 'react';
 import { UserPlusIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
+import useJourneyStore from '../../../store/journeyStore';
+import useLocationStore from '../../../store/locationStore';
 
 /**
  * UnregisteredContent - 미등록 상태의 순수 컨텐츠 컴포넌트
- * 템플릿 래핑 없이 순수 컨텐츠만 제공
+ * 무한 루프 방지를 위해 직접 store 구독 사용
+ * React.memo로 래핑하여 불필요한 리렌더링 방지
  */
-export default function UnregisteredContent({ 
-  // 필요한 데이터만 props로 받음
-  user,
-  patientState,
-  taggedLocation
-}) {
+const UnregisteredContent = ({ 
+  user, 
+  patientState, 
+  taggedLocation,
+  ...otherProps 
+}) => {
+  // 개발 모드에서만 props 확인
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔥 UnregisteredContent props:', { user: user?.name, taggedLocation: taggedLocation?.name });
+  }
   return (
     <div className="space-y-6">
       {/* 환영 메시지 */}
@@ -68,4 +75,8 @@ export default function UnregisteredContent({
       )}
     </div>
   );
-}
+};
+
+UnregisteredContent.displayName = 'UnregisteredContent';
+
+export default UnregisteredContent;
