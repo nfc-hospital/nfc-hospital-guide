@@ -148,3 +148,101 @@ def get_exam_location(exam):
     if exam.room:
         location += f" {exam.room}"
     return location.strip()
+
+
+@api_view(['GET'])
+@authentication_classes([])  # 인증 불필요
+@permission_classes([AllowAny])  # 모든 접근 허용
+def get_public_queue_info(request):
+    """
+    공개 가능한 병원 일반 정보 API (비로그인 사용자용)
+    """
+    logger.info("🌐 [공개 API] 병원 일반 정보 요청")
+    
+    try:
+        # 진료과별 평균 대기 시간 계산
+        from django.db.models import Avg, Count
+        from appointments.models import Exam
+        
+        department_stats = Queue.objects.filter(
+            state__in=['waiting', 'called']
+        ).values('exam__department').annotate(
+            avg_wait_time=Avg('estimated_wait_time'),
+            queue_count=Count('queue_id')
+        )
+        
+        # 검사별 정보
+        exam_info = {}
+        popular_exams = ['CT', 'MRI', 'X-ray', '혈액검사', '초음파']
+        
+        for exam_name in popular_exams:
+            exam = Exam.objects.filter(title__icontains=exam_name).first()
+            if exam:
+                queue_count = Queue.objects.filter(
+                    exam=exam,
+                    state__in=['waiting', 'called']
+                ).count()
+                
+                avg_duration = exam.average_duration if hasattr(exam, 'average_duration') else 20
+                
+                exam_info[exam_name] = {
+                    'location': get_exam_location(exam),
+                    'current_waiting': queue_count,
+                    'estimated_wait': queue_count * (avg_duration / 3),  # 대략적인 계산
+                    'average_duration': avg_duration,
+                    'preparation': get_exam_preparation(exam_name)
+                }
+        
+        # 실시간 혼잡도 (전체 대기 인원)
+        total_waiting = Queue.objects.filter(state__in=['waiting', 'called']).count()
+        
+        response_data = {
+            'hospital_info': {
+                'main_number': '1588-0000',
+                'emergency': '02-0000-0119',
+                'operating_hours': {
+                    'weekday': '08:30 - 17:30',
+                    'saturday': '08:30 - 12:30',
+                    'sunday': '응급실만 24시간'
+                }
+            },
+            'department_stats': list(department_stats),
+            'exam_info': exam_info,
+            'total_waiting_patients': total_waiting,
+            'congestion_level': get_congestion_level(total_waiting),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        logger.info(f"🌐 공개 정보 제공: 대기 환자 {total_waiting}명")
+        return Response(response_data, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"❌ [공개 API] 오류: {str(e)}")
+        return Response(
+            {"error": "Failed to fetch public info"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+def get_exam_preparation(exam_name):
+    """검사별 준비사항 반환"""
+    preparations = {
+        'CT': '8시간 금식, 금속 제거',
+        'MRI': '금속 제거, 폐쇄공포증 주의',
+        'X-ray': '특별한 준비 불필요',
+        '혈액검사': '8-12시간 금식',
+        '초음파': '검사 부위에 따라 다름'
+    }
+    return preparations.get(exam_name, '병원에 문의')
+
+
+def get_congestion_level(total_waiting):
+    """혼잡도 수준 판단"""
+    if total_waiting < 50:
+        return '원활'
+    elif total_waiting < 100:
+        return '보통'
+    elif total_waiting < 150:
+        return '혼잡'
+    else:
+        return '매우 혼잡'

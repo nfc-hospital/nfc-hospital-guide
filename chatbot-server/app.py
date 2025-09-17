@@ -54,55 +54,77 @@ else:
 
 # Django와 동일한 JWT 설정
 # Django의 기본 SECRET_KEY와 동일하게 설정
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
+# 주의: Django가 JWT_SECRET_KEY를 사용한다면 그것을 사용해야 함
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')  # Django와 동일한 JWT 비밀 키
+SECRET_KEY = os.getenv('SECRET_KEY', JWT_SECRET_KEY or 'django-insecure-change-this-in-production')
 DJANGO_API_URL = os.getenv('DJANGO_API_URL', 'http://localhost:8000')
+
+# 디버깅용: 어떤 키를 사용하는지 출력
+print("\n" + "="*60)
+print("🔑 [챗봇 서버] JWT 키 설정 확인")
+print(f"   JWT_SECRET_KEY 존재: {'Yes' if JWT_SECRET_KEY else 'No'}")
+print(f"   SECRET_KEY 사용: {SECRET_KEY[:20]}..." if SECRET_KEY else "   SECRET_KEY: None")
+print("="*60 + "\n")
 
 def get_user_from_token(auth_header):
     """JWT 토큰에서 사용자 정보 추출"""
     if not auth_header:
-        print("DEBUG: No Authorization header")
+        print("🔴 No Authorization header")
         return None
     
     if not auth_header.startswith('Bearer '):
-        print(f"DEBUG: Invalid Authorization header format: {auth_header[:20]}")
+        print(f"🔴 Invalid Authorization header format: {auth_header[:20]}")
         return None
     
     try:
         token = auth_header.split(' ')[1]
-        print(f"DEBUG: Token received (first 20 chars): {token[:20]}...")
+        print(f"🔵 Token received (first 20 chars): {token[:20]}...")
         
         # 토큰 디코딩 시도
         try:
             # 먼저 서명 검증 없이 디코딩 시도 (디버깅용)
             unverified = jwt.decode(token, options={"verify_signature": False})
-            print(f"DEBUG: Token payload (unverified): user_id={unverified.get('user_id')}, token_type={unverified.get('token_type')}")
+            print(f"🟡 Token payload (unverified): user_id={unverified.get('user_id')}, token_type={unverified.get('token_type')}")
         except Exception as debug_e:
-            print(f"DEBUG: Failed to decode token even without verification: {debug_e}")
+            print(f"🔴 Failed to decode token structure: {debug_e}")
         
-        # 실제 검증 포함 디코딩
-        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        # JWT_SECRET_KEY가 있으면 먼저 시도, 없으면 SECRET_KEY 사용
+        keys_to_try = []
+        if JWT_SECRET_KEY:
+            keys_to_try.append(('JWT_SECRET_KEY', JWT_SECRET_KEY))
+        keys_to_try.append(('SECRET_KEY', SECRET_KEY))
         
-        # 토큰 타입 확인
-        if payload.get('token_type') != 'access':
-            print(f"DEBUG: Invalid token type: {payload.get('token_type')}")
-            return None
+        for key_name, key_value in keys_to_try:
+            try:
+                print(f"🔑 Trying to decode with {key_name}...")
+                payload = jwt.decode(token, key_value, algorithms=['HS256'])
+                print(f"✅ Successfully decoded with {key_name}")
+                
+                # 토큰 타입 확인
+                if payload.get('token_type') != 'access':
+                    print(f"🔴 Invalid token type: {payload.get('token_type')}")
+                    return None
+                
+                user_info = {
+                    'user_id': payload.get('user_id'),
+                    'role': payload.get('role', 'patient'),
+                    'name': payload.get('name')
+                }
+                print(f"✅ Token validated for user: {user_info['name']} (ID: {user_info['user_id']})")
+                return user_info
+                
+            except jwt.InvalidTokenError:
+                print(f"❌ Failed with {key_name}")
+                continue
         
-        user_info = {
-            'user_id': payload.get('user_id'),
-            'role': payload.get('role', 'patient'),
-            'name': payload.get('name')
-        }
-        print(f"DEBUG: Token validated successfully for user: {user_info['user_id']}")
-        return user_info
+        print("🔴 All key attempts failed")
+        return None
         
     except jwt.ExpiredSignatureError:
-        print("DEBUG: Token expired")
-        return None
-    except jwt.InvalidTokenError as e:
-        print(f"DEBUG: Invalid token: {e}")
+        print("⏰ Token expired")
         return None
     except Exception as e:
-        print(f"DEBUG: Token validation error: {e}")
+        print(f"💥 Unexpected error during token validation: {e}")
         return None
 
 def fetch_patient_context(user_id):
@@ -249,6 +271,55 @@ def health_check():
         "service": "NFC Hospital Chatbot Server"
     })
 
+def classify_question_intent(question):
+    """
+    질문의 의도를 분류 (개인 정보 vs 일반 정보)
+    """
+    # 개인 정보 키워드
+    personal_keywords = ['내', '제', '저의', '저한테', '저', 'my', '내꺼', '제꺼', '나의', '나']
+    
+    # 일반 정보 키워드
+    general_keywords = ['CT', 'MRI', 'X-ray', '검사', '시간', '위치', '준비', '금식', 
+                       '병원', '주차', '비용', '요금', '운영', '시간', '휴진']
+    
+    question_lower = question.lower()
+    
+    # 명확히 개인 질문인 경우
+    for keyword in personal_keywords:
+        if keyword in question:
+            return 'personal'
+    
+    # 명확히 일반 질문인 경우
+    for keyword in general_keywords:
+        if keyword in question_lower:
+            return 'general'
+    
+    # 디폴트: 일반 질문으로 처리
+    return 'general'
+
+
+def get_public_info_from_django():
+    """
+    Django에서 공개 가능한 병원 일반 정보 조회
+    """
+    try:
+        url = f"{DJANGO_API_URL}/api/v1/queue/internal/public-queue-info/"
+        print(f"🌐 공개 정보 API 호출: {url}")
+        
+        response = requests.get(url, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            print("✅ 공개 정보 수신 성공")
+            return data
+        else:
+            print(f"❌ 공개 정보 API 실패: {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"💥 공개 정보 API 오류: {e}")
+        return None
+
+
 @app.route('/api/chatbot/query', methods=['POST'])
 def chatbot_query():
     try:
@@ -286,27 +357,59 @@ def chatbot_query():
                 "timestamp": datetime.now().isoformat()
             })
         
+        # 질문 의도 분류
+        intent = classify_question_intent(user_question)
+        print(f"🎯 질문 의도: {intent} - \"{user_question[:50]}...\"")
+        
         # JWT 토큰에서 사용자 정보 추출
         auth_header = request.headers.get('Authorization', '')
-        print(f"DEBUG: Received Authorization header: {auth_header[:50] if auth_header else 'None'}...")
-        print(f"DEBUG: Using SECRET_KEY: {SECRET_KEY[:20]}...")
         user = get_user_from_token(auth_header)
         
-        # 로그인 여부에 따라 다른 처리
-        if user:
-            # 로그인 사용자: Django API에서 실시간 데이터 조회
-            print(f"DEBUG: Authenticated user: {user['user_id']} (role: {user['role']})")
-            patient_context = fetch_patient_context(user['user_id'])
-            system_prompt = build_personalized_prompt(user, patient_context)
-            
-            if patient_context:
-                print(f"DEBUG: Using personalized prompt with patient state: {patient_context.get('patient_state')}")
+        # 의도와 로그인 상태에 따른 처리
+        if intent == 'personal':
+            # 개인 질문 처리
+            if user:
+                print(f"👤 로그인 사용자의 개인 질문: {user.get('name', 'Unknown')}")
+                patient_context = fetch_patient_context(user['user_id'])
+                system_prompt = build_personalized_prompt(user, patient_context)
+                
+                if not patient_context:
+                    system_prompt += "\n현재 진행 중인 검사가 없습니다. 예약 확인을 위해 원무과에 문의해주세요."
             else:
-                print("DEBUG: No patient context available, using basic personalized prompt")
+                # 개인 질문인데 로그인 안 함 - OpenAI 사용 안 하고 바로 안내
+                print("🔒 비로그인 사용자의 개인 질문")
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "response": {
+                            "content": "대기 순서와 같은 개인 정보는 로그인 후 확인하실 수 있습니다. 원무과(1588-0000)로 문의하시거나 로그인해주세요.",
+                            "type": "login_required"
+                        }
+                    },
+                    "timestamp": datetime.now().isoformat()
+                })
         else:
-            # 비로그인 사용자: 일반 프롬프트 사용
-            system_prompt = build_guest_prompt()
-            print("DEBUG: Guest user (not authenticated) - using guest prompt")
+            # 일반 질문 처리 - 로그인 여부와 관계없이
+            print("🌐 일반 정보 질문 처리")
+            public_info = get_public_info_from_django()
+            
+            if public_info:
+                system_prompt = f"""당신은 HC_119 병원의 AI 안내원입니다.
+
+병원 기본 정보:
+{json.dumps(public_info.get('hospital_info', {}), ensure_ascii=False, indent=2)}
+
+현재 검사별 정보:
+{json.dumps(public_info.get('exam_info', {}), ensure_ascii=False, indent=2)}
+
+현재 혼잡도: {public_info.get('congestion_level', '정보 없음')}
+전체 대기 환자: {public_info.get('total_waiting_patients', 0)}명
+
+위 정보를 바탕으로 간결하고 친절하게 답변해주세요.
+개인 정보는 절대 묻거나 요구하지 마세요."""
+            else:
+                # Django API가 실패해도 기본 정보는 제공
+                system_prompt = build_guest_prompt()
         
         # OpenAI API 사용 가능 여부 확인
         if not openai_available:

@@ -72,6 +72,9 @@ urlpatterns = [
     # 내부 API (챗봇 서버 전용)
     # URL: /api/v1/internal/patient-context/<user_id>/
     path('internal/patient-context/<uuid:user_id>/', internal_views.get_patient_context, name='internal-patient-context'),
+    
+    # URL: /api/v1/internal/public-queue-info/
+    path('internal/public-queue-info/', internal_views.get_public_queue_info, name='internal-public-queue-info'),
 ]
 
 # 테스트 환경용 URL (개발 환경에서만 활성화)
