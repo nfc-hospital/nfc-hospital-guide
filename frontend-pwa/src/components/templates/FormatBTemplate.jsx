@@ -147,128 +147,272 @@ const FormatBTemplate = ({
   };
 
   // 준비사항 체크리스트 렌더링 - 더 깔끔하고 현대적으로
-  const renderPreparationTab = () => (
-    <div className="space-y-4">
-      {preparationItems?.map((category, categoryIndex) => {
-        // customContent가 있는 경우 직접 렌더링
-        if (category.customContent) {
-          return (
-            <div key={categoryIndex}>
-              {category.customContent}
-            </div>
-          );
+  const renderPreparationTab = () => {
+    // 안전한 데이터 사용
+    const safePreparationItems = preparationItems || [];
+
+    if (safePreparationItems.length === 0) {
+      // 기본 준비사항 제공
+      const defaultPreparationItems = [
+        {
+          title: "병원 방문 시 준비사항",
+          description: "원활한 진료를 위해 준비해 주세요",
+          icon: "🏥",
+          items: [
+            { title: "신분증 지참", description: "본인 확인을 위해 신분증을 꼭 지참해 주세요" },
+            { title: "보험증 준비", description: "건강보험증 또는 의료보험 관련 서류를 준비해 주세요" },
+            { title: "이전 검사 결과", description: "관련된 이전 검사 결과가 있다면 가져와 주세요" }
+          ]
+        },
+        {
+          title: "검사 전 주의사항",
+          description: "정확한 검사를 위해 지켜주세요",
+          icon: "⚠️",
+          items: [
+            { title: "복용 중인 약물 확인", description: "현재 복용 중인 모든 약물을 의료진에게 알려주세요" },
+            { title: "알레르기 정보 확인", description: "약물이나 음식 알레르기가 있다면 미리 알려주세요" }
+          ]
         }
-        
-        const isExpanded = expandedItems.includes(categoryIndex);
-        const categoryCheckedCount = category.items?.filter((_, itemIndex) => 
-          checkedItems[`${categoryIndex}-${itemIndex}`]
-        ).length || 0;
-        const totalItems = category.items?.length || 0;
-        const isAllChecked = categoryCheckedCount === totalItems && totalItems > 0;
-        
-        return (
-          <div 
-            key={categoryIndex}
-            className={`border-2 rounded-2xl overflow-hidden transition-all duration-300 ${
-              isAllChecked ? 'border-green-300 bg-green-50/30' : 'border-gray-200 bg-white'
-            } shadow-sm hover:shadow-md`}
-          >
-            <button
-              onClick={() => toggleExpanded(categoryIndex)}
-              className={`w-full p-5 flex items-center gap-4 transition-all duration-300 ${
-                isAllChecked ? 'bg-green-50/50' : 'hover:bg-gray-50'
-              }`}
-            >
-              {/* 카테고리 아이콘 - 더 크고 배경 추가 */}
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${
-                isAllChecked ? 'bg-green-100' : 'bg-gray-100'
-              }`}>
-                <span className="text-2xl">{category.icon}</span>
-              </div>
-              
-              {/* 카테고리 정보 */}
-              <div className="flex-1 text-left">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-lg font-bold text-gray-900">{category.title}</h4>
-                  {categoryCheckedCount > 0 && (
-                    <span className={`text-sm font-medium px-2 py-1 rounded-full ${
-                      isAllChecked ? 'bg-green-200 text-green-800' : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {categoryCheckedCount}/{totalItems}
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-600 mt-1">{category.description}</p>
-              </div>
-              
-              {/* 펼침/접힘 화살표 - 더 부드럽게 */}
-              <div className={`transform transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
-                <ChevronDownIcon className="w-6 h-6 text-gray-400" />
-              </div>
-            </button>
-            
-            {/* 체크리스트 상세 내용 - 애니메이션 추가 */}
-            <div className={`transition-all duration-300 ease-in-out ${
-              isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
-            } overflow-hidden`}>
-              <div className="px-5 pb-5 space-y-2 border-t border-gray-100">
-                {category.items?.map((item, itemIndex) => {
-                  const key = `${categoryIndex}-${itemIndex}`;
-                  const isChecked = checkedItems[key];
-                  
-                  return (
-                    <div
-                      key={itemIndex}
-                      className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 ${
-                        isChecked 
-                          ? 'bg-gray-100/70 scale-[0.98]' 
-                          : 'hover:bg-blue-50/50 hover:scale-[1.01]'
-                      }`}
-                    >
-                      {/* 항목 텍스트 - 더 읽기 쉽게 */}
-                      <div className="flex-1">
-                        <h5 className={`text-lg font-bold mb-1.5 transition-all duration-300 ${
-                          isChecked 
-                            ? 'text-gray-400 line-through' 
-                            : 'text-gray-900'
+      ];
+
+      return (
+        <div className="space-y-4">
+          {defaultPreparationItems.map((category, categoryIndex) => {
+            const isExpanded = expandedItems.includes(categoryIndex);
+            const categoryCheckedCount = category.items?.filter((_, itemIndex) =>
+              checkedItems[`${categoryIndex}-${itemIndex}`]
+            ).length || 0;
+            const totalItems = category.items?.length || 0;
+            const isAllChecked = categoryCheckedCount === totalItems && totalItems > 0;
+
+            return (
+              <div
+                key={categoryIndex}
+                className={`border-2 rounded-2xl overflow-hidden transition-all duration-300 ${
+                  isAllChecked ? 'border-green-300 bg-green-50/30' : 'border-gray-200 bg-white'
+                } shadow-sm hover:shadow-md`}
+              >
+                <button
+                  onClick={() => toggleExpanded(categoryIndex)}
+                  className={`w-full p-5 flex items-center gap-4 transition-all duration-300 ${
+                    isAllChecked ? 'bg-green-50/50' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  {/* 카테고리 아이콘 - 더 크고 배경 추가 */}
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${
+                    isAllChecked ? 'bg-green-100' : 'bg-gray-100'
+                  }`}>
+                    <span className="text-2xl">{category.icon}</span>
+                  </div>
+
+                  {/* 카테고리 정보 */}
+                  <div className="flex-1 text-left">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-lg font-bold text-gray-900">{category.title}</h4>
+                      {categoryCheckedCount > 0 && (
+                        <span className={`text-sm font-medium px-2 py-1 rounded-full ${
+                          isAllChecked ? 'bg-green-200 text-green-800' : 'bg-blue-100 text-blue-700'
                         }`}>
-                          {item.title || item.text}
-                        </h5>
-                        {item.description && (
-                          <p className={`text-sm text-gray-600 leading-relaxed transition-all duration-300 ${
-                            isChecked ? 'line-through' : ''
-                          }`}>
-                            {item.description}
-                          </p>
-                        )}
-                      </div>
-                      
-                      {/* 체크박스 - 오른쪽으로 이동 */}
-                      <button
-                        onClick={() => toggleChecked(categoryIndex, itemIndex)}
-                        className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all duration-300 transform flex-shrink-0 ${
-                          isChecked 
-                            ? 'bg-blue-600 border-blue-600 scale-110 shadow-lg' 
-                            : 'bg-gray-50 border-gray-500 hover:bg-gray-100 hover:border-gray-700 hover:scale-105 shadow-sm'
+                          {categoryCheckedCount}/{totalItems}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">{category.description}</p>
+                  </div>
+
+                  {/* 펼침/접힘 화살표 - 더 부드럽게 */}
+                  <div className={`transform transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                    <ChevronDownIcon className="w-6 h-6 text-gray-400" />
+                  </div>
+                </button>
+
+                {/* 체크리스트 상세 내용 - 애니메이션 추가 */}
+                <div className={`transition-all duration-300 ease-in-out ${
+                  isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+                } overflow-hidden`}>
+                  <div className="px-5 pb-5 space-y-2 border-t border-gray-100">
+                    {category.items?.map((item, itemIndex) => {
+                      const key = `${categoryIndex}-${itemIndex}`;
+                      const isChecked = checkedItems[key];
+
+                      return (
+                        <div
+                          key={itemIndex}
+                          className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 ${
+                            isChecked
+                              ? 'bg-gray-100/70 scale-[0.98]'
+                              : 'hover:bg-blue-50/50 hover:scale-[1.01]'
+                          }`}
+                        >
+                          {/* 항목 텍스트 - 더 읽기 쉽게 */}
+                          <div className="flex-1">
+                            <h5 className={`text-lg font-bold mb-1.5 transition-all duration-300 ${
+                              isChecked
+                                ? 'text-gray-400 line-through'
+                                : 'text-gray-900'
+                            }`}>
+                              {item.title || item.text}
+                            </h5>
+                            {item.description && (
+                              <p className={`text-sm text-gray-600 leading-relaxed transition-all duration-300 ${
+                                isChecked ? 'line-through' : ''
+                              }`}>
+                                {item.description}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* 체크박스 - 오른쪽으로 이동 */}
+                          <button
+                            onClick={() => toggleChecked(categoryIndex, itemIndex)}
+                            className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all duration-300 transform flex-shrink-0 ${
+                              isChecked
+                                ? 'bg-blue-600 border-blue-600 scale-110 shadow-lg'
+                                : 'bg-gray-50 border-gray-500 hover:bg-gray-100 hover:border-gray-700 hover:scale-105 shadow-sm'
+                            }`}
+                          >
+                            {isChecked && (
+                              <CheckIconSolid className="w-5 h-5 text-white animate-[scale-in_0.3s_ease-out]" />
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* 커스텀 준비사항 콘텐츠 추가 */}
+          {customPreparationContent && customPreparationContent}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {safePreparationItems.map((category, categoryIndex) => {
+          // customContent가 있는 경우 직접 렌더링
+          if (category.customContent) {
+            return (
+              <div key={categoryIndex}>
+                {category.customContent}
+              </div>
+            );
+          }
+
+          const isExpanded = expandedItems.includes(categoryIndex);
+          const categoryCheckedCount = category.items?.filter((_, itemIndex) =>
+            checkedItems[`${categoryIndex}-${itemIndex}`]
+          ).length || 0;
+          const totalItems = category.items?.length || 0;
+          const isAllChecked = categoryCheckedCount === totalItems && totalItems > 0;
+
+          return (
+            <div
+              key={categoryIndex}
+              className={`border-2 rounded-2xl overflow-hidden transition-all duration-300 ${
+                isAllChecked ? 'border-green-300 bg-green-50/30' : 'border-gray-200 bg-white'
+              } shadow-sm hover:shadow-md`}
+            >
+              <button
+                onClick={() => toggleExpanded(categoryIndex)}
+                className={`w-full p-5 flex items-center gap-4 transition-all duration-300 ${
+                  isAllChecked ? 'bg-green-50/50' : 'hover:bg-gray-50'
+                }`}
+              >
+                {/* 카테고리 아이콘 - 더 크고 배경 추가 */}
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm ${
+                  isAllChecked ? 'bg-green-100' : 'bg-gray-100'
+                }`}>
+                  <span className="text-2xl">{category.icon}</span>
+                </div>
+
+                {/* 카테고리 정보 */}
+                <div className="flex-1 text-left">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-lg font-bold text-gray-900">{category.title}</h4>
+                    {categoryCheckedCount > 0 && (
+                      <span className={`text-sm font-medium px-2 py-1 rounded-full ${
+                        isAllChecked ? 'bg-green-200 text-green-800' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {categoryCheckedCount}/{totalItems}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1">{category.description}</p>
+                </div>
+
+                {/* 펼침/접힘 화살표 - 더 부드럽게 */}
+                <div className={`transform transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>
+                  <ChevronDownIcon className="w-6 h-6 text-gray-400" />
+                </div>
+              </button>
+
+              {/* 체크리스트 상세 내용 - 애니메이션 추가 */}
+              <div className={`transition-all duration-300 ease-in-out ${
+                isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+              } overflow-hidden`}>
+                <div className="px-5 pb-5 space-y-2 border-t border-gray-100">
+                  {category.items?.map((item, itemIndex) => {
+                    const key = `${categoryIndex}-${itemIndex}`;
+                    const isChecked = checkedItems[key];
+
+                    return (
+                      <div
+                        key={itemIndex}
+                        className={`flex items-center gap-4 p-4 rounded-xl transition-all duration-300 ${
+                          isChecked
+                            ? 'bg-gray-100/70 scale-[0.98]'
+                            : 'hover:bg-blue-50/50 hover:scale-[1.01]'
                         }`}
                       >
-                        {isChecked && (
-                          <CheckIconSolid className="w-5 h-5 text-white animate-[scale-in_0.3s_ease-out]" />
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
+                        {/* 항목 텍스트 - 더 읽기 쉽게 */}
+                        <div className="flex-1">
+                          <h5 className={`text-lg font-bold mb-1.5 transition-all duration-300 ${
+                            isChecked
+                              ? 'text-gray-400 line-through'
+                              : 'text-gray-900'
+                          }`}>
+                            {item.title || item.text}
+                          </h5>
+                          {item.description && (
+                            <p className={`text-sm text-gray-600 leading-relaxed transition-all duration-300 ${
+                              isChecked ? 'line-through' : ''
+                            }`}>
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* 체크박스 - 오른쪽으로 이동 */}
+                        <button
+                          onClick={() => toggleChecked(categoryIndex, itemIndex)}
+                          className={`w-8 h-8 rounded-lg border-2 flex items-center justify-center transition-all duration-300 transform flex-shrink-0 ${
+                            isChecked
+                              ? 'bg-blue-600 border-blue-600 scale-110 shadow-lg'
+                              : 'bg-gray-50 border-gray-500 hover:bg-gray-100 hover:border-gray-700 hover:scale-105 shadow-sm'
+                          }`}
+                        >
+                          {isChecked && (
+                            <CheckIconSolid className="w-5 h-5 text-white animate-[scale-in_0.3s_ease-out]" />
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
-      
-      {/* 커스텀 준비사항 콘텐츠 추가 */}
-      {customPreparationContent && customPreparationContent}
-    </div>
-  );
+          );
+        })}
+
+        {/* 커스텀 준비사항 콘텐츠 추가 */}
+        {customPreparationContent && customPreparationContent}
+      </div>
+    );
+  };
 
   // 위치 안내 탭 렌더링 (arrived 화면 전용)
   const renderLocationTab = () => (
@@ -354,27 +498,35 @@ const FormatBTemplate = ({
   );
 
   // 완료내역 탭 렌더링 - 더 세련되게
-  const renderCompletionTab = () => (
-    <div className="space-y-4">
-      {/* 수납 완료 영수증 - screenType이 completed이고 showPaymentInfo가 true일 때만 */}
-      {screenType === 'completed' && showPaymentInfo && (
-        <div>
-          {/* 소요시간과 완료 정보 */}
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            <div className="bg-emerald-50 rounded-2xl p-4 text-center border border-emerald-200">
-              <p className="text-sm text-emerald-600 font-medium mb-1">소요시간</p>
-              <p className="text-2xl font-bold text-emerald-700">
-                {totalDuration >= 60 ? 
-                  `${Math.floor(totalDuration / 60)}시간 ${totalDuration % 60}분` : 
-                  `${totalDuration}분`
-                }
-              </p>
-            </div>
-            <div className="bg-emerald-50 rounded-2xl p-4 text-center border border-emerald-200">
-              <p className="text-sm text-emerald-600 font-medium mb-1">완료 검사</p>
-              <p className="text-2xl font-bold text-emerald-700">{completedCount}개</p>
-            </div>
+  const renderCompletionTab = () => {
+    // 안전한 데이터 사용
+    const safeCompletedAppointments = completedAppointments || [];
+    const safeTotalDuration = totalDuration || 0;
+    const safeCompletedCount = completedCount || 0;
+    const safeTodaySchedule = todaySchedule || [];
+
+    return (
+      <div className="space-y-4">
+        {/* 완료 통계 카드 - 항상 표시 */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-emerald-50 rounded-2xl p-4 text-center border border-emerald-200">
+            <p className="text-sm text-emerald-600 font-medium mb-1">소요시간</p>
+            <p className="text-2xl font-bold text-emerald-700">
+              {safeTotalDuration >= 60 ?
+                `${Math.floor(safeTotalDuration / 60)}시간 ${safeTotalDuration % 60}분` :
+                `${safeTotalDuration}분`
+              }
+            </p>
           </div>
+          <div className="bg-emerald-50 rounded-2xl p-4 text-center border border-emerald-200">
+            <p className="text-sm text-emerald-600 font-medium mb-1">완료 검사</p>
+            <p className="text-2xl font-bold text-emerald-700">{safeCompletedCount}개</p>
+          </div>
+        </div>
+
+        {/* 수납 완료 영수증 - screenType이 completed이고 showPaymentInfo가 true일 때만 */}
+        {screenType === 'completed' && showPaymentInfo && (
+          <div>
 
           {/* 영수증 */}
           <div className="bg-white rounded-3xl shadow-lg overflow-hidden border border-gray-100">
@@ -538,151 +690,281 @@ const FormatBTemplate = ({
       )}
     </div>
   );
+};
 
   // 주의사항 탭 렌더링 - 더 직관적이고 깔끔하게
-  const renderPrecautionsTab = () => (
-    <div className="space-y-4">
-      {precautions?.map((precaution, index) => {
-        const isHighPriority = precaution.priority === 'high';
-        const baseColor = precaution.bgColor.split(' ')[0].replace('bg-', '').replace('-50', '');
-        
-        return (
-          <div 
-            key={index}
-            className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
-              isHighPriority 
-                ? 'border-red-200 shadow-md' 
-                : precaution.priority === 'medium'
-                ? 'border-orange-200'
-                : 'border-gray-200'
-            }`}
-          >
-            {/* 우선순위별 배경 그라데이션 */}
-            <div className={`absolute inset-0 opacity-30 bg-gradient-to-r ${
-              isHighPriority
-                ? 'from-red-50 to-pink-50'
-                : precaution.priority === 'medium'
-                ? 'from-orange-50 to-amber-50'
-                : 'from-blue-50 to-indigo-50'
-            }`} />
-            
-            <div className="relative p-5">
-              <div className="flex items-start gap-4">
-                {/* 아이콘 박스 */}
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-sm flex-shrink-0 ${
+  const renderPrecautionsTab = () => {
+    // 안전한 데이터 사용
+    const safePrecautions = precautions || [];
+
+    if (safePrecautions.length === 0) {
+      // 기본 주의사항 제공
+      const defaultPrecautions = [
+        {
+          title: "결과 확인",
+          icon: "🔍",
+          priority: "medium",
+          bgColor: "bg-blue-50",
+          items: [
+            "검사 결과는 담당의와 상담을 통해 확인하세요",
+            "추가 검사가 필요한 경우 안내를 받으세요",
+            "궁금한 점은 담당 의료진에게 문의하세요"
+          ]
+        },
+        {
+          title: "처방전 및 수납",
+          icon: "💊",
+          priority: "high",
+          bgColor: "bg-green-50",
+          items: [
+            "처방전이 있는 경우 1층 원무과에서 받으세요",
+            "수납이 필요한 경우 원무과에서 진행하세요",
+            "영수증을 보관하여 보험 청구에 활용하세요"
+          ]
+        },
+        {
+          title: "다음 방문 안내",
+          icon: "📅",
+          priority: "medium",
+          bgColor: "bg-amber-50",
+          items: [
+            "다음 진료 예약이 있는 경우 확인하세요",
+            "정기 검진 일정을 미리 계획하세요",
+            "응급상황 시 연락처를 확인하세요"
+          ]
+        }
+      ];
+
+      return (
+        <div className="space-y-4">
+          {defaultPrecautions.map((precaution, index) => {
+            const isHighPriority = precaution.priority === 'high';
+
+            return (
+              <div
+                key={index}
+                className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
                   isHighPriority
-                    ? 'bg-red-100'
+                    ? 'border-red-200 shadow-md'
                     : precaution.priority === 'medium'
-                    ? 'bg-orange-100'
-                    : 'bg-blue-100'
-                }`}>
-                  {precaution.icon}
-                </div>
-                
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <h5 className="font-bold text-lg text-gray-900">{precaution.title}</h5>
-                    {isHighPriority && (
-                      <span className="px-3 py-1 bg-red-500 text-white text-xs rounded-full font-bold shadow-sm animate-pulse">
-                        중요
-                      </span>
-                    )}
+                    ? 'border-orange-200'
+                    : 'border-gray-200'
+                }`}
+              >
+                {/* 우선순위별 배경 그라데이션 */}
+                <div className={`absolute inset-0 opacity-30 bg-gradient-to-r ${
+                  isHighPriority
+                    ? 'from-red-50 to-pink-50'
+                    : precaution.priority === 'medium'
+                    ? 'from-orange-50 to-amber-50'
+                    : 'from-blue-50 to-indigo-50'
+                }`} />
+
+                <div className="relative p-5">
+                  <div className="flex items-start gap-4">
+                    {/* 아이콘 박스 */}
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-sm flex-shrink-0 ${
+                      isHighPriority
+                        ? 'bg-red-100'
+                        : precaution.priority === 'medium'
+                        ? 'bg-orange-100'
+                        : 'bg-blue-100'
+                    }`}>
+                      {precaution.icon}
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-3">
+                        <h5 className="font-bold text-lg text-gray-900">{precaution.title}</h5>
+                        {isHighPriority && (
+                          <span className="px-3 py-1 bg-red-500 text-white text-xs rounded-full font-bold shadow-sm animate-pulse">
+                            중요
+                          </span>
+                        )}
+                      </div>
+
+                      <ul className="space-y-2">
+                        {precaution.items?.map((item, itemIndex) => (
+                          <li key={itemIndex} className="flex items-start gap-3 group">
+                            <span className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                              isHighPriority ? 'bg-red-400' : 'bg-gray-400'
+                            }`} />
+                            <span className="text-base text-gray-700 leading-relaxed group-hover:text-gray-900 transition-colors">
+                              {item}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                  
-                  <ul className="space-y-2">
-                    {precaution.items?.map((item, itemIndex) => (
-                      <li key={itemIndex} className="flex items-start gap-3 group">
-                        <span className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                          isHighPriority ? 'bg-red-400' : 'bg-gray-400'
-                        }`} />
-                        <span className="text-base text-gray-700 leading-relaxed group-hover:text-gray-900 transition-colors">
-                          {item}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {safePrecautions.map((precaution, index) => {
+          const isHighPriority = precaution.priority === 'high';
+          const baseColor = precaution.bgColor?.split(' ')[0]?.replace('bg-', '')?.replace('-50', '') || 'blue';
+
+          return (
+            <div
+              key={index}
+              className={`relative overflow-hidden rounded-2xl border transition-all duration-300 hover:shadow-lg ${
+                isHighPriority
+                  ? 'border-red-200 shadow-md'
+                  : precaution.priority === 'medium'
+                  ? 'border-orange-200'
+                  : 'border-gray-200'
+              }`}
+            >
+              {/* 우선순위별 배경 그라데이션 */}
+              <div className={`absolute inset-0 opacity-30 bg-gradient-to-r ${
+                isHighPriority
+                  ? 'from-red-50 to-pink-50'
+                  : precaution.priority === 'medium'
+                  ? 'from-orange-50 to-amber-50'
+                  : 'from-blue-50 to-indigo-50'
+              }`} />
+
+              <div className="relative p-5">
+                <div className="flex items-start gap-4">
+                  {/* 아이콘 박스 */}
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-sm flex-shrink-0 ${
+                    isHighPriority
+                      ? 'bg-red-100'
+                      : precaution.priority === 'medium'
+                      ? 'bg-orange-100'
+                      : 'bg-blue-100'
+                  }`}>
+                    {precaution.icon}
+                  </div>
+
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-3">
+                      <h5 className="font-bold text-lg text-gray-900">{precaution.title}</h5>
+                      {isHighPriority && (
+                        <span className="px-3 py-1 bg-red-500 text-white text-xs rounded-full font-bold shadow-sm animate-pulse">
+                          중요
                         </span>
-                      </li>
-                    ))}
-                  </ul>
+                      )}
+                    </div>
+
+                    <ul className="space-y-2">
+                      {precaution.items?.map((item, itemIndex) => (
+                        <li key={itemIndex} className="flex items-start gap-3 group">
+                          <span className={`mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                            isHighPriority ? 'bg-red-400' : 'bg-gray-400'
+                          }`} />
+                          <span className="text-base text-gray-700 leading-relaxed group-hover:text-gray-900 transition-colors">
+                            {item}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+          );
+        })}
+      </div>
+    );
+  };
 
   // 오늘의 일정 탭 렌더링 (FormatA와 동일)
-  const renderScheduleTab = () => (
-    <div className="space-y-3">
-      {todaySchedule && todaySchedule.map((schedule, index) => {
-        const isExpanded = expandedItems.includes(`schedule-${index}`);
-        const isCompleted = schedule.status === 'completed' || schedule.status === 'done';
-        
-        return (
-          <div 
-            key={index}
-            className="border rounded-xl overflow-hidden transition-all duration-300 border-gray-200"
-          >
-            <button
-              onClick={() => toggleExpanded(`schedule-${index}`)}
-              className="w-full p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
-            >
-              {/* 번호 원형 */}
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
-                isCompleted ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'
-              }`}>
-                {isCompleted ? <CheckIcon className="w-5 h-5" /> : index + 1}
-              </div>
-              
-              {/* 일정 정보 */}
-              <div className="flex-1 text-left">
-                <h4 className="font-semibold text-gray-900">{schedule.examName}</h4>
-                <p className="text-sm text-gray-600">{schedule.location}</p>
-              </div>
-              
-              {/* 펼침/접힘 화살표 */}
-              {isExpanded ? (
-                <ChevronUpIcon className="w-5 h-5 text-gray-400" />
-              ) : (
-                <ChevronDownIcon className="w-5 h-5 text-gray-400" />
-              )}
-            </button>
-            
-            {/* 상세 정보 */}
-            {isExpanded && (
-              <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
-                <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-blue-50/90 transition-colors duration-300">
-                  <h5 className="text-sm font-medium text-blue-900 mb-1">검사 목적</h5>
-                  <p className="text-sm text-blue-700">{schedule.purpose || schedule.description || '건강 상태 확인 및 진단'}</p>
-                </div>
-                
-                {schedule.preparation && (
-                  <div className="bg-amber-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-amber-50/90 transition-colors duration-300">
-                    <h5 className="text-sm font-medium text-amber-900 mb-1">준비사항</h5>
-                    <p className="text-sm text-amber-700">{schedule.preparation}</p>
-                  </div>
-                )}
-                
-                <div className="bg-gray-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-gray-50/90 transition-colors duration-300">
-                  <h5 className="text-sm font-medium text-gray-900 mb-1">소요시간</h5>
-                  <p className="text-sm text-gray-700">약 {schedule.duration}분</p>
-                </div>
-                
-                {isCompleted && schedule.completedAt && (
-                  <div className="bg-green-50/80 backdrop-blur-sm rounded-lg p-3">
-                    <h5 className="text-sm font-medium text-green-900 mb-1">완료 정보</h5>
-                    <p className="text-sm text-green-700">완료 시간: {schedule.completedAt}</p>
-                    {schedule.cost && (
-                      <p className="text-sm text-green-700">진료비: {schedule.cost}원</p>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+  const renderScheduleTab = () => {
+    // 안전한 데이터 사용
+    const safeTodaySchedule = todaySchedule || [];
+
+    if (safeTodaySchedule.length === 0) {
+      return (
+        <div className="text-center py-8">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">📅</span>
           </div>
-        );
-      })}
-    </div>
-  );
+          <p className="text-gray-500 text-lg">오늘 예정된 검사가 없습니다</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        {safeTodaySchedule.map((schedule, index) => {
+          const isExpanded = expandedItems.includes(`schedule-${index}`);
+          const isCompleted = schedule.status === 'completed' || schedule.status === 'done';
+
+          return (
+            <div
+              key={index}
+              className="border rounded-xl overflow-hidden transition-all duration-300 border-gray-200"
+            >
+              <button
+                onClick={() => toggleExpanded(`schedule-${index}`)}
+                className="w-full p-4 flex items-center gap-4 hover:bg-gray-50 transition-colors"
+              >
+                {/* 번호 원형 */}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${
+                  isCompleted ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-400'
+                }`}>
+                  {isCompleted ? <CheckIcon className="w-5 h-5" /> : index + 1}
+                </div>
+
+                {/* 일정 정보 */}
+                <div className="flex-1 text-left">
+                  <h4 className="font-semibold text-gray-900">{schedule.examName || schedule.name || '검사'}</h4>
+                  <p className="text-sm text-gray-600">{schedule.location || schedule.room || '위치 미정'}</p>
+                </div>
+
+                {/* 펼침/접힘 화살표 */}
+                {isExpanded ? (
+                  <ChevronUpIcon className="w-5 h-5 text-gray-400" />
+                ) : (
+                  <ChevronDownIcon className="w-5 h-5 text-gray-400" />
+                )}
+              </button>
+
+              {/* 상세 정보 */}
+              {isExpanded && (
+                <div className="px-4 pb-4 space-y-3 border-t border-gray-100">
+                  <div className="bg-blue-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-blue-50/90 transition-colors duration-300">
+                    <h5 className="text-sm font-medium text-blue-900 mb-1">검사 목적</h5>
+                    <p className="text-sm text-blue-700">{schedule.purpose || schedule.description || '건강 상태 확인 및 진단'}</p>
+                  </div>
+
+                  {schedule.preparation && (
+                    <div className="bg-amber-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-amber-50/90 transition-colors duration-300">
+                      <h5 className="text-sm font-medium text-amber-900 mb-1">준비사항</h5>
+                      <p className="text-sm text-amber-700">{schedule.preparation}</p>
+                    </div>
+                  )}
+
+                  <div className="bg-gray-50/80 backdrop-blur-sm rounded-lg p-3 hover:bg-gray-50/90 transition-colors duration-300">
+                    <h5 className="text-sm font-medium text-gray-900 mb-1">소요시간</h5>
+                    <p className="text-sm text-gray-700">약 {schedule.duration || 30}분</p>
+                  </div>
+
+                  {isCompleted && schedule.completedAt && (
+                    <div className="bg-green-50/80 backdrop-blur-sm rounded-lg p-3">
+                      <h5 className="text-sm font-medium text-green-900 mb-1">완료 정보</h5>
+                      <p className="text-sm text-green-700">완료 시간: {schedule.completedAt}</p>
+                      {schedule.cost && (
+                        <p className="text-sm text-green-700">진료비: {schedule.cost}원</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   // 탭 구성 결정
   const getTabs = () => {

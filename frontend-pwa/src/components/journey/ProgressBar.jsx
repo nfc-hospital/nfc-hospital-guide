@@ -11,17 +11,30 @@ import { QueueDetailState } from '../../constants/states';
  * @param {Array} props.appointments - appointments 배열 (레거시 지원)
  */
 export default function ProgressBar(props) {
+  // 디버깅용 로그 (개발 환경에서만)
+  if (import.meta.env.DEV) {
+    console.log('🎯 [ProgressBar] Props received:', props);
+  }
+
   // 레거시 지원: appointments 배열만 전달된 경우
   let appointments = props.appointments;
   let patientState = null;
-  
+
   // 새로운 방식: journeyData 객체가 전달된 경우
   if (props.journeyData) {
     appointments = props.journeyData.appointments;
     patientState = props.journeyData.patientState;
   }
 
+  if (import.meta.env.DEV) {
+    console.log('📋 [ProgressBar] Final appointments:', appointments);
+    console.log('📊 [ProgressBar] Appointments length:', appointments?.length);
+  }
+
   if (!appointments || appointments.length === 0) {
+    if (import.meta.env.DEV) {
+      console.warn('⚠️ [ProgressBar] No appointments data, returning null');
+    }
     return null;
   }
 
@@ -36,9 +49,25 @@ export default function ProgressBar(props) {
     return apt.status === QueueDetailState.COMPLETED ? index : lastIndex;
   }, -1);
 
-  // appointment에서 이름 가져오기 (exam.title 또는 name 사용)
+  // appointment에서 이름 가져오기 (여러 경로에서 찾기)
   const getAppointmentName = (appointment) => {
-    return appointment.name || appointment.exam?.title || '검사';
+    // 디버깅용 로그 (개발 환경에서만)
+    if (import.meta.env.DEV) {
+      console.log('🔍 [ProgressBar] Appointment data:', appointment);
+    }
+
+    // 다양한 경로에서 이름을 찾기
+    const name = appointment?.name ||
+                 appointment?.exam?.title ||
+                 appointment?.examName ||
+                 appointment?.title ||
+                 '검사';
+
+    if (import.meta.env.DEV) {
+      console.log('🏷️ [ProgressBar] Resolved name:', name);
+    }
+
+    return name;
   };
 
   // 현재 상태에 따른 헤더 텍스트

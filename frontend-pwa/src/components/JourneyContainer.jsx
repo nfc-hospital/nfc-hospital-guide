@@ -91,6 +91,38 @@ const JourneyContainer = ({ taggedLocation }) => {
   const isLoading = useJourneyStore(state => state.isLoading);
   const todaysAppointments = useJourneyStore(state => state.todaysAppointments);
 
+  // FormatBTemplate에 필요한 추가 데이터 (useMemo로 메모이제이션)
+  const todaySchedule = React.useMemo(() => {
+    if (!todaysAppointments) return [];
+    return todaysAppointments.map((apt, index) => ({
+      id: apt.appointment_id,
+      examName: apt.exam?.title || `검사 ${index + 1}`,
+      location: apt.exam?.room || apt.exam?.title || '위치 미정',
+      status: apt.status,
+      description: apt.exam?.description,
+      duration: apt.exam?.average_duration || 30,
+      scheduled_at: apt.scheduled_at,
+      exam: apt.exam
+    }));
+  }, [todaysAppointments]);
+
+  const completionStats = React.useMemo(() => {
+    if (!todaysAppointments) return { completedCount: 0, totalCount: 0, completedAppointments: [] };
+
+    const completed = todaysAppointments.filter(apt =>
+      apt.status === 'completed' || apt.status === 'examined'
+    );
+    return {
+      completedCount: completed.length,
+      totalCount: todaysAppointments.length,
+      completedAppointments: completed
+    };
+  }, [todaysAppointments]);
+
+  const totalDuration = React.useMemo(() => {
+    return completionStats.completedAppointments.reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
+  }, [completionStats.completedAppointments]);
+
   // 🎯 순수한 조립: 상태에 따른 컴포넌트 선택만
   const currentState = patientState?.current_state || patientState || PatientJourneyState.REGISTERED;
   const { Template, Content, screenType } = getJourneyComponents(currentState);
@@ -109,6 +141,13 @@ const JourneyContainer = ({ taggedLocation }) => {
         taggedLocation={taggedLocation}
         // ✅ ProgressBar에 필요한 데이터 전달
         progressBar={<ProgressBar appointments={todaysAppointments} />}
+        // ✅ FormatBTemplate에 필요한 데이터 전달
+        todaysAppointments={todaysAppointments}
+        todaySchedule={todaySchedule}
+        completionStats={completionStats}
+        completedAppointments={completionStats.completedAppointments}
+        totalDuration={totalDuration}
+        completedCount={completionStats.completedCount}
       >
         <Content />
       </Template>
