@@ -1267,4 +1267,155 @@ useJourneyStore.subscribe(
   }
 );
 
+// 🎯 Selector 함수들 - 계산 로직 중앙화 (안정적인 참조를 위해 개별 함수로 정의)
+
+// 오늘의 일정을 UI용으로 포맷팅
+const getTodaysScheduleForUI = (state) => {
+  const appointments = state.todaysAppointments || [];
+  return appointments.map((apt, index) => {
+    // 장소 정보 생성 - room이 없으면 title 사용
+    const building = apt.exam?.building || '본관';
+    const floor = apt.exam?.floor ? `${apt.exam.floor}층` : '';
+    const room = apt.exam?.room || apt.exam?.title || '';
+    
+    // 장소 문자열 조합 - 빈 값 제외하고 조합
+    const locationParts = [building, floor, room].filter(part => part);
+    const location = locationParts.length > 0 ? locationParts.join(' ') : '위치 미정';
+    
+    return {
+      id: apt.appointment_id,
+      examName: apt.exam?.title || `검사 ${index + 1}`,
+      location: location,
+      status: apt.status,
+      description: apt.exam?.description,
+      purpose: apt.exam?.description || '건강 상태 확인 및 진단',
+      preparation: apt.status === 'pending' ? '검사 전 준비사항을 확인해주세요' : null,
+      preparations: apt.exam?.preparations || [],
+      duration: apt.exam?.average_duration || apt.exam?.duration || 30,
+      scheduled_at: apt.scheduled_at,
+      department: apt.exam?.department,
+      exam: apt.exam,
+      queue_info: apt.queue_info
+    };
+  });
+};
+
+// 현재 진행중인 작업 찾기
+const getCurrentTask = (state) => {
+  const appointments = state.todaysAppointments || [];
+  const queues = state.currentQueues || [];
+  
+  // 현재 활성 대기열 찾기
+  const activeQueue = queues.find(
+    q => q.state === 'waiting' || q.state === 'called' || q.state === 'in_progress'
+  );
+  
+  if (activeQueue) {
+    // 대기열과 연결된 예약 찾기
+    const appointment = appointments.find(
+      apt => apt.appointment_id === activeQueue.appointment_id
+    );
+    
+    if (appointment) {
+      return {
+        ...activeQueue,
+        exam: appointment.exam,
+        appointment: appointment
+      };
+    }
+  }
+  
+  return null;
+};
+
+// 현재 검사 정보
+const getCurrentExam = (state) => {
+  const currentTask = getCurrentTask(state);
+  return currentTask?.exam || null;
+};
+
+// 대기 정보 계산
+const getWaitingInfo = (state) => {
+  const queues = state.currentQueues || [];
+  const patientState = state.patientState;
+  const currentExam = getCurrentExam(state);
+  const todaysAppointments = state.todaysAppointments || [];
+  
+  const activeQueue = queues.find(
+    q => q.state === 'waiting' || q.state === 'called' || q.state === 'in_progress'
+  );
+  
+  if (activeQueue) {
+    // 큐 데이터가 있을 때
+    return {
+      peopleAhead: activeQueue.queue_number > 0 ? activeQueue.queue_number - 1 : 0,
+      estimatedTime: activeQueue.estimated_wait_time || currentExam?.average_duration || 15,
+      queueNumber: activeQueue.queue_number || 1,
+      priority: activeQueue.priority || 'normal'
+    };
+  }
+  
+  // 대기 상태이지만 큐 데이터가 없을 때 기본값 제공
+  if (patientState === 'WAITING' || patientState === 'REGISTERED') {
+    const currentExamData = currentExam || todaysAppointments?.[0]?.exam;
+    return {
+      peopleAhead: 0,
+      estimatedTime: currentExamData?.average_duration || 15,
+      queueNumber: 1,
+      priority: 'normal'
+    };
+  }
+  
+  return null;
+};
+
+// 완료 통계 계산
+const getCompletionStats = (state) => {
+  const schedule = getTodaysScheduleForUI(state);
+  // completed 또는 examined 상태를 모두 완료로 처리
+  const completed = schedule.filter(s => 
+    s.status === 'completed' || s.status === 'examined'
+  );
+  const total = schedule.length;
+  
+  return {
+    completedCount: completed.length,
+    totalCount: total,
+    completedAppointments: completed,
+    remainingCount: total - completed.length,
+    progressPercentage: total > 0 ? Math.round((completed.length / total) * 100) : 0
+  };
+};
+
+// 현재 단계 계산
+const getCurrentStep = (state) => {
+  const schedule = getTodaysScheduleForUI(state);
+  const currentStep = schedule.findIndex(s => 
+    ['waiting', 'called', 'in_progress'].includes(s.status)
+  );
+  return currentStep === -1 ? 0 : currentStep;
+};
+
+// 상태별 플래그들
+const getStateFlags = (state) => {
+  const patientState = state.patientState;
+  return {
+    isInProgress: patientState === 'IN_PROGRESS',
+    isCalled: patientState === 'CALLED',
+    isWaiting: patientState === 'WAITING',
+    isRegistered: patientState === 'REGISTERED',
+    isFinished: patientState === 'FINISHED'
+  };
+};
+
+export const useJourneySelectors = {
+  getTodaysScheduleForUI,
+  getCurrentTask,
+  getCurrentExam,
+  getWaitingInfo,
+  getCompletionStats,
+  getCurrentStep,
+  getStateFlags
+};
+
 export default useJourneyStore;

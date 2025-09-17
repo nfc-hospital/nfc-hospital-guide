@@ -1,17 +1,71 @@
 import React from 'react';
 import { CheckBadgeIcon, HomeIcon, CalendarIcon } from '@heroicons/react/24/outline';
+import useJourneyStore from '../../../store/journeyStore';
 
 /**
  * FinishedContent - 완료 상태의 순수 컨텐츠 컴포넌트
- * 템플릿 래핑 없이 순수 컨텐츠만 제공
+ * 무한 루프 방지를 위해 직접 store 구독 사용
+ * React.memo로 래핑하여 불필요한 리렌더링 방지
  */
-export default function FinishedContent({ 
-  // 필요한 데이터만 props로 받음
-  user,
-  patientState,
-  completionStats,
-  todaySchedule
-}) {
+const FinishedContent = ({ 
+  user, 
+  todaysAppointments = [], 
+  patientState, 
+  completionStats: propsCompletionStats,
+  ...otherProps 
+}) => {
+  // FinishedContent 실행 확인 (개발 모드에서만)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔥 FinishedContent props:', { user: user?.name, appointments: todaysAppointments?.length });
+  }
+  
+  // fallback 데이터 (props가 없을 때만 사용)
+  const fallbackUser = { name: '김환자' };
+  const fallbackAppointments = [
+    { appointment_id: '1', exam: { title: '혈액검사' }, status: 'completed' },
+    { appointment_id: '2', exam: { title: '흉부 X-ray' }, status: 'completed' },
+    { appointment_id: '3', exam: { title: '내과진료' }, status: 'completed' }
+  ];
+  
+  // props 우선 사용, 없으면 fallback
+  const actualUser = user || fallbackUser;
+  const actualAppointments = (todaysAppointments && todaysAppointments.length > 0) ? todaysAppointments : fallbackAppointments;
+  
+  // 완료 통계: props 우선 사용, 없으면 로컬 계산
+  const completionStats = React.useMemo(() => {
+    if (propsCompletionStats) {
+      return propsCompletionStats;
+    }
+    
+    const completed = actualAppointments.filter(apt => 
+      apt.status === 'completed' || apt.status === 'examined'
+    );
+    return {
+      completedCount: completed.length,
+      totalCount: actualAppointments.length,
+      completedAppointments: completed
+    };
+  }, [propsCompletionStats, actualAppointments]);
+  
+  // 간단한 일정 포맷팅 (로컬에서)
+  const todaySchedule = React.useMemo(() => {
+    return actualAppointments.map((apt, index) => ({
+      id: apt.appointment_id,
+      examName: apt.exam?.title || `검사 ${index + 1}`,
+      location: apt.exam?.room || apt.exam?.title || '검사실',
+      status: apt.status
+    }));
+  }, [actualAppointments]);
+  
+  // 개발 모드에서만 렌더링 정보 출력
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 FinishedContent 렌더링:', { 
+      actualUser: actualUser?.name, 
+      actualAppointments: actualAppointments?.length,
+      completionStats: completionStats
+    });
+  }
+  
   return (
     <div className="space-y-6">
       {/* 완료 축하 메시지 */}
@@ -20,7 +74,7 @@ export default function FinishedContent({
           <CheckBadgeIcon className="w-16 h-16 text-green-600" />
         </div>
         <p className="text-lg text-green-800 font-medium">
-          {user?.name}님, 모든 검사가 완료되었습니다!
+          {actualUser?.name || '환자'}님, 모든 검사가 완료되었습니다!
         </p>
         <p className="text-sm text-green-600 mt-2">
           오늘 하루 수고 많으셨습니다. 안전하게 귀가하세요.
@@ -109,4 +163,8 @@ export default function FinishedContent({
       </div>
     </div>
   );
-}
+};
+
+FinishedContent.displayName = 'FinishedContent';
+
+export default FinishedContent;

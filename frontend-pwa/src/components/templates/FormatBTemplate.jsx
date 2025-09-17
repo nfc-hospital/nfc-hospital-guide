@@ -32,7 +32,7 @@ const FormatBTemplate = ({
   taggedLocation
 }) => {
   const navigate = useNavigate();
-  const { currentLocation: taggedLocationInfo } = useJourneyStore();
+  const taggedLocationInfo = useJourneyStore(state => state.currentLocation);
   const actualCurrentLocation = taggedLocationInfo || taggedLocation;
   const [activeTab, setActiveTab] = useState(
     screenType === 'unregistered' ? 'preparation' : 
@@ -49,6 +49,7 @@ const FormatBTemplate = ({
       case 'unregistered':
         return 'from-slate-600 via-slate-700 to-slate-800';
       case 'completed':
+      case 'finished':
         return 'from-emerald-500 via-emerald-600 to-green-700';
       default:
         return 'from-blue-500 via-blue-600 to-indigo-700';
@@ -61,6 +62,7 @@ const FormatBTemplate = ({
       case 'unregistered':
         return 'bg-amber-400';
       case 'completed':
+      case 'finished':
         return 'bg-emerald-400';
       default:
         return 'bg-blue-400';
@@ -694,7 +696,7 @@ const FormatBTemplate = ({
         { key: 'preparation', icon: ClipboardDocumentListIcon, label: '준비사항' },
         { key: 'schedule', icon: CalendarIcon, label: '오늘 일정' }
       ];
-    } else if (screenType === 'completed') {
+    } else if (screenType === 'completed' || screenType === 'finished') {
       return [
         { key: 'completion', icon: ChartBarIcon, label: '완료내역' },
         { key: 'precautions', icon: ExclamationTriangleIcon, label: '주의사항' },
@@ -815,16 +817,25 @@ const FormatBTemplate = ({
 
         {/* 탭 내용 */}
         <div className="min-h-[400px]">
-          {activeTab === 'location' && renderLocationTab()}
-          {activeTab === 'preparation' && renderPreparationTab()}
-          {activeTab === 'completion' && renderCompletionTab()}
-          {activeTab === 'precautions' && renderPrecautionsTab()}
-          {activeTab === 'schedule' && renderScheduleTab()}
+          {screenType === 'finished' ? (
+            /* FINISHED 상태일 때는 children 표시 */
+            <div className="mb-6">
+              {children}
+            </div>
+          ) : (
+            <>
+              {activeTab === 'location' && renderLocationTab()}
+              {activeTab === 'preparation' && renderPreparationTab()}
+              {activeTab === 'completion' && renderCompletionTab()}
+              {activeTab === 'precautions' && renderPrecautionsTab()}
+              {activeTab === 'schedule' && renderScheduleTab()}
+            </>
+          )}
         </div>
 
-        {/* 추가 컨텐츠 영역 */}
-        {children && (
-          <div className="mt-6">
+        {/* 다른 상태에서는 Content 컴포넌트 메인 영역 */}
+        {screenType !== 'finished' && (
+          <div className="mb-6">
             {children}
           </div>
         )}

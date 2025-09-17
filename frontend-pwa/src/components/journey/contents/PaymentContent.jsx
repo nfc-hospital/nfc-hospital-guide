@@ -1,29 +1,59 @@
 import React from 'react';
 import { CreditCardIcon, MapPinIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
+import useJourneyStore from '../../../store/journeyStore';
+import { PatientJourneyState } from '../../../constants/states';
 
 /**
  * PaymentContent - 수납 상태의 순수 컨텐츠 컴포넌트
- * 템플릿 래핑 없이 순수 컨텐츠만 제공
+ * 무한 루프 방지를 위해 직접 store 구독 사용
+ * React.memo로 래핑하여 불필요한 리렌더링 방지
  */
-export default function PaymentContent({ 
-  // 필요한 데이터만 props로 받음
-  user,
-  patientState,
+const PaymentContent = ({ 
+  user, 
+  todaysAppointments = [], 
+  patientState, 
   locationInfo,
-  completionStats
-}) {
+  completionStats: propsCompletionStats,
+  ...otherProps 
+}) => {
+  // 개발 모드에서만 props 확인
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔥 PaymentContent props:', { user: user?.name, appointments: todaysAppointments?.length });
+  }
+  
+  // 현재 상태가 COMPLETED인지 PAYMENT인지 확인
+  const currentStateValue = patientState?.current_state || patientState;
+  
+  const isCompleted = currentStateValue === PatientJourneyState.COMPLETED;
+  const isPayment = currentStateValue === PatientJourneyState.PAYMENT;
+  
+  // 완료 통계: props 우선 사용, 없으면 로컬 계산
+  const completionStats = React.useMemo(() => {
+    if (propsCompletionStats) {
+      return propsCompletionStats;
+    }
+    
+    const completed = todaysAppointments.filter(apt => 
+      apt.status === 'completed' || apt.status === 'examined'
+    );
+    return {
+      completedCount: completed.length,
+      totalCount: todaysAppointments.length,
+      completedAppointments: completed
+    };
+  }, [propsCompletionStats, todaysAppointments]);
   return (
     <div className="space-y-6">
-      {/* 수납 안내 메시지 */}
-      <div className="bg-blue-50 rounded-2xl p-6 text-center">
+      {/* 검사 완료 축하 메시지 - 무조건 초록색으로 */}
+      <div className="bg-green-50 rounded-2xl p-6 text-center">
         <div className="flex justify-center mb-3">
-          <CreditCardIcon className="w-16 h-16 text-blue-600" />
+          <CheckCircleIcon className="w-16 h-16 text-green-600" />
         </div>
-        <p className="text-lg text-blue-800 font-medium">
-          {user?.name}님, 수납을 위해 원무과로 이동해주세요
+        <p className="text-lg text-green-800 font-medium">
+          {user?.name || '환자'}님, 모든 검사가 완료되었습니다!
         </p>
-        <p className="text-sm text-blue-600 mt-2">
-          검사가 완료되었습니다. 수납 후 귀가하실 수 있습니다.
+        <p className="text-sm text-green-600 mt-2">
+          오늘 하루 수고 많으셨습니다. 수납을 위해 원무과로 이동해주세요.
         </p>
       </div>
 
@@ -100,4 +130,8 @@ export default function PaymentContent({
       </div>
     </div>
   );
-}
+};
+
+PaymentContent.displayName = 'PaymentContent';
+
+export default PaymentContent;

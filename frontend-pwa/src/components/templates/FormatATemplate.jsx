@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronDownIcon, MapPinIcon, CalendarIcon, ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, MapPinIcon, CalendarIcon, ClipboardDocumentListIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { CheckIcon } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
@@ -127,13 +127,16 @@ const FormatATemplate = ({
   children
 }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('location');
+  const [activeTab, setActiveTab] = useState(
+    screenType === 'finished' || screenType === 'payment' ? 'content' : 'location'
+  );
   const [expandedItems, setExpandedItems] = useState([]);
   const [showDemoMap, setShowDemoMap] = useState(true);
   const [isDemoExpanded, setIsDemoExpanded] = useState(true);
   
   // journeyStore에서 현재 위치 정보 가져오기
-  const { currentLocation, taggedLocationInfo } = useJourneyStore();
+  const currentLocation = useJourneyStore(state => state.currentLocation);
+  const taggedLocationInfo = useJourneyStore(state => state.taggedLocationInfo);
   
   // 실제 현재 위치 정보 우선 사용
   const actualCurrentLocation = taggedLocationInfo || taggedLocation || currentLocation;
@@ -515,10 +518,26 @@ const FormatATemplate = ({
                 <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600" />
               )}
             </button>
+            {(screenType === 'finished' || screenType === 'payment') && (
+              <button
+                onClick={() => setActiveTab('content')}
+                className={`flex-1 pb-3 pt-2 flex items-center justify-center gap-2 transition-all duration-300 relative ${
+                  activeTab === 'content' 
+                    ? 'text-blue-600' 
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <CheckCircleIcon className="w-5 h-5" />
+                <span className="font-medium">{screenType === 'finished' ? '완료' : '수납'}</span>
+                {activeTab === 'content' && (
+                  <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600" />
+                )}
+              </button>
+            )}
           </div>
 
           {/* 탭 내용 */}
-          <div className="min-h-[400px] lg:min-h-[500px]">
+          <div className="min-h-[200px]">
             {activeTab === 'location' ? (
               <div className="space-y-4">
                 {/* 위치 정보 - 깔끔한 카드 디자인 */}
@@ -653,6 +672,10 @@ const FormatATemplate = ({
                   </div>
                 )}
               </div>
+            ) : activeTab === 'content' ? (
+              <div className="space-y-4">
+                {children}
+              </div>
             ) : (
               <div className="space-y-3">
                 {/* 오늘의 일정 아코디언 */}
@@ -733,12 +756,6 @@ const FormatATemplate = ({
             )}
           </div>
 
-          {/* 추가 컨텐츠 영역 */}
-          {children && (
-            <div className="mt-6">
-              {children}
-            </div>
-          )}
           
           {/* NFC 안내 - 최하단 - 세련되게 */}
           <div className="mt-auto pt-6 pb-8">

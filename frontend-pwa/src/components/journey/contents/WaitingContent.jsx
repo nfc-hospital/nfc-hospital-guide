@@ -2,20 +2,44 @@ import React, { useState, useEffect } from 'react';
 import { ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
 import CalledModal from '../../modals/CalledModal';
 import { PatientJourneyState } from '../../../constants/states';
+import useJourneyStore from '../../../store/journeyStore';
 
 /**
  * WaitingContent - 대기 상태의 순수 컨텐츠 컴포넌트
- * 템플릿 래핑 없이 순수 컨텐츠만 제공
+ * 무한 루프 방지를 위해 직접 store 구독 사용
+ * React.memo로 래핑하여 불필요한 리렌더링 방지
  */
-export default function WaitingContent({ 
-  // 필요한 데이터만 props로 받음
-  user,
-  patientState,
+const WaitingContent = ({ 
+  user, 
+  patientState, 
+  currentTask, 
   currentExam,
-  currentTask,
-  isInProgress,
-  isCalled
-}) {
+  waitingInfo,
+  isInProgress: propsIsInProgress,
+  isCalled: propsIsCalled,
+  ...otherProps 
+}) => {
+  // 개발 모드에서만 props 확인
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔥 WaitingContent props:', { user: user?.name, currentTask: currentTask?.title });
+  }
+  
+  // 상태 플래그: props 우선 사용, 없으면 로컬 계산
+  const isInProgress = React.useMemo(() => {
+    if (propsIsInProgress !== undefined) {
+      return propsIsInProgress;
+    }
+    return currentTask?.state === 'ongoing' || 
+           patientState === PatientJourneyState.IN_PROGRESS;
+  }, [propsIsInProgress, currentTask?.state, patientState]);
+  
+  const isCalled = React.useMemo(() => {
+    if (propsIsCalled !== undefined) {
+      return propsIsCalled;
+    }
+    return currentTask?.state === 'called' || 
+           patientState === PatientJourneyState.CALLED;
+  }, [propsIsCalled, currentTask?.state, patientState]);
   // CalledModal 상태 관리
   const [showCalledModal, setShowCalledModal] = useState(false);
   const [hasShownModal, setHasShownModal] = useState(false);
@@ -84,4 +108,8 @@ export default function WaitingContent({
       </div>
     </>
   );
-}
+};
+
+WaitingContent.displayName = 'WaitingContent';
+
+export default WaitingContent;
