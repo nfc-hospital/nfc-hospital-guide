@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
-from openai import OpenAI
+import openai  # OpenAI 라이브러리를 다른 방식으로 import
 from utils.medical_safety_filter import medical_safety_filter, check_emergency_keywords, get_emergency_response
 
 # Windows 콘솔 UTF-8 설정
@@ -24,40 +24,33 @@ app = Flask(__name__)
 CORS(app)
 
 # OpenAI 클라이언트 초기화
-try:
-    # 환경 변수에서 프록시 설정 제거 (만약 있다면)
-    import os
-    for key in list(os.environ.keys()):
-        if 'proxy' in key.lower() or 'proxies' in key.lower():
-            print(f"Removing environment variable: {key}")
-            os.environ.pop(key, None)
-    
-    # 프록시 관련 HTTP 환경 변수도 제거
-    proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']
-    for var in proxy_vars:
-        if var in os.environ:
-            print(f"Removing proxy variable: {var}")
-            del os.environ[var]
-    
-    # OpenAI 클라이언트 생성 (가장 기본 매개변수만 사용)
-    api_key = os.getenv('OPENAI_API_KEY')
-    if not api_key:
-        print("WARNING: OPENAI_API_KEY not found in environment variables")
-        client = None
-    else:
-        # OpenAI 클라이언트 초기화
-        try:
-            client = OpenAI(api_key=api_key)
-            print(f"OpenAI client initialized successfully")
-        except Exception as init_error:
-            print(f"Failed to initialize OpenAI client: {init_error}")
-            client = None
-        
-except Exception as e:
-    print(f"Failed to initialize OpenAI client: {e}")
-    import traceback
-    traceback.print_exc()
-    client = None
+# 환경 변수에서 프록시 설정 제거 (만약 있다면)
+for key in list(os.environ.keys()):
+    if 'proxy' in key.lower() or 'proxies' in key.lower():
+        print(f"Removing environment variable: {key}")
+        os.environ.pop(key, None)
+
+# 프록시 관련 HTTP 환경 변수도 제거
+proxy_vars = ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy', 'ALL_PROXY', 'all_proxy']
+for var in proxy_vars:
+    if var in os.environ:
+        print(f"Removing proxy variable: {var}")
+        del os.environ[var]
+
+# OpenAI API 키 설정
+api_key = os.getenv('OPENAI_API_KEY')
+if not api_key:
+    print("WARNING: OPENAI_API_KEY not found in environment variables")
+    openai_available = False
+else:
+    # OpenAI API 키 설정 (v1.0+ 방식)
+    try:
+        openai.api_key = api_key
+        openai_available = True
+        print(f"✅ OpenAI API key configured successfully")
+    except Exception as e:
+        print(f"❌ Failed to configure OpenAI: {e}")
+        openai_available = False
 
 # Django와 동일한 JWT 설정
 # Django의 기본 SECRET_KEY와 동일하게 설정
@@ -77,6 +70,16 @@ def get_user_from_token(auth_header):
     try:
         token = auth_header.split(' ')[1]
         print(f"DEBUG: Token received (first 20 chars): {token[:20]}...")
+        
+        # 토큰 디코딩 시도
+        try:
+            # 먼저 서명 검증 없이 디코딩 시도 (디버깅용)
+            unverified = jwt.decode(token, options={"verify_signature": False})
+            print(f"DEBUG: Token payload (unverified): user_id={unverified.get('user_id')}, token_type={unverified.get('token_type')}")
+        except Exception as debug_e:
+            print(f"DEBUG: Failed to decode token even without verification: {debug_e}")
+        
+        # 실제 검증 포함 디코딩
         payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
         
         # 토큰 타입 확인
@@ -246,6 +249,7 @@ def chatbot_query():
         # JWT 토큰에서 사용자 정보 추출
         auth_header = request.headers.get('Authorization', '')
         print(f"DEBUG: Received Authorization header: {auth_header[:50] if auth_header else 'None'}...")
+        print(f"DEBUG: Using SECRET_KEY: {SECRET_KEY[:20]}...")
         user = get_user_from_token(auth_header)
         
         # 로그인 여부에 따라 다른 처리
@@ -264,10 +268,10 @@ def chatbot_query():
             system_prompt = build_guest_prompt()
             print("DEBUG: Guest user (not authenticated) - using guest prompt")
         
-        # OpenAI API 키 확인
-        if not client:
+        # OpenAI API 사용 가능 여부 확인
+        if not openai_available:
             # API 키가 없을 때 fallback 응답 사용
-            print("WARNING: Using fallback response due to missing OpenAI client")
+            print("WARNING: Using fallback response due to OpenAI unavailable")
             
             # 질문에 따라 기본 응답 생성
             question_lower = user_question.lower()
@@ -314,17 +318,30 @@ def chatbot_query():
             print(f"User question: {user_question.encode('utf-8', 'ignore').decode('utf-8')}")
         
         # GPT 호출 (간결하고 친근한 응답)
-        response = client.chat.completions.create(
-            model="gpt-4",  # 또는 "gpt-3.5-turbo"
-            messages=messages,
-            max_tokens=200,  # 짧은 응답을 위해 제한
-            temperature=0.8,  # 자연스러운 응답
-            presence_penalty=0.3,  # 반복 줄이기
-            frequency_penalty=0.2,  # 다양한 어휘
-            top_p=0.9  # 자연스러운 응답
-        )
-        
-        ai_response = response.choices[0].message.content
+        try:
+            # OpenAI v1.0+ API 사용
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key)
+            
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",  # 더 빠르고 비용 효율적
+                messages=messages,
+                max_tokens=200,  # 짧은 응답을 위해 제한
+                temperature=0.8,  # 자연스러운 응답
+                presence_penalty=0.3,  # 반복 줄이기
+                frequency_penalty=0.2,  # 다양한 어휘
+                top_p=0.9  # 자연스러운 응답
+            )
+            
+            ai_response = response.choices[0].message.content
+            
+        except Exception as gpt_error:
+            print(f"GPT API call error: {gpt_error}")
+            # GPT 호출 실패 시 기본 응답
+            if user:
+                ai_response = "죄송합니다. 잠시 후 다시 시도해주세요. 급한 문의는 원무과(1588-0000)로 연락주세요."
+            else:
+                ai_response = "로그인하시면 더 정확한 정보를 제공해드릴 수 있습니다."
         # Windows 콘솔 인코딩 문제 해결
         try:
             print(f"GPT Response: {ai_response[:100]}...")
