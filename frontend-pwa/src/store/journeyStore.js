@@ -4,6 +4,13 @@ import apiService from '../api/apiService';
 import { authAPI, appointmentAPI, queueAPI, api, nfcAPI } from '../api/client';
 import useMapStore from './mapStore';
 import useLocationStore from './locationStore';
+// 🔧 상태 정규화 함수 추가
+import { 
+  normalizeQueueData, 
+  normalizePatientState, 
+  validateStateConsistency,
+  loadStateDefinitions 
+} from '../api/patientJourneyService';
 
 const useJourneyStore = create(
   devtools(
@@ -280,6 +287,13 @@ const useJourneyStore = create(
         fetchJourneyData: async (tagId = null) => {
           set({ isLoading: true, error: null });
           
+          // 🔧 상태 정의 로드 (최초 1회만)
+          try {
+            await loadStateDefinitions();
+          } catch (error) {
+            console.warn('상태 정의 로드 실패, fallback 사용:', error);
+          }
+          
           // tagId가 없으면 기존 위치 정보 유지, 있으면 초기화
           if (tagId) {
             set({ taggedLocationInfo: null });
@@ -368,7 +382,7 @@ const useJourneyStore = create(
             // user와 patientState, currentLocation을 올바르게 설정
             set({ 
               user: userData,
-              patientState: userData.state || 'UNREGISTERED',
+              patientState: normalizePatientState(userData.state) || 'UNREGISTERED',
               // 프로필 API에서 currentLocation이 오면 설정
               // currentLocation은 mapStore에서 별도 관리
             });
@@ -541,17 +555,16 @@ const useJourneyStore = create(
                   currentQueues = [queueData];
                 }
                 
-                // ✅ 상태 정규화 함수 추가 (백엔드가 'ongoing'을 보내더라도 'in_progress'로 변환)
-                const normalizeQueueState = (state) => {
-                  if (state === 'ongoing') return 'in_progress';
-                  return state;
-                };
+                // 🔧 새로운 정규화 함수 적용
+                currentQueues = normalizeQueueData(currentQueues);
                 
-                // 큐 데이터 정규화 적용
-                currentQueues = currentQueues.map(q => ({
-                  ...q,
-                  state: normalizeQueueState(q.state)
-                }));
+                // 상태 일관성 체크 (개발 환경에서만)
+                if (import.meta.env.DEV) {
+                  const consistency = validateStateConsistency(userData?.state, currentQueues);
+                  if (!consistency.isValid) {
+                    console.warn('⚠️ 상태 불일치 감지:', consistency.issues);
+                  }
+                }
                 
                 console.log('🔍 최종 currentQueues (정규화 후):', currentQueues);
                 

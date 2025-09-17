@@ -5,9 +5,84 @@ import useMapStore from '../store/mapStore';
 import { getFacilityByName } from '../data/facilityManagement';
 import { PatientJourneyState, QueueDetailState } from '../constants/states';
 
+// Content 컴포넌트 imports
+import UnregisteredContent from './journey/contents/UnregisteredContent';
+import ArrivedContent from './journey/contents/ArrivedContent';
+import RegisteredContent from './journey/contents/RegisteredContent';
+import WaitingContent from './journey/contents/WaitingContent';
+import FinishedContent from './journey/contents/FinishedContent';
+import PaymentContent from './journey/contents/PaymentContent';
+
+// Template imports
+import FormatATemplate from './templates/FormatATemplate';
+import FormatBTemplate from './templates/FormatBTemplate';
+
 // 컴포넌트 외부에 상수 선언 (무한 렌더링 방지)
 const EMPTY_NODES = [];
 const EMPTY_EDGES = [];
+
+// 상태별 컴포넌트 매핑 (Template + Content 조합)
+const getJourneyComponents = (patientState) => {
+  switch (patientState) {
+    case PatientJourneyState.UNREGISTERED:
+      return {
+        Template: FormatATemplate,
+        Content: UnregisteredContent,
+        screenType: 'unregistered'
+      };
+    
+    case PatientJourneyState.ARRIVED:
+      return {
+        Template: FormatATemplate,
+        Content: ArrivedContent,
+        screenType: 'arrived'
+      };
+    
+    case PatientJourneyState.REGISTERED:
+      return {
+        Template: FormatATemplate,
+        Content: RegisteredContent,
+        screenType: 'registered'
+      };
+    
+    case PatientJourneyState.WAITING:
+    case PatientJourneyState.CALLED:
+    case PatientJourneyState.IN_PROGRESS:
+      return {
+        Template: FormatATemplate,
+        Content: WaitingContent,
+        screenType: 'waiting'
+      };
+    
+    case PatientJourneyState.COMPLETED:
+      return {
+        Template: FormatATemplate,
+        Content: RegisteredContent, // 완료 후 다음 검사 안내
+        screenType: 'registered'
+      };
+    
+    case PatientJourneyState.PAYMENT:
+      return {
+        Template: FormatATemplate,
+        Content: PaymentContent,
+        screenType: 'payment'
+      };
+    
+    case PatientJourneyState.FINISHED:
+      return {
+        Template: FormatBTemplate,
+        Content: FinishedContent,
+        screenType: 'finished'
+      };
+    
+    default:
+      return {
+        Template: FormatATemplate,
+        Content: UnregisteredContent,
+        screenType: 'unregistered'
+      };
+  }
+};
 
 const JourneyContainer = ({ taggedLocation }) => {
   // 1. Store에서 원본 데이터를 개별적으로 선택 (무한 루프 방지)
@@ -536,109 +611,50 @@ const JourneyContainer = ({ taggedLocation }) => {
     nextExam
   ]);
   
-  // 환자 상태에 따른 화면 렌더링 (switch문)
+  // 🎯 새로운 동적 렌더링 로직: Template + Content 조합
   const currentState = patientState?.current_state || patientState || PatientJourneyState.REGISTERED;
   
-  switch (currentState) {
-    case PatientJourneyState.UNREGISTERED:
-      return (
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <UnregisteredScreen 
-            taggedLocation={taggedLocation}
-            user={user}
-            todaysAppointments={todaysAppointments}
-            fetchJourneyData={fetchJourneyData}
-            nextSchedule={nextSchedule}
-            summaryCards={summaryCards}
-          />
-        </React.Suspense>
-      );
-    
-    case PatientJourneyState.ARRIVED:
-      return (
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <ArrivedScreen 
-            {...commonProps}
-            nextSchedule={nextSchedule}
-            summaryCards={summaryCards}
-            locationInfo={locationInfo}
-          />
-        </React.Suspense>
-      );
-    
-    case PatientJourneyState.REGISTERED:
-      // RegisteredScreen만 먼저 props로 데이터 전달
-      return (
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <RegisteredScreen {...registeredScreenProps} />
-        </React.Suspense>
-      );
-    
-    case PatientJourneyState.WAITING:
-    case PatientJourneyState.CALLED:
-    case PatientJourneyState.IN_PROGRESS:
-      // WaitingScreen도 props로 데이터 전달
-      return (
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <WaitingScreen 
-            {...commonProps}
-            locationInfo={locationInfo}
-            currentTask={currentTask}
-            isInProgress={isInProgress}
-            isCalled={isCalled}
-          />
-        </React.Suspense>
-      );
-    
-    case PatientJourneyState.COMPLETED:
-      // COMPLETED 상태는 WaitingScreen 재사용
-      return (
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <WaitingScreen 
-            {...commonProps}
-            locationInfo={locationInfo}
-            currentTask={currentTask}
-            isInProgress={false}
-            isCalled={false}
-          />
-        </React.Suspense>
-      );
-    
-    case PatientJourneyState.PAYMENT:
-      return (
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <PaymentScreen 
-            {...commonProps}
-            locationInfo={locationInfo}  // 통일된 locationInfo 사용
-            paymentLocationInfo={locationInfo}  // 하위 호환성
-            paymentInfo={waitingInfo || { peopleAhead: 0, estimatedTime: 5 }}
-          />
-        </React.Suspense>
-      );
-    
-    case PatientJourneyState.FINISHED:
-      return (
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <FinishedScreen 
-            {...commonProps}
-            completed_tasks={completed_tasks}
-            todaysAppointments={todaysAppointments}
-            appointments={appointments}
-            isLoading={isLoading}
-            mockPatientData={mockPatientData}
-            mockPostCareInstructions={mockPostCareInstructions}
-          />
-        </React.Suspense>
-      );
-    
-    default:
-      console.warn('Unknown patient state:', currentState);
-      return (
-        <React.Suspense fallback={<div>Loading...</div>}>
-          <RegisteredScreen {...registeredScreenProps} />
-        </React.Suspense>
-      );
-  }
+  // 상태에 따른 컴포넌트 선택
+  const { Template, Content, screenType } = getJourneyComponents(currentState);
+  
+  // 모든 상태에서 공통으로 사용할 Template props
+  const templateProps = {
+    screenType,
+    currentStep: actualCurrentStep,
+    totalSteps: todaySchedule?.length || 7,
+    nextAction: null, // 템플릿에서 자동 생성
+    waitingInfo,
+    locationInfo,
+    todaySchedule,
+    queueData: currentTask,
+    taggedLocation,
+    patientState: currentState,
+    currentExam,
+    completionStats
+  };
+  
+  // Content 컴포넌트에 전달할 props
+  const contentProps = {
+    user,
+    patientState: currentState,
+    currentExam,
+    currentTask,
+    isInProgress,
+    isCalled,
+    nextExam,
+    todaysAppointments,
+    locationInfo,
+    completionStats,
+    taggedLocation
+  };
+  
+  return (
+    <React.Suspense fallback={<div>Loading...</div>}>
+      <Template {...templateProps}>
+        <Content {...contentProps} />
+      </Template>
+    </React.Suspense>
+  );
 };
 
 export default JourneyContainer;

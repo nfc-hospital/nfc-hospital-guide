@@ -4,32 +4,15 @@ import useJourneyStore from '../store/journeyStore';
 import useLocationStore from '../store/locationStore';
 import { useAuth } from '../context/AuthContext';
 
-// 상태별 화면 컴포넌트들
-import UnregisteredScreen from '../components/screens/UnregisteredScreen';
-import ArrivedScreen from '../components/screens/ArrivedScreen';
-import RegisteredScreen from '../components/screens/RegisteredScreen';
-import WaitingScreen from '../components/screens/WaitingScreen';
-// CalledScreen은 별도로 없음 - WaitingScreen 사용
-import FinishedScreen from '../components/screens/FinishedScreen';
-import PaymentScreen from '../components/screens/PaymentScreen';
+// 중앙화된 JourneyContainer
+import JourneyContainer from '../components/JourneyContainer';
 import AdminHomeScreen from '../components/screens/AdminHomeScreen';
 
 // 로딩 및 에러 컴포넌트
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorBoundary from '../components/common/ErrorBoundary';
 
-// 상태별 화면 매핑
-const StateScreenMap = {
-  UNREGISTERED: UnregisteredScreen,
-  ARRIVED: ArrivedScreen,
-  REGISTERED: RegisteredScreen,
-  WAITING: WaitingScreen,
-  CALLED: WaitingScreen, // 호출됨도 대기 화면 사용 (호출 상태 표시)
-  IN_PROGRESS: WaitingScreen, // 진행 중도 대기 화면 사용
-  COMPLETED: RegisteredScreen, // 완료도 등록 화면 사용
-  PAYMENT: PaymentScreen,
-  FINISHED: FinishedScreen,
-};
+// StateScreenMap 제거 - JourneyContainer에서 모든 상태 처리
 
 const MainScreen = () => {
   const { tagId } = useParams(); // URL에서 NFC 태그 ID 가져오기
@@ -89,27 +72,15 @@ const MainScreen = () => {
     };
   }, [tagId]);
 
-  // 역할별 화면 렌더링
+  // 🎯 간소화된 렌더링 로직: JourneyContainer가 모든 상태 처리
   const renderContent = () => {
-    // 관리자인 경우 관리자 홈 화면 표시
+    // 관리자인 경우에만 별도 화면
     if (journeyUser?.role && ['staff', 'dept-admin', 'super-admin'].includes(journeyUser.role)) {
       return <AdminHomeScreen />;
     }
 
-    // 환자인 경우 상태별 화면 표시
-    if (journeyUser?.role === 'patient' && patientState) {
-      const StateScreen = StateScreenMap[patientState] || UnregisteredScreen;
-      
-      return (
-        <StateScreen 
-          taggedLocation={currentLocation}
-          patientState={patientState}
-        />
-      );
-    }
-
-    // 기본값: 미등록 화면
-    return <UnregisteredScreen />;
+    // 모든 환자 상태는 JourneyContainer에서 처리
+    return <JourneyContainer taggedLocation={currentLocation} />;
   };
 
   // 로딩 중
