@@ -54,16 +54,14 @@ else:
 
 # Django와 동일한 JWT 설정
 # Django의 기본 SECRET_KEY와 동일하게 설정
-# 주의: Django가 JWT_SECRET_KEY를 사용한다면 그것을 사용해야 함
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY')  # Django와 동일한 JWT 비밀 키
-SECRET_KEY = os.getenv('SECRET_KEY', JWT_SECRET_KEY or 'django-insecure-change-this-in-production')
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
 DJANGO_API_URL = os.getenv('DJANGO_API_URL', 'http://localhost:8000')
 
 # 디버깅용: 어떤 키를 사용하는지 출력
 print("\n" + "="*60)
 print("🔑 [챗봇 서버] JWT 키 설정 확인")
-print(f"   JWT_SECRET_KEY 존재: {'Yes' if JWT_SECRET_KEY else 'No'}")
-print(f"   SECRET_KEY 사용: {SECRET_KEY[:20]}..." if SECRET_KEY else "   SECRET_KEY: None")
+print(f"   SECRET_KEY 사용: {SECRET_KEY[:30]}..." if SECRET_KEY else "   SECRET_KEY: None")
+print(f"   Django의 SECRET_KEY와 동일해야 합니다!")
 print("="*60 + "\n")
 
 def get_user_from_token(auth_header):
@@ -88,43 +86,34 @@ def get_user_from_token(auth_header):
         except Exception as debug_e:
             print(f"🔴 Failed to decode token structure: {debug_e}")
         
-        # JWT_SECRET_KEY가 있으면 먼저 시도, 없으면 SECRET_KEY 사용
-        keys_to_try = []
-        if JWT_SECRET_KEY:
-            keys_to_try.append(('JWT_SECRET_KEY', JWT_SECRET_KEY))
-        keys_to_try.append(('SECRET_KEY', SECRET_KEY))
-        
-        for key_name, key_value in keys_to_try:
-            try:
-                print(f"🔑 Trying to decode with {key_name}...")
-                payload = jwt.decode(token, key_value, algorithms=['HS256'])
-                print(f"✅ Successfully decoded with {key_name}")
-                
-                # 토큰 타입 확인
-                if payload.get('token_type') != 'access':
-                    print(f"🔴 Invalid token type: {payload.get('token_type')}")
-                    return None
-                
-                user_info = {
-                    'user_id': payload.get('user_id'),
-                    'role': payload.get('role', 'patient'),
-                    'name': payload.get('name')
-                }
-                print(f"✅ Token validated for user: {user_info['name']} (ID: {user_info['user_id']})")
-                return user_info
-                
-            except jwt.InvalidTokenError:
-                print(f"❌ Failed with {key_name}")
-                continue
-        
-        print("🔴 All key attempts failed")
-        return None
-        
-    except jwt.ExpiredSignatureError:
-        print("⏰ Token expired")
-        return None
+        # Django와 동일한 SECRET_KEY로 검증
+        try:
+            print(f"🔑 Decoding with SECRET_KEY: {SECRET_KEY[:20]}...")
+            payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+            print(f"✅ Successfully decoded JWT token")
+            
+            # 토큰 타입 확인
+            if payload.get('token_type') != 'access':
+                print(f"🔴 Invalid token type: {payload.get('token_type')}")
+                return None
+            
+            user_info = {
+                'user_id': payload.get('user_id'),
+                'role': payload.get('role', 'patient'),
+                'name': payload.get('name')
+            }
+            print(f"✅ Token validated for user: {user_info['name']} (ID: {user_info['user_id']})")
+            return user_info
+            
+        except jwt.ExpiredSignatureError:
+            print("⏰ Token expired")
+            return None
+        except jwt.InvalidTokenError as e:
+            print(f"❌ JWT validation failed: {e}")
+            return None
+            
     except Exception as e:
-        print(f"💥 Unexpected error during token validation: {e}")
+        print(f"💥 Unexpected error: {e}")
         return None
 
 def fetch_patient_context(user_id):
