@@ -116,6 +116,8 @@ const FormatATemplate = ({
   patientState,
   taggedLocation,
   progressBar, // ✅ ProgressBar 컴포넌트 prop 추가
+  header, // ✅ UnifiedHeader 컴포넌트 prop 추가
+  mainContent, // ✅ Content 컴포넌트 prop 추가
   children
 }) => {
   const navigate = useNavigate();
@@ -234,6 +236,9 @@ const FormatATemplate = ({
 
   return (
     <div className="w-full">
+      {/* ✅ UnifiedHeader 렌더링 */}
+      {header && header}
+
       {/* 상단 영역 - 파란색 배경 - 컴팩트하게 */}
       <div className="relative bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-700">
           {/* 살짝의 장식 요소 */}
@@ -243,8 +248,8 @@ const FormatATemplate = ({
           </div>
           
           <div className="relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 pb-12 sm:pb-16">
-            {/* ✅ ProgressBar 컴포넌트 사용 */}
-            {progressBar && (
+            {/* ✅ ProgressBar 컴포넌트 사용 (header가 없을 때만, 중복 방지) */}
+            {progressBar && !header && (
               <div className="mb-3 sm:mb-4">
                 {progressBar}
               </div>
@@ -472,7 +477,8 @@ const FormatATemplate = ({
               </div>
             ) : activeTab === 'content' ? (
               <div className="space-y-4">
-                {children}
+                {/* ✅ mainContent 사용 */}
+                {mainContent || children}
               </div>
             ) : (
               <div className="space-y-3">

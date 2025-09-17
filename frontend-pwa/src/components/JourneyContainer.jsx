@@ -123,9 +123,111 @@ const JourneyContainer = ({ taggedLocation }) => {
     return completionStats.completedAppointments.reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
   }, [completionStats.completedAppointments]);
 
+  // FormatBTemplate용 helper 함수들
+  const getStatusText = (state) => {
+    const statusTexts = {
+      'UNREGISTERED': '병원 도착 전',
+      'ARRIVED': '병원 도착',
+      'REGISTERED': '접수 완료',
+      'WAITING': '검사 대기',
+      'CALLED': '호출됨',
+      'IN_PROGRESS': '검사 중',
+      'COMPLETED': '검사 완료',
+      'PAYMENT': '수납 대기',
+      'FINISHED': '모든 일정 완료'
+    };
+    return statusTexts[state] || '진행 중';
+  };
+
+  const getNextScheduleText = (appointments) => {
+    if (!appointments || appointments.length === 0) return null;
+    const nextApt = appointments.find(apt => ['pending', 'waiting'].includes(apt.status));
+    return nextApt ? `다음: ${nextApt.exam?.title || '검사'}` : null;
+  };
+
+  const getSummaryCards = (appointments, stats, duration) => {
+    if (!appointments) return null;
+
+    return [
+      {
+        label: '완료된 검사',
+        value: `${stats.completedCount}/${appointments.length}`
+      },
+      {
+        label: '총 소요시간',
+        value: `${Math.floor(duration / 60)}시간 ${duration % 60}분`
+      }
+    ];
+  };
+
   // 🎯 순수한 조립: 상태에 따른 컴포넌트 선택만
-  const currentState = patientState?.current_state || patientState || PatientJourneyState.REGISTERED;
+  const currentState = patientState?.current_state || patientState || PatientJourneyState.FINISHED;
   const { Template, Content, screenType } = getJourneyComponents(currentState);
+
+  // 🔧 테스트용 데이터 주입 (실제 데이터가 없을 때)
+  if (!todaysAppointments || todaysAppointments.length === 0) {
+    console.warn('⚠️ No appointments data, injecting test data...');
+    const testAppointments = [
+      {
+        appointment_id: 'test_1',
+        status: 'completed',
+        exam: { title: '혈액검사', average_duration: 15, department: '진단검사의학과' },
+        scheduled_at: '09:00'
+      },
+      {
+        appointment_id: 'test_2',
+        status: 'completed',
+        exam: { title: '심전도검사', average_duration: 10, department: '순환기내과' },
+        scheduled_at: '09:30'
+      },
+      {
+        appointment_id: 'test_3',
+        status: 'in_progress',
+        exam: { title: 'X-Ray', average_duration: 20, department: '영상의학과' },
+        scheduled_at: '10:00'
+      }
+    ];
+
+    // 테스트 데이터로 completionStats 재계산
+    const completed = testAppointments.filter(apt => apt.status === 'completed');
+    const testCompletionStats = {
+      completedCount: completed.length,
+      totalCount: testAppointments.length,
+      completedAppointments: completed
+    };
+
+    const testTotalDuration = completed.reduce((sum, apt) => sum + (apt.exam?.average_duration || 30), 0);
+
+    return (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <Template
+          screenType={screenType}
+          patientState={currentState}
+          taggedLocation={taggedLocation}
+          progressBar={<ProgressBar appointments={testAppointments} />}
+          mainContent={<Content />}
+          status={getStatusText(currentState)}
+          nextSchedule={getNextScheduleText(testAppointments)}
+          summaryCards={getSummaryCards(testAppointments, testCompletionStats, testTotalDuration)}
+          todaysAppointments={testAppointments}
+          todaySchedule={testAppointments.map((apt, index) => ({
+            id: apt.appointment_id,
+            examName: apt.exam?.title || `검사 ${index + 1}`,
+            location: apt.exam?.department || '위치 미정',
+            status: apt.status,
+            description: apt.exam?.description,
+            duration: apt.exam?.average_duration || 30,
+            scheduled_at: apt.scheduled_at,
+            exam: apt.exam
+          }))}
+          completionStats={testCompletionStats}
+          completedAppointments={completed}
+          totalDuration={testTotalDuration}
+          completedCount={testCompletionStats.completedCount}
+        />
+      </React.Suspense>
+    );
+  }
 
   // 로딩 상태 처리
   if (isLoading) {
@@ -141,16 +243,19 @@ const JourneyContainer = ({ taggedLocation }) => {
         taggedLocation={taggedLocation}
         // ✅ ProgressBar에 필요한 데이터 전달
         progressBar={<ProgressBar appointments={todaysAppointments} />}
-        // ✅ FormatBTemplate에 필요한 데이터 전달
+        // ✅ Content 컴포넌트 전달
+        mainContent={<Content />}
+        // ✅ FormatBTemplate에 필요한 핵심 props 전달
+        status={getStatusText(currentState)}
+        nextSchedule={getNextScheduleText(todaysAppointments)}
+        summaryCards={getSummaryCards(todaysAppointments, completionStats, totalDuration)}
         todaysAppointments={todaysAppointments}
         todaySchedule={todaySchedule}
         completionStats={completionStats}
         completedAppointments={completionStats.completedAppointments}
         totalDuration={totalDuration}
         completedCount={completionStats.completedCount}
-      >
-        <Content />
-      </Template>
+      />
     </React.Suspense>
   );
 };

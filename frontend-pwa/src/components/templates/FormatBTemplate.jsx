@@ -30,7 +30,9 @@ const FormatBTemplate = ({
   locationInfo,
   patientState,
   taggedLocation,
-  progressBar // ✅ ProgressBar 컴포넌트 prop 추가
+  progressBar, // ✅ ProgressBar 컴포넌트 prop 추가
+  header, // ✅ UnifiedHeader 컴포넌트 prop 추가
+  mainContent // ✅ Content 컴포넌트 prop 추가
 }) => {
   const navigate = useNavigate();
   const taggedLocationInfo = useJourneyStore(state => state.currentLocation);
@@ -993,13 +995,16 @@ const FormatBTemplate = ({
 
   return (
     <div className="w-full">
+      {/* ✅ UnifiedHeader 렌더링 */}
+      {header && header}
+
       {/* 상단 영역 - 배경색 동적 변경 - 컴팩트하게 */}
       <div className={`relative bg-gradient-to-br ${getBackgroundColor()}`}>
         {/* 장식 요소 제거 - 더 깔끔하게 */}
         
         <div className="relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 pb-12 sm:pb-16">
-          {/* arrived 타입일 때만 진행 상태바 표시 */}
-          {screenType === 'arrived' && currentStep !== undefined && (
+          {/* arrived 타입일 때만 진행 상태바 표시 (header가 없을 때만) */}
+          {screenType === 'arrived' && currentStep !== undefined && !header && (
             <div className="mb-3 sm:mb-4">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center flex-1">
@@ -1016,8 +1021,8 @@ const FormatBTemplate = ({
             </div>
           )}
           
-          {/* 기본 상태 표시 (arrived가 아닐 때) */}
-          {screenType !== 'arrived' && (
+          {/* 기본 상태 표시 (arrived가 아니고 header가 없을 때만) */}
+          {screenType !== 'arrived' && !header && (
             <div className="mb-3 sm:mb-4">
               <div className="inline-flex items-center gap-2 sm:gap-3">
                 <div className={`w-3 h-3 ${getStatusDotColor()} rounded-full`} />
@@ -1101,9 +1106,9 @@ const FormatBTemplate = ({
         {/* 탭 내용 */}
         <div className="min-h-[400px]">
           {screenType === 'finished' ? (
-            /* FINISHED 상태일 때는 children를 항상 표시 */
+            /* FINISHED 상태일 때는 mainContent 또는 children를 항상 표시 */
             <div className="space-y-6">
-              {children}
+              {mainContent || children}
             </div>
           ) : (
             <>
@@ -1112,10 +1117,10 @@ const FormatBTemplate = ({
               {activeTab === 'completion' && renderCompletionTab()}
               {activeTab === 'precautions' && renderPrecautionsTab()}
               {activeTab === 'schedule' && renderScheduleTab()}
-              
+
               {/* 다른 상태에서는 Content 컴포넌트도 함께 표시 */}
               <div className="mt-6">
-                {children}
+                {mainContent || children}
               </div>
             </>
           )}
