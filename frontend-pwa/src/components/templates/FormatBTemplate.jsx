@@ -818,8 +818,8 @@ const FormatBTemplate = ({
         {/* 탭 내용 */}
         <div className="min-h-[400px]">
           {screenType === 'finished' ? (
-            /* FINISHED 상태일 때는 children 표시 */
-            <div className="mb-6">
+            /* FINISHED 상태일 때는 children를 항상 표시 */
+            <div className="space-y-6">
               {children}
             </div>
           ) : (
@@ -829,16 +829,14 @@ const FormatBTemplate = ({
               {activeTab === 'completion' && renderCompletionTab()}
               {activeTab === 'precautions' && renderPrecautionsTab()}
               {activeTab === 'schedule' && renderScheduleTab()}
+              
+              {/* 다른 상태에서는 Content 컴포넌트도 함께 표시 */}
+              <div className="mt-6">
+                {children}
+              </div>
             </>
           )}
         </div>
-
-        {/* 다른 상태에서는 Content 컴포넌트 메인 영역 */}
-        {screenType !== 'finished' && (
-          <div className="mb-6">
-            {children}
-          </div>
-        )}
 
         {/* 공통 빠른 길찾기 섹션 - 고정 위치 (NFC 안내 바로 위) */}
         {showQuickNavigation && (
