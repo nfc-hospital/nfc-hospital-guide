@@ -5,43 +5,31 @@ import { PatientJourneyState } from '../../../constants/states';
 
 /**
  * PaymentContent - 수납 상태의 순수 컨텐츠 컴포넌트
- * 무한 루프 방지를 위해 직접 store 구독 사용
- * React.memo로 래핑하여 불필요한 리렌더링 방지
+ * Store에서 직접 필요한 데이터를 구독하여 Props Drilling 완전 제거
  */
-const PaymentContent = ({ 
-  user, 
-  todaysAppointments = [], 
-  patientState, 
-  locationInfo,
-  completionStats: propsCompletionStats,
-  ...otherProps 
-}) => {
-  // 개발 모드에서만 props 확인
+const PaymentContent = () => {
+  // 🎯 Store에서 필요한 데이터 직접 구독
+  const user = useJourneyStore(state => state.user);
+  const todaysAppointments = useJourneyStore(state => state.todaysAppointments || []);
+  const patientState = useJourneyStore(state => state.patientState);
+  const locationInfo = useJourneyStore(state => state.locationInfo);
+  const completionStats = useJourneyStore(state => state.getCompletionStats());
+  
+  // 개발 모드에서만 데이터 확인
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔥 PaymentContent props:', { user: user?.name, appointments: todaysAppointments?.length });
+    console.log('🔥 PaymentContent 직접 구독 데이터:', { 
+      user: user?.name, 
+      appointments: todaysAppointments?.length,
+      patientState,
+      locationInfo: locationInfo?.name,
+      completionStats
+    });
   }
   
   // 현재 상태가 COMPLETED인지 PAYMENT인지 확인
   const currentStateValue = patientState?.current_state || patientState;
-  
   const isCompleted = currentStateValue === PatientJourneyState.COMPLETED;
   const isPayment = currentStateValue === PatientJourneyState.PAYMENT;
-  
-  // 완료 통계: props 우선 사용, 없으면 로컬 계산
-  const completionStats = React.useMemo(() => {
-    if (propsCompletionStats) {
-      return propsCompletionStats;
-    }
-    
-    const completed = todaysAppointments.filter(apt => 
-      apt.status === 'completed' || apt.status === 'examined'
-    );
-    return {
-      completedCount: completed.length,
-      totalCount: todaysAppointments.length,
-      completedAppointments: completed
-    };
-  }, [propsCompletionStats, todaysAppointments]);
   return (
     <div className="space-y-6">
       {/* 검사 완료 축하 메시지 - 무조건 초록색으로 */}

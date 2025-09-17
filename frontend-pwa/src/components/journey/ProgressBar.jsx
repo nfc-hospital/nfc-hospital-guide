@@ -57,110 +57,75 @@ export default function ProgressBar(props) {
   const completedCount = appointments.filter(apt => apt.status === QueueDetailState.COMPLETED).length;
   const progressPercentage = (completedCount / appointments.length) * 100;
 
+  // Template의 파란색 배경에 맞는 스타일로 수정
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-      {/* 헤더 영역 */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">오늘의 여정</h2>
-        <p className="text-xl text-blue-600 font-medium">{getStatusText()}</p>
-      </div>
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center flex-1">
+        {/* 단계별 마커 - Template 스타일에 맞게 컴팩트하게 */}
+        {appointments.map((appointment, index) => {
+          const isCompleted = appointment.status === QueueDetailState.COMPLETED;
+          const isInProgress = appointment.status === QueueDetailState.IN_PROGRESS;
+          const isCurrent = index === currentStepIndex || index === nextStepIndex;
+          const isPending = appointment.status === 'pending' || appointment.status === QueueDetailState.WAITING;
 
-      {/* 프로그레스 바 영역 */}
-      <div className="relative">
-        {/* 배경 트랙 */}
-        <div className="absolute top-8 left-0 right-0 h-1 bg-gray-200 rounded-full" />
-        
-        {/* 진행 바 */}
-        <div 
-          className="absolute top-8 left-0 h-1 bg-blue-500 rounded-full transition-all duration-700 ease-out"
-          style={{ width: `${progressPercentage}%` }}
-        />
+          return (
+            <div key={appointment.id || appointment.appointment_id || index} className="flex flex-col items-center relative" style={{ flex: '1 1 0%' }}>
+              {/* 연결선 */}
+              {index > 0 && (
+                <div className="absolute top-3 sm:top-4 h-0.5" style={{
+                  left: '-50%',
+                  right: '50%',
+                  background: isCompleted || isCurrent
+                    ? 'linear-gradient(to right, transparent, rgba(255,255,255,0.7) 20%, rgba(255,255,255,0.7) 80%, transparent)'
+                    : 'linear-gradient(to right, transparent, rgba(255,255,255,0.25) 20%, rgba(255,255,255,0.25) 80%, transparent)'
+                }} />
+              )}
 
-        {/* 단계별 마커 */}
-        <div className="relative flex justify-between">
-          {appointments.map((appointment, index) => {
-            const isCompleted = appointment.status === QueueDetailState.COMPLETED;
-            const isInProgress = appointment.status === QueueDetailState.IN_PROGRESS;
-            const isCurrent = index === currentStepIndex || index === nextStepIndex;
-            const isPending = appointment.status === 'pending' || appointment.status === QueueDetailState.WAITING;
-
-            return (
-              <div 
-                key={appointment.id || appointment.appointment_id || index} 
-                className="flex flex-col items-center"
-                style={{ flex: 1 }}
-              >
-                {/* 원형 마커 */}
-                <div className="relative">
-                  <div
-                    className={`
-                      w-12 h-12 sm:w-16 sm:h-16 rounded-full border-4 flex items-center justify-center
-                      text-base sm:text-lg font-bold transition-all duration-300 
-                      ${isCompleted 
-                        ? 'bg-green-500 border-green-500 text-white' 
-                        : isInProgress
-                        ? 'bg-blue-500 border-blue-500 text-white animate-pulse'
-                        : isCurrent && isPending
-                        ? 'bg-amber-500 border-amber-500 text-white'
-                        : 'bg-white border-gray-300 text-gray-500'
-                      }
-                    `}
-                  >
-                    {isCompleted ? (
-                      <svg className="w-6 h-6 sm:w-8 sm:h-8" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" 
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" 
-                              clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      index + 1
-                    )}
-                  </div>
-                  
-                  {/* 진행 중 표시 애니메이션 */}
-                  {isInProgress && (
-                    <div className="absolute inset-0 rounded-full bg-blue-400 opacity-50 animate-ping" />
-                  )}
-                </div>
-
-                {/* 단계 이름 */}
-                <div className="mt-3 text-center max-w-[80px] sm:max-w-none">
-                  <p className={`
-                    text-sm sm:text-lg font-medium transition-colors duration-300
-                    ${isCompleted || isInProgress || isCurrent 
-                      ? 'text-gray-900' 
-                      : 'text-gray-500'
-                    }
-                    ${appointments.length > 4 ? 'break-words' : ''}
-                  `}>
-                    {getAppointmentName(appointment)}
-                  </p>
-                  
-                  {/* 상태 텍스트 */}
-                  {isInProgress && (
-                    <p className="text-sm text-blue-600 font-medium mt-1">진행 중</p>
-                  )}
-                  {isCurrent && isPending && (
-                    <p className="text-sm text-amber-600 font-medium mt-1">대기 중</p>
+              {/* 단계 원 */}
+              <div className="relative">
+                <div className={`
+                  relative w-5 h-5 sm:w-6 sm:h-6 rounded-full
+                  flex items-center justify-center transition-all duration-500
+                  ${isCompleted
+                    ? 'bg-white shadow-md'
+                    : isCurrent
+                    ? 'bg-amber-400 shadow-lg ring-2 ring-white/30 scale-110'
+                    : 'bg-white/15 backdrop-blur-sm border border-white/25'
+                  }
+                `}>
+                  {isCompleted ? (
+                    <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd" />
+                    </svg>
+                  ) : isCurrent ? (
+                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                  ) : (
+                    <div className="w-1 h-1 bg-white/50 rounded-full" />
                   )}
                 </div>
               </div>
-            );
-          })}
-        </div>
+
+              {/* 단계 라벨 */}
+              <div className="mt-1">
+                <div className={`text-[11px] sm:text-xs font-medium transition-all duration-300 whitespace-nowrap text-center ${
+                  isCurrent ? 'text-white' : isCompleted ? 'text-white/90' : 'text-white/60'
+                }`}>
+                  {getAppointmentName(appointment)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* 하단 요약 정보 */}
-      <div className="mt-8 flex items-center justify-between text-lg">
-        <div className="flex items-center gap-2">
-          <span className="text-gray-600">완료:</span>
-          <span className="font-bold text-green-600">{completedCount}개</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-gray-600">남은 검사:</span>
-          <span className="font-bold text-blue-600">
-            {appointments.length - completedCount}개
-          </span>
+      {/* 진행률 숫자 표시 */}
+      <div className="flex flex-col items-end flex-shrink-0">
+        <div className="text-white/70 text-xs sm:text-sm">진행</div>
+        <div className="text-white flex items-baseline gap-0.5">
+          <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{completedCount}</span>
+          <span className="text-sm sm:text-base lg:text-xl text-white/70">/{appointments.length}</span>
         </div>
       </div>
     </div>

@@ -111,19 +111,11 @@ const getNextActionText = (patientState, currentExam, taggedLocation, locationIn
   }
 };
 
-const FormatATemplate = ({ 
+const FormatATemplate = ({
   screenType, // 'registered' | 'waiting' | 'payment' | 'arrived'
-  currentStep,
-  totalSteps,
-  nextAction,
-  waitingInfo,
-  locationInfo,
-  todaySchedule,
-  queueData,
+  patientState,
   taggedLocation,
-  patientState, // 환자의 현재 상태 추가
-  currentExam, // 현재 진행 중인 검사
-  preparationItems, // 준비사항 데이터
+  progressBar, // ✅ ProgressBar 컴포넌트 prop 추가
   children
 }) => {
   const navigate = useNavigate();
@@ -134,15 +126,66 @@ const FormatATemplate = ({
   const [showDemoMap, setShowDemoMap] = useState(true);
   const [isDemoExpanded, setIsDemoExpanded] = useState(true);
   
-  // journeyStore에서 현재 위치 정보 가져오기
+  // 🎯 Store에서 기본 데이터만 구독 (계산 함수는 useMemo로 메모이제이션)
+  const todaysAppointments = useJourneyStore(state => state.todaysAppointments);
+  const locationInfo = useJourneyStore(state => state.locationInfo);
   const currentLocation = useJourneyStore(state => state.currentLocation);
   const taggedLocationInfo = useJourneyStore(state => state.taggedLocationInfo);
+  const currentQueues = useJourneyStore(state => state.currentQueues);
+
+  // useMemo로 계산값 메모이제이션
+  const todaySchedule = React.useMemo(() => {
+    if (!todaysAppointments) return [];
+    return todaysAppointments.map((apt, index) => ({
+      id: apt.appointment_id,
+      examName: apt.exam?.title || `검사 ${index + 1}`,
+      location: apt.exam?.room || apt.exam?.title || '위치 미정',
+      status: apt.status,
+      description: apt.exam?.description,
+      duration: apt.exam?.average_duration || 30,
+      scheduled_at: apt.scheduled_at,
+      exam: apt.exam
+    }));
+  }, [todaysAppointments]);
+
+  const waitingInfo = React.useMemo(() => {
+    const activeQueue = currentQueues?.find(
+      q => q.state === 'waiting' || q.state === 'called' || q.state === 'in_progress'
+    );
+
+    if (activeQueue) {
+      return {
+        peopleAhead: activeQueue.queue_number > 0 ? activeQueue.queue_number - 1 : 0,
+        estimatedTime: activeQueue.estimated_wait_time || 15,
+        queueNumber: activeQueue.queue_number || 1,
+        priority: activeQueue.priority || 'normal'
+      };
+    }
+    return null;
+  }, [currentQueues]);
+
+  const currentStep = React.useMemo(() => {
+    const current = todaySchedule.findIndex(s =>
+      ['waiting', 'called', 'in_progress'].includes(s.status)
+    );
+    return current === -1 ? 0 : current;
+  }, [todaySchedule]);
+
+  const totalSteps = todaysAppointments?.length || 0;
   
   // 실제 현재 위치 정보 우선 사용
   const actualCurrentLocation = taggedLocationInfo || taggedLocation || currentLocation;
   
-  // nextAction이 없으면 자동 생성 (locationInfo를 마지막 매개변수로)
-  const displayNextAction = nextAction || getNextActionText(patientState, currentExam, actualCurrentLocation, locationInfo);
+  // currentExam을 useMemo로 계산
+  const currentExam = React.useMemo(() => {
+    const activeQueue = currentQueues?.find(
+      q => q.state === 'waiting' || q.state === 'called' || q.state === 'in_progress'
+    );
+    return activeQueue?.exam || todaysAppointments?.[0]?.exam || null;
+  }, [currentQueues, todaysAppointments]);
+
+  // nextAction 자동 생성
+  const displayNextAction = getNextActionText(patientState, currentExam, actualCurrentLocation, locationInfo);
 
   const toggleExpanded = (index) => {
     setExpandedItems(prev => 
@@ -152,225 +195,7 @@ const FormatATemplate = ({
     );
   };
 
-  // 전체 여정 단계 구성 (도착 - 접수 - 모든 검사/진료 - 수납 - 완료)
-  const buildFullJourneySteps = () => {
-    const steps = [];
-    
-    // 기본 단계들
-    steps.push({ state: 'ARRIVED', label: '도착', isFixed: true, status: 'completed' });
-    steps.push({ state: 'REGISTERED', label: '접수', isFixed: true, status: 'completed' });
-    
-    // 모든 검사/진료 추가
-    if (todaySchedule && todaySchedule.length > 0) {
-      todaySchedule.forEach((exam, index) => {
-        steps.push({
-          state: 'EXAM', // 검사는 모두 EXAM 상태로 통일
-          label: exam.examName || `검사 ${index + 1}`,
-          examId: exam.id,
-          status: exam.status || 'scheduled', // appointment의 status 사용
-          isFixed: false
-        });
-      });
-    }
-    
-    // 마지막 고정 단계들
-    steps.push({ state: 'PAYMENT', label: '수납', isFixed: true, status: 'scheduled' });
-    steps.push({ state: 'FINISHED', label: '완료', isFixed: true, status: 'scheduled' });
-    
-    return steps;
-  };
   
-  // 현재 단계 찾기
-  const getCurrentStepIndex = (steps) => {
-    // 환자 상태에 따른 현재 단계 찾기
-    if (patientState === 'ARRIVED') return 0;
-    if (patientState === 'FINISHED') return steps.length - 1;
-    
-    // 수납 상태
-    if (patientState === 'PAYMENT') {
-      return steps.findIndex(s => s.state === 'PAYMENT');
-    }
-    
-    // 접수 완료 후 첫 검사 대기 중
-    if (patientState === 'REGISTERED') {
-      // 첫 번째 검사를 찾아서 현재 단계로
-      const firstExamIdx = steps.findIndex(s => s.state === 'EXAM');
-      if (firstExamIdx !== -1) return firstExamIdx;
-      return 1; // 없으면 접수 단계
-    }
-    
-    // 검사/진료 관련 상태 (WAITING, CALLED, IN_PROGRESS, COMPLETED)
-    if ([PatientJourneyState.WAITING, PatientJourneyState.CALLED, PatientJourneyState.IN_PROGRESS, PatientJourneyState.COMPLETED].includes(patientState)) {
-      // 현재 진행 중인 검사 찾기 (waiting, called, in_progress 상태)
-      let activeExamIndex = -1;
-      
-      // 모든 검사를 순회하면서 현재 활성화된 검사 찾기
-      for (let i = 0; i < steps.length; i++) {
-        const step = steps[i];
-        if (step.state === 'EXAM') {
-          // waiting, called, in_progress 상태인 검사를 현재로
-          if ([QueueDetailState.WAITING, QueueDetailState.CALLED, QueueDetailState.IN_PROGRESS].includes(step.status)) {
-            activeExamIndex = i;
-            break;
-          }
-        }
-      }
-      
-      if (activeExamIndex !== -1) {
-        return activeExamIndex;
-      }
-      
-      // 진행 중인 검사가 없고 COMPLETED 상태라면
-      if (patientState === 'COMPLETED') {
-        // 완료된 검사 중 가장 최근 것 찾기
-        let lastCompletedIdx = -1;
-        for (let i = 0; i < steps.length; i++) {
-          if (steps[i].state === 'EXAM' && steps[i].status === 'completed') {
-            lastCompletedIdx = i;
-          }
-        }
-        
-        // 다음 검사가 있는지 확인
-        if (lastCompletedIdx !== -1 && lastCompletedIdx + 1 < steps.length) {
-          const nextStep = steps[lastCompletedIdx + 1];
-          if (nextStep.state === 'EXAM') {
-            return lastCompletedIdx + 1; // 다음 검사로
-          }
-        }
-        
-        // 모든 검사가 완료되면 수납으로
-        const allExamsCompleted = steps
-          .filter(s => s.state === 'EXAM')
-          .every(s => s.status === 'completed');
-        
-        if (allExamsCompleted) {
-          return steps.findIndex(s => s.state === 'PAYMENT');
-        }
-      }
-    }
-    
-    // 기본값: 접수
-    return 1;
-  };
-  
-  // 화면에 표시할 3개 단계 선택
-  const getVisibleSteps = () => {
-    const allSteps = buildFullJourneySteps();
-    const currentIdx = getCurrentStepIndex(allSteps);
-    
-    // 디버깅을 위한 로그 (개발 환경에서만)
-    if (import.meta.env.DEV) {
-      console.log('📊 진행 상태 디버그:', {
-        patientState,
-        currentExam,
-        todaySchedule: todaySchedule?.map(s => ({ name: s.examName, status: s.status })),
-        allSteps: allSteps.map((s, i) => ({ 
-          index: i, 
-          label: s.label, 
-          state: s.state, 
-          status: s.status, 
-          isFixed: s.isFixed 
-        })),
-        currentIdx,
-        currentStep: allSteps[currentIdx],
-        visibleRange: `${Math.max(0, currentIdx - 1)} to ${Math.min(allSteps.length - 1, currentIdx + 1)}`
-      });
-    }
-    
-    // 이전, 현재, 다음 단계 선택
-    const visibleSteps = [];
-    
-    // 이전 단계가 있으면 추가
-    if (currentIdx > 0) {
-      visibleSteps.push({ ...allSteps[currentIdx - 1], position: 'prev' });
-    }
-    
-    // 현재 단계
-    visibleSteps.push({ ...allSteps[currentIdx], position: 'current' });
-    
-    // 다음 단계가 있으면 추가
-    if (currentIdx < allSteps.length - 1) {
-      visibleSteps.push({ ...allSteps[currentIdx + 1], position: 'next' });
-    }
-    
-    // 3개가 안 되는 경우 처리
-    if (visibleSteps.length === 2) {
-      if (currentIdx === 0) {
-        // 첫 번째 단계인 경우, 다다음 단계 추가
-        if (allSteps.length > 2) {
-          visibleSteps.push({ ...allSteps[2], position: 'next' });
-        }
-      } else if (currentIdx === allSteps.length - 1) {
-        // 마지막 단계인 경우, 전전 단계 추가
-        if (allSteps.length > 2) {
-          visibleSteps.unshift({ ...allSteps[currentIdx - 2], position: 'prev' });
-        }
-      }
-    }
-    
-    return {
-      visible: visibleSteps,
-      currentStep: currentIdx,
-      totalSteps: allSteps.length
-    };
-  };
-  
-  // 진행 단계 렌더링
-  const renderProgressSteps = () => {
-    const { visible: stepsToShow } = getVisibleSteps();
-    
-    return stepsToShow.map((step, index) => {
-      const isCurrent = step.position === 'current';
-      const isCompleted = step.position === 'prev';
-      
-      return (
-        <div key={index} className="flex flex-col items-center relative" style={{ flex: '1 1 0%' }}>
-          {/* 연결선 - 그라데이션으로 부드럽게 */}
-          {index > 0 && (
-            <div className="absolute top-3 sm:top-4 h-0.5" style={{
-              left: '-50%',
-              right: '50%',
-              background: isCompleted || isCurrent
-                ? 'linear-gradient(to right, transparent, rgba(255,255,255,0.7) 20%, rgba(255,255,255,0.7) 80%, transparent)'
-                : 'linear-gradient(to right, transparent, rgba(255,255,255,0.25) 20%, rgba(255,255,255,0.25) 80%, transparent)'
-            }} />
-          )}
-          
-          {/* 단계 원 - 컴팩트한 디자인 */}
-          <div className="relative">
-            {/* 메인 원 */}
-            <div className={`
-              relative w-5 h-5 sm:w-6 sm:h-6 rounded-full 
-              flex items-center justify-center transition-all duration-500 
-              ${isCompleted 
-                ? 'bg-white shadow-md' 
-                : isCurrent 
-                ? 'bg-amber-400 shadow-lg ring-2 ring-white/30 scale-110' 
-                : 'bg-white/15 backdrop-blur-sm border border-white/25'
-              }
-            `}>
-              {isCompleted ? (
-                <CheckIcon className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600" />
-              ) : isCurrent ? (
-                <div className="w-1.5 h-1.5 bg-white rounded-full" />
-              ) : (
-                <div className="w-1 h-1 bg-white/50 rounded-full" />
-              )}
-            </div>
-          </div>
-          
-          {/* 단계 라벨 - 작게 */}
-          <div className="mt-1">
-            <div className={`text-[11px] sm:text-xs font-medium transition-all duration-300 whitespace-nowrap text-center ${
-              isCurrent ? 'text-white' : isCompleted ? 'text-white/90' : 'text-white/60'
-            }`}>
-              {step.label}
-            </div>
-          </div>
-        </div>
-      );
-    });
-  };
 
   const getStepLabel = (index) => {
     // 실제 일정 데이터가 있으면 사용, 없으면 기본값
@@ -418,21 +243,12 @@ const FormatATemplate = ({
           </div>
           
           <div className="relative px-4 sm:px-6 lg:px-8 py-3 sm:py-4 pb-12 sm:pb-16">
-            {/* 진행 상태바 */}
-            <div className="mb-3 sm:mb-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center flex-1">
-                  {renderProgressSteps()}
-                </div>
-                <div className="flex flex-col items-end flex-shrink-0">
-                  <div className="text-white/70 text-xs sm:text-sm">진행</div>
-                  <div className="text-white flex items-baseline gap-0.5">
-                    <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{todaySchedule.filter(s => s.status === 'completed').length}</span>
-                    <span className="text-sm sm:text-base lg:text-xl text-white/70">/{todaySchedule.length || totalSteps || 7}</span>
-                  </div>
-                </div>
+            {/* ✅ ProgressBar 컴포넌트 사용 */}
+            {progressBar && (
+              <div className="mb-3 sm:mb-4">
+                {progressBar}
               </div>
-            </div>
+            )}
 
             {/* 다음 행동 안내 - 맥박 애니메이션 포함 */}
             <div className="bg-white/20 backdrop-blur-lg rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 border border-white/30 hover:bg-white/25 transition-all duration-300">
@@ -488,22 +304,7 @@ const FormatATemplate = ({
                 <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600" />
               )}
             </button>
-            {preparationItems && (
-              <button
-                onClick={() => setActiveTab('preparation')}
-                className={`flex-1 pb-3 pt-2 flex items-center justify-center gap-2 transition-all duration-300 relative ${
-                  activeTab === 'preparation' 
-                    ? 'text-blue-600' 
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                <ClipboardDocumentListIcon className="w-5 h-5" />
-                <span className="font-medium">준비사항</span>
-                {activeTab === 'preparation' && (
-                  <div className="absolute bottom-0 left-4 right-4 h-0.5 bg-blue-600" />
-                )}
-              </button>
-            )}
+            {/* 준비사항 탭은 필요시 추가 - 현재는 제거 */}
             <button
               onClick={() => setActiveTab('schedule')}
               className={`flex-1 pb-3 pt-2 flex items-center justify-center gap-2 transition-all duration-300 relative ${
@@ -662,15 +463,12 @@ const FormatATemplate = ({
               </div>
             ) : activeTab === 'preparation' ? (
               <div className="space-y-4">
-                {/* 준비사항 내용 */}
-                {preparationItems || (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <ClipboardDocumentListIcon className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <p className="text-gray-500">준비사항이 없습니다</p>
+                <div className="text-center py-8">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <ClipboardDocumentListIcon className="w-8 h-8 text-gray-400" />
                   </div>
-                )}
+                  <p className="text-gray-500">준비사항이 없습니다</p>
+                </div>
               </div>
             ) : activeTab === 'content' ? (
               <div className="space-y-4">

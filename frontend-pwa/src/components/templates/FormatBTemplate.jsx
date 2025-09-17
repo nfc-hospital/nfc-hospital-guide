@@ -6,7 +6,7 @@ import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
 import useMapStore from '../../store/mapStore';
 
-const FormatBTemplate = ({ 
+const FormatBTemplate = ({
   screenType, // 'unregistered' | 'completed'
   status,
   nextSchedule,
@@ -29,7 +29,8 @@ const FormatBTemplate = ({
   nextAction,
   locationInfo,
   patientState,
-  taggedLocation
+  taggedLocation,
+  progressBar // ✅ ProgressBar 컴포넌트 prop 추가
 }) => {
   const navigate = useNavigate();
   const taggedLocationInfo = useJourneyStore(state => state.currentLocation);

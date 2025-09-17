@@ -6,19 +6,23 @@ import useJourneyStore from '../../../store/journeyStore';
 
 /**
  * ArrivedContent - 병원 도착 상태의 순수 컨텐츠 컴포넌트
- * 무한 루프 방지를 위해 직접 store 구독 사용
- * React.memo로 래핑하여 불필요한 리렌더링 방지
+ * Store에서 직접 필요한 데이터를 구독하여 Props Drilling 완전 제거
  */
-const ArrivedContent = ({ 
-  user, 
-  todaysAppointments = [], 
-  patientState, 
-  locationInfo,
-  ...otherProps 
-}) => {
-  // 개발 모드에서만 props 확인
+const ArrivedContent = () => {
+  // 🎯 Store에서 필요한 데이터 직접 구독
+  const user = useJourneyStore(state => state.user);
+  const todaysAppointments = useJourneyStore(state => state.todaysAppointments || []);
+  const patientState = useJourneyStore(state => state.patientState);
+  const locationInfo = useJourneyStore(state => state.locationInfo);
+  
+  // 개발 모드에서만 데이터 확인
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔥 ArrivedContent props:', { user: user?.name, appointments: todaysAppointments?.length });
+    console.log('🔥 ArrivedContent 직접 구독 데이터:', { 
+      user: user?.name, 
+      appointments: todaysAppointments?.length,
+      patientState,
+      locationInfo: locationInfo?.name
+    });
   }
   const navigate = useNavigate();
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);

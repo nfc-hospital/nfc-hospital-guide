@@ -6,40 +6,31 @@ import useJourneyStore from '../../../store/journeyStore';
 
 /**
  * WaitingContent - 대기 상태의 순수 컨텐츠 컴포넌트
- * 무한 루프 방지를 위해 직접 store 구독 사용
- * React.memo로 래핑하여 불필요한 리렌더링 방지
+ * Store에서 직접 필요한 데이터를 구독하여 Props Drilling 완전 제거
  */
-const WaitingContent = ({ 
-  user, 
-  patientState, 
-  currentTask, 
-  currentExam,
-  waitingInfo,
-  isInProgress: propsIsInProgress,
-  isCalled: propsIsCalled,
-  ...otherProps 
-}) => {
-  // 개발 모드에서만 props 확인
+const WaitingContent = () => {
+  // 🎯 Store에서 필요한 데이터 직접 구독
+  const waitingScreenData = useJourneyStore(state => state.getWaitingScreenData());
+  const { user, currentState } = useJourneyStore(state => ({
+    user: state.user,
+    currentState: state.patientState
+  }));
+  const stateFlags = useJourneyStore(state => state.getStateFlags());
+  
+  // 개발 모드에서만 데이터 확인
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔥 WaitingContent props:', { user: user?.name, currentTask: currentTask?.title });
+    console.log('🔥 WaitingContent 직접 구독 데이터:', { 
+      user: user?.name, 
+      currentTask: waitingScreenData?.currentTask?.exam?.title,
+      currentState,
+      stateFlags
+    });
   }
   
-  // 상태 플래그: props 우선 사용, 없으면 로컬 계산
-  const isInProgress = React.useMemo(() => {
-    if (propsIsInProgress !== undefined) {
-      return propsIsInProgress;
-    }
-    return currentTask?.state === 'ongoing' || 
-           patientState === PatientJourneyState.IN_PROGRESS;
-  }, [propsIsInProgress, currentTask?.state, patientState]);
-  
-  const isCalled = React.useMemo(() => {
-    if (propsIsCalled !== undefined) {
-      return propsIsCalled;
-    }
-    return currentTask?.state === 'called' || 
-           patientState === PatientJourneyState.CALLED;
-  }, [propsIsCalled, currentTask?.state, patientState]);
+  // 대기 화면에서 필요한 데이터 추출
+  const { currentTask, waitingInfo, nextExam, upcomingTasks, queueDetails } = waitingScreenData;
+  const currentExam = currentTask?.exam || nextExam;
+  const { isInProgress, isCalled } = stateFlags;
   // CalledModal 상태 관리
   const [showCalledModal, setShowCalledModal] = useState(false);
   const [hasShownModal, setHasShownModal] = useState(false);

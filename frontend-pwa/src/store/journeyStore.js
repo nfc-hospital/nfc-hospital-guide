@@ -271,6 +271,100 @@ const useJourneyStore = create(
           };
         },
 
+        // 📍 추가 Selector 함수들 - UI 컴포넌트에서 필요한 모든 데이터
+        
+        // 사용자 이름 또는 기본값 반환
+        getUserName: () => {
+          return get().user?.name || '환자';
+        },
+
+        // 환자 ID (접수번호) 반환
+        getPatientId: () => {
+          return get().user?.patient_id || get().patientState?.patient_id || null;
+        },
+
+        // 모든 상태 플래그 통합 반환
+        getStateFlags: () => {
+          const patientState = get().patientState;
+          return {
+            isInProgress: patientState === 'IN_PROGRESS',
+            isCalled: patientState === 'CALLED',
+            isWaiting: patientState === 'WAITING',
+            isRegistered: patientState === 'REGISTERED',
+            isArrived: patientState === 'ARRIVED',
+            isFinished: patientState === 'FINISHED',
+            isPayment: patientState === 'PAYMENT',
+            isUnregistered: patientState === 'UNREGISTERED',
+            isCompleted: patientState === 'COMPLETED'
+          };
+        },
+
+        // 전체 일정 관련 통합 데이터 (스케줄 탭용)
+        getScheduleData: () => {
+          const schedule = get().getTodaysScheduleForUI();
+          const completionStats = get().getCompletionStats();
+          const currentStep = get().getCurrentStepIndex();
+          
+          return {
+            todaySchedule: schedule,
+            completionStats,
+            currentStep,
+            totalSteps: schedule.length
+          };
+        },
+
+        // Header에서 필요한 모든 데이터 통합
+        getHeaderData: () => {
+          const user = get().user;
+          const patientState = get().patientState;
+          const nextExam = get().getNextExam();
+          const waitingInfo = get().getWaitingInfo();
+          
+          return {
+            userName: user?.name || '환자',
+            patientId: user?.patient_id || null,
+            currentState: patientState,
+            nextDestination: nextExam?.title || '목적지 없음',
+            queueNumber: waitingInfo?.queueNumber || null,
+            estimatedWaitTime: waitingInfo?.estimatedTime || null
+          };
+        },
+
+        // 대기 화면에서 필요한 모든 데이터 통합
+        getWaitingScreenData: () => {
+          const currentTask = get().getCurrentTask();
+          const waitingInfo = get().getWaitingInfo();
+          const nextExam = get().getNextExam();
+          const upcomingTasks = get().getTodaysScheduleForUI().filter(s => 
+            s.status === 'scheduled' || s.status === 'pending'
+          );
+          
+          return {
+            currentTask,
+            waitingInfo,
+            nextExam,
+            upcomingTasks,
+            queueDetails: get().patientState?.queue_details || null
+          };
+        },
+
+        // 완료 화면에서 필요한 모든 데이터 통합
+        getFinishedScreenData: () => {
+          const user = get().user;
+          const completionStats = get().getCompletionStats();
+          const todaySchedule = get().getTodaysScheduleForUI();
+          
+          return {
+            user,
+            completionStats,
+            todaySchedule,
+            completedAppointments: completionStats.completedAppointments,
+            totalDuration: completionStats.completedAppointments.reduce(
+              (total, apt) => total + (apt.duration || 30), 0
+            )
+          };
+        },
+
 
         // 알림 설정
         notificationSettings: null,
