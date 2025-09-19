@@ -294,11 +294,12 @@ const JourneyContainer = ({ taggedLocation }) => {
         showPaymentInfo={true}
         paymentAmount={journeySummary.completedAppointments?.length > 0
           ? journeySummary.completedAppointments.reduce((total, apt) => {
-              const cost = apt.cost || apt.exam?.cost || 25000;
-              const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : cost;
+              // API에서 받은 실제 환자 본인부담금 사용
+              const cost = apt.exam?.patient_cost || apt.exam?.base_price || 0;
+              const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : Number(cost);
               return total + numericCost;
             }, 0)
-          : 50000 // 기본 금액
+          : 0 // 기본 금액을 0으로 변경
         }
       />
     </React.Suspense>

@@ -12,11 +12,15 @@ class ExamPreparationSerializer(serializers.ModelSerializer):
 
 class ExamSerializer(serializers.ModelSerializer):
     preparations = ExamPreparationSerializer(many=True, read_only=True)
-    
+
     # location 필드를 객체 형태로 반환하기 위해 SerializerMethodField 사용
     # 모델에는 building, floor, room이 개별 필드이지만, API 응답에서는 location 객체로 묶음
     location = serializers.SerializerMethodField()
-    
+
+    # 가격 계산 필드 추가
+    patient_cost = serializers.ReadOnlyField()
+    insurance_amount = serializers.ReadOnlyField()
+
     class Meta:
         model = Exam
         # 모든 필드를 포함하되, PK는 `exam_id`로 명시
@@ -26,9 +30,10 @@ class ExamSerializer(serializers.ModelSerializer):
             'category',
             'building', 'floor', 'room',  # 개별 필드 추가
             'x_coord', 'y_coord',  # 좌표 필드 추가
-            'location'  # 통합 객체도 제공
+            'location',  # 통합 객체도 제공
+            'base_price', 'insurance_coverage', 'patient_cost', 'insurance_amount'  # 가격 정보 추가
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'patient_cost', 'insurance_amount']
 
     # get_location 메서드 정의: Exam 인스턴스에서 building, floor, room 정보를 가져와 딕셔너리 형태로 반환
     def get_location(self, obj):
@@ -151,15 +156,23 @@ class ExamListSerializer(serializers.ModelSerializer):
                 'title': '검사 정보 없음',
                 'department': '',
                 'category': '',
-                'average_duration': 30
+                'average_duration': 30,
+                'base_price': 25000,
+                'insurance_coverage': 0.70,
+                'patient_cost': 7500,
+                'insurance_amount': 17500
             }
-        
+
         return {
             'exam_id': str(obj.exam.exam_id),  # UUID를 문자열로 명시적 변환
             'title': obj.exam.title or '제목 없음',
             'department': obj.exam.department or '',
             'category': obj.exam.category or '',
-            'average_duration': obj.exam.average_duration or 30
+            'average_duration': obj.exam.average_duration or 30,
+            'base_price': int(obj.exam.base_price),
+            'insurance_coverage': float(obj.exam.insurance_coverage),
+            'patient_cost': obj.exam.patient_cost,
+            'insurance_amount': obj.exam.insurance_amount
         }
     
     def get_location(self, obj):
@@ -239,6 +252,12 @@ class TodayScheduleExamSerializer(serializers.Serializer):
     location = serializers.SerializerMethodField()
     duration = serializers.IntegerField(source='average_duration')
     preparations = ExamPreparationSerializer(many=True, read_only=True)
+
+    # 가격 정보 추가
+    base_price = serializers.DecimalField(max_digits=10, decimal_places=0)
+    insurance_coverage = serializers.DecimalField(max_digits=5, decimal_places=2)
+    patient_cost = serializers.IntegerField()
+    insurance_amount = serializers.IntegerField()
     
     def get_location(self, obj):
         if obj.building or obj.floor or obj.room:
