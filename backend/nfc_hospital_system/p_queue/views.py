@@ -1351,6 +1351,57 @@ def patient_daily_schedule(request):
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
+def patient_next_appointment(request):
+    """
+    다음 예약 조회
+    GET /api/v1/queue/patient/next-appointment/
+    """
+    try:
+        user = request.user
+        now = timezone.now()
+
+        # 지금 시간 이후의 가장 빠른 예약 1개를 찾습니다.
+        next_appt = Appointment.objects.filter(
+            user=user,
+            scheduled_at__gt=now
+        ).select_related('exam').order_by('scheduled_at').first()
+
+        if not next_appt:
+            return APIResponse.success(
+                data=None,
+                message="다음 예약이 없습니다."
+            )
+
+        # 다음 예약 정보를 직렬화합니다.
+        appointment_data = {
+            'appointment_id': next_appt.appointment_id,
+            'scheduled_at': next_appt.scheduled_at.isoformat(),
+            'status': next_appt.status,
+            'exam': {
+                'exam_id': next_appt.exam.exam_id,
+                'title': next_appt.exam.title,
+                'department': next_appt.exam.department,
+                'room': next_appt.exam.room,
+                'building': next_appt.exam.building,
+                'floor': next_appt.exam.floor,
+            } if next_appt.exam else None
+        }
+
+        return APIResponse.success(
+            data=appointment_data,
+            message="다음 예약을 성공적으로 조회했습니다."
+        )
+
+    except Exception as e:
+        logger.error(f"Next appointment retrieval error: {str(e)}")
+        return APIResponse.error(
+            message="다음 예약 조회 중 오류가 발생했습니다.",
+            code="NEXT_APPOINTMENT_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
 def patient_state_history(request):
     """
     환자 상태 전환 히스토리
