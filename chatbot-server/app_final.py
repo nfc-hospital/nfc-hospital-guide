@@ -108,21 +108,12 @@ def fetch_patient_context(user_id):
             data = response.json()
             print(f"✅ Patient context received successfully")
             return data
-        elif response.status_code == 404:
-            print(f"⚠️ User {user_id} not found in Django")
-            return None
         else:
             print(f"❌ Failed to fetch patient context: {response.status_code}")
             return None
             
-    except requests.exceptions.Timeout:
-        print(f"⏱️ Django API timeout - using fallback response")
-        return None
-    except requests.exceptions.ConnectionError:
-        print(f"🔌 Cannot connect to Django API - is it running?")
-        return None
     except Exception as e:
-        print(f"💥 Unexpected error fetching patient context: {e}")
+        print(f"💥 Error fetching patient context: {e}")
         return None
 
 def get_public_info_from_django():
@@ -141,14 +132,8 @@ def get_public_info_from_django():
             print(f"❌ Failed to fetch public info: {response.status_code}")
             return None
             
-    except requests.exceptions.Timeout:
-        print(f"⏱️ Django API timeout for public info")
-        return None
-    except requests.exceptions.ConnectionError:
-        print(f"🔌 Cannot connect to Django for public info")
-        return None
     except Exception as e:
-        print(f"💥 Unexpected error fetching public info: {e}")
+        print(f"💥 Error fetching public info: {e}")
         return None
 
 # --- 건강 체크 엔드포인트 ---
@@ -182,10 +167,6 @@ def query_chatbot():
         question = data['question']
         print(f"\n{'='*60}")
         print(f"📝 Question: {question}")
-        
-        # 변수 초기화 (scope 문제 해결)
-        patient_context = None
-        public_info = None
         
         # 1. JWT 토큰 확인으로 로그인 상태 파악
         auth_header = request.headers.get('Authorization', '')
@@ -265,7 +246,7 @@ def query_chatbot():
 """
         
         print(f"🤖 User authenticated: {user is not None}")
-        print(f"📋 Context provided: Patient={patient_context is not None}, Public={public_info is not None}")
+        print(f"📋 Context provided: Patient={patient_context is not None if user else False}, Public={public_info is not None}")
         
         # 6. OpenAI API 호출
         if not client:
