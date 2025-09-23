@@ -46,6 +46,20 @@ export const PatientJourneyAPI = {
       console.error('Failed to get state definitions:', error);
       throw error;
     }
+  },
+
+  /**
+   * 다음 예약 조회
+   * @returns {Promise} 다음 예약 정보
+   */
+  getNextAppointment: async () => {
+    try {
+      const response = await api.get('/queue/patient/next-appointment/');
+      return response;
+    } catch (error) {
+      console.error('Failed to get next appointment:', error);
+      throw error;
+    }
   }
 };
 

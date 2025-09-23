@@ -58,6 +58,9 @@ urlpatterns = [
     
     # URL: /api/v1/queue/patient/daily-schedule/
     path('patient/daily-schedule/', views.patient_daily_schedule, name='patient-daily-schedule'),
+
+    # URL: /api/v1/queue/patient/next-appointment/
+    path('patient/next-appointment/', views.patient_next_appointment, name='patient-next-appointment'),
     
     # URL: /api/v1/queue/patient/state-history/
     path('patient/state-history/', views.patient_state_history, name='patient-state-history'),

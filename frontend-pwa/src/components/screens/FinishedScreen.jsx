@@ -354,15 +354,16 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
   // 소요 시간 계산 - 고정값 사용
   const totalDuration = calculateTotalDuration();
   
-  // 총 비용 계산 - 실제 비용 정보가 있으면 사용, 없으면 Mock 90,000원
+  // 총 비용 계산 - API에서 받은 실제 환자 본인부담금 사용
   const totalCost = completedAppointments.length > 0
     ? completedAppointments.reduce((sum, apt) => {
-        const cost = apt.cost || apt.exam?.cost || '25000';
-        const numericCost = typeof cost === 'string' ? 
-          parseInt(cost.replace(/[^0-9]/g, '')) : cost;
+        // API에서 받은 실제 환자 본인부담금 사용
+        const cost = apt.exam?.patient_cost || apt.exam?.base_price || 0;
+        const numericCost = typeof cost === 'string' ?
+          parseInt(cost.replace(/[^0-9]/g, '')) : Number(cost);
         return sum + numericCost;
       }, 0)
-    : 90000; // Mock 데이터: 35,000 + 15,000 + 25,000 + 15,000 = 90,000원
+    : 0; // 기본값을 0으로 변경
 
   // 처방 여부 확인
   const hasPrescription = completedAppointments.some(apt => 

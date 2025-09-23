@@ -1,7 +1,8 @@
 // src/components/JourneyContainer.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import useJourneyStore from '../store/journeyStore';
 import { PatientJourneyState } from '../constants/states';
+import { PatientJourneyAPI } from '../api/patientJourneyService';
 
 // Content 컴포넌트 imports
 import UnregisteredContent from './journey/contents/UnregisteredContent';
@@ -139,7 +140,28 @@ const JourneyContainer = ({ taggedLocation }) => {
     return statusTexts[state] || '진행 중';
   };
 
-  const getNextScheduleText = (appointments) => {
+
+  const getNextScheduleText = (appointments, currentState) => {
+    // finished 상태일 때는 실제 다음 예약 정보 사용
+    if (currentState === PatientJourneyState.FINISHED) {
+      if (loadingNextAppointment) {
+        return '다음 예약 확인 중...';
+      }
+      if (nextAppointment && nextAppointment.exam) {
+        const appointmentDate = new Date(nextAppointment.scheduled_at);
+        const dateStr = appointmentDate.toLocaleDateString('ko-KR', {
+          month: 'long',
+          day: 'numeric'
+        });
+        const timeStr = appointmentDate.toLocaleTimeString('ko-KR', {
+          hour: 'numeric',
+          hour12: true
+        });
+        return `다음: ${dateStr} ${timeStr}`;
+      }
+      return '다음: 예약된 일정이 없습니다'; // 다음 예약이 없어도 영역 표시
+    }
+
     if (!appointments || appointments.length === 0) return null;
     const nextApt = appointments.find(apt => ['pending', 'waiting'].includes(apt.status));
     return nextApt ? `다음: ${nextApt.exam?.title || '검사'}` : null;
@@ -163,6 +185,32 @@ const JourneyContainer = ({ taggedLocation }) => {
   // 🎯 순수한 조립: 상태에 따른 컴포넌트 선택만
   const currentState = patientState?.current_state || patientState || PatientJourneyState.FINISHED;
   const { Template, Content, screenType } = getJourneyComponents(currentState);
+
+  // finished 상태일 때 다음 예약 정보 조회
+  const [nextAppointment, setNextAppointment] = React.useState(null);
+  const [loadingNextAppointment, setLoadingNextAppointment] = React.useState(false);
+
+  React.useEffect(() => {
+    if (currentState === PatientJourneyState.FINISHED) {
+      const fetchNextAppointment = async () => {
+        try {
+          setLoadingNextAppointment(true);
+          const response = await PatientJourneyAPI.getNextAppointment();
+          if (response.success && response.data) {
+            setNextAppointment(response.data);
+          } else {
+            setNextAppointment(null);
+          }
+        } catch (error) {
+          console.error('다음 예약 조회 실패:', error);
+          setNextAppointment(null);
+        } finally {
+          setLoadingNextAppointment(false);
+        }
+      };
+      fetchNextAppointment();
+    }
+  }, [currentState]);
 
   // 🆕 실제 백엔드 데이터 사용 (테스트 데이터 제거) - 안정적인 selector 사용
   const journeySummary = React.useMemo(() => {
@@ -235,7 +283,7 @@ const JourneyContainer = ({ taggedLocation }) => {
         mainContent={<Content />}
         // ✅ FormatBTemplate에 필요한 핵심 props 전달 (실제 백엔드 데이터 사용)
         status={getStatusText(currentState)}
-        nextSchedule={getNextScheduleText(todaysAppointments)}
+        nextSchedule={getNextScheduleText(todaysAppointments, currentState)}
         summaryCards={getSummaryCards(todaysAppointments, journeySummary, journeySummary.totalDuration)}
         todaysAppointments={todaysAppointments}
         todaySchedule={todaySchedule}
@@ -246,11 +294,12 @@ const JourneyContainer = ({ taggedLocation }) => {
         showPaymentInfo={true}
         paymentAmount={journeySummary.completedAppointments?.length > 0
           ? journeySummary.completedAppointments.reduce((total, apt) => {
-              const cost = apt.cost || apt.exam?.cost || 25000;
-              const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : cost;
+              // API에서 받은 실제 환자 본인부담금 사용
+              const cost = apt.exam?.patient_cost || apt.exam?.base_price || 0;
+              const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : Number(cost);
               return total + numericCost;
             }, 0)
-          : 50000 // 기본 금액
+          : 0 // 기본 금액을 0으로 변경
         }
       />
     </React.Suspense>

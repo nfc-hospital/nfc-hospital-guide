@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.core.validators import MinValueValidator, MaxValueValidator
 import uuid
 
 User = get_user_model()
@@ -68,6 +69,24 @@ class Exam(models.Model):
         help_text='예: "imaging", "blood", "urine", "cardiac"'
     )
 
+    # 가격 정보
+    base_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=0,
+        default=25000,
+        verbose_name='기본 가격',
+        help_text='검사의 기본 수가 (원)'
+    )
+
+    insurance_coverage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.70,
+        verbose_name='보험 적용률',
+        help_text='0.0 ~ 1.0 사이 값 (예: 0.7 = 70%)',
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)]
+    )
+
     # 활성 상태
     is_active = models.BooleanField(
         default=True,
@@ -100,6 +119,16 @@ class Exam(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.department})"
+
+    @property
+    def patient_cost(self):
+        """환자 본인부담금 계산"""
+        return int(self.base_price * (1 - self.insurance_coverage))
+
+    @property
+    def insurance_amount(self):
+        """공단부담금 계산"""
+        return int(self.base_price * self.insurance_coverage)
     
     @property
     def building(self):

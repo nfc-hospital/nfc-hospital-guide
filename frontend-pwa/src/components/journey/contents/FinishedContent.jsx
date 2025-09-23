@@ -1,26 +1,55 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckBadgeIcon, HomeIcon, CalendarIcon } from '@heroicons/react/24/outline';
 import useJourneyStore from '../../../store/journeyStore';
+import { PatientJourneyAPI } from '../../../api/patientJourneyService';
 
 /**
  * FinishedContent - 완료 상태의 순수 컨텐츠 컴포넌트
  * 무한 루프 방지를 위해 직접 store 구독 사용
  * React.memo로 래핑하여 불필요한 리렌더링 방지
  */
-const FinishedContent = ({ 
-  user, 
-  todaysAppointments = [], 
-  patientState, 
+const FinishedContent = ({
+  user,
+  todaysAppointments = [],
+  patientState,
   completionStats: propsCompletionStats,
-  ...otherProps 
+  ...otherProps
 }) => {
+  // 다음 예약 정보 상태
+  const [nextAppointment, setNextAppointment] = useState(null);
+  const [loadingNextAppointment, setLoadingNextAppointment] = useState(true);
+
+  // 컴포넌트 마운트 시 다음 예약 정보 조회
+  useEffect(() => {
+    const fetchNextAppointment = async () => {
+      try {
+        setLoadingNextAppointment(true);
+        const response = await PatientJourneyAPI.getNextAppointment();
+
+        if (response.success && response.data) {
+          setNextAppointment(response.data);
+        } else {
+          setNextAppointment(null);
+        }
+      } catch (error) {
+        console.error('다음 예약 조회 실패:', error);
+        setNextAppointment(null);
+      } finally {
+        setLoadingNextAppointment(false);
+      }
+    };
+
+    fetchNextAppointment();
+  }, []);
+
   // FinishedContent 실행 확인 (개발 모드에서만)
   if (process.env.NODE_ENV === 'development') {
-    console.log('🔥 FinishedContent 렌더링 시작!', { 
-      user: user?.name, 
+    console.log('🔥 FinishedContent 렌더링 시작!', {
+      user: user?.name,
       appointments: todaysAppointments?.length,
       hasUser: !!user,
-      hasAppointments: !!todaysAppointments 
+      hasAppointments: !!todaysAppointments,
+      nextAppointment: nextAppointment
     });
   }
   
@@ -143,6 +172,32 @@ const FinishedContent = ({
           📋 다음 단계 안내
         </h3>
         <ul className="space-y-4">
+          {/* 다음 예약이 있을 경우 표시 */}
+          {!loadingNextAppointment && nextAppointment && (
+            <li className="flex items-start space-x-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <CalendarIcon className="w-4 h-4 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <span className="text-base text-blue-800 leading-relaxed">
+                  <strong>다음 예약:</strong> {new Date(nextAppointment.scheduled_at).toLocaleString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+                {nextAppointment.exam && (
+                  <div className="mt-1 text-sm text-blue-700">
+                    {nextAppointment.exam.title} ({nextAppointment.exam.department})
+                    {nextAppointment.exam.room && ` - ${nextAppointment.exam.room}`}
+                  </div>
+                )}
+              </div>
+            </li>
+          )}
+
           <li className="flex items-start space-x-3 p-3 bg-white rounded-xl border border-amber-100">
             <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
               <CalendarIcon className="w-4 h-4 text-amber-600" />

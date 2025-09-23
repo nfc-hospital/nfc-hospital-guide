@@ -571,9 +571,11 @@ const FormatBTemplate = ({
               
               <div className="space-y-3">
                 {safeCompletedAppointments.length > 0 ? safeCompletedAppointments.map((apt, index) => {
-                  const cost = apt.cost || apt.exam?.cost || '25000';
-                  const numericCost = typeof cost === 'string' ? 
-                    parseInt(cost.replace(/[^0-9]/g, '')) : cost;
+                  // API에서 받은 실제 가격 정보 사용
+                  const basePrice = apt.exam?.base_price || 0;
+                  const patientCost = apt.exam?.patient_cost || 0;
+                  const insuranceAmount = apt.exam?.insurance_amount || 0;
+                  const numericCost = Number(patientCost);
                   
                   return (
                     <div 
@@ -618,20 +620,34 @@ const FormatBTemplate = ({
             
             {/* 결제 정보 */}
             <div className="space-y-3">
-              <div className="flex justify-between items-center text-gray-600">
-                <span>진료비 합계</span>
-                <span>{paymentAmount.toLocaleString()}원</span>
-              </div>
-              <div className="flex justify-between items-center text-gray-600">
-                <span>공단부담금</span>
-                <span>{Math.floor(paymentAmount * 0.7).toLocaleString()}원</span>
-              </div>
-              <div className="flex justify-between items-center pt-3 border-t border-gray-200">
-                <span className="text-lg font-bold text-gray-900">본인부담금</span>
-                <span className="text-xl font-bold text-emerald-600">
-                  {Math.floor(paymentAmount * 0.3).toLocaleString()}원
-                </span>
-              </div>
+              {(() => {
+                // 실제 가격 데이터로 총액 계산
+                const totalBasePrice = safeCompletedAppointments.reduce((sum, apt) =>
+                  sum + Number(apt.exam?.base_price || 0), 0);
+                const totalInsurance = safeCompletedAppointments.reduce((sum, apt) =>
+                  sum + Number(apt.exam?.insurance_amount || 0), 0);
+                const totalPatientCost = safeCompletedAppointments.reduce((sum, apt) =>
+                  sum + Number(apt.exam?.patient_cost || 0), 0);
+
+                return (
+                  <>
+                    <div className="flex justify-between items-center text-gray-600">
+                      <span>진료비 합계</span>
+                      <span>{totalBasePrice.toLocaleString()}원</span>
+                    </div>
+                    <div className="flex justify-between items-center text-gray-600">
+                      <span>공단부담금</span>
+                      <span>(-) {totalInsurance.toLocaleString()}원</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-200">
+                      <span className="text-lg font-bold text-gray-900">본인부담금</span>
+                      <span className="text-xl font-bold text-emerald-600">
+                        {totalPatientCost.toLocaleString()}원
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
             
             {/* 결제 방법 */}
