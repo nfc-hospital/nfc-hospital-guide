@@ -39,13 +39,13 @@ else:
     print("✅ OpenAI client initialized")
 
 # Django 설정
-DJANGO_BASE_URL = os.getenv('DJANGO_API_URL', 'http://localhost:8000')
-SECRET_KEY = os.getenv('SECRET_KEY')  # Django와 동일한 SECRET_KEY 사용
+DJANGO_BASE_URL = os.getenv('DJANGO_BASE_URL', 'http://localhost:8000')
+DJANGO_SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')  # Django와 동일한 SECRET_KEY 사용
 
 print("\n" + "="*60)
-print("🚀 챗봇 서버 시작")
+print("🚀 챗봇 서버 시작 (최종 버전)")
 print(f"   Django API: {DJANGO_BASE_URL}")
-print(f"   SECRET_KEY: {SECRET_KEY[:30]}..." if SECRET_KEY else "   SECRET_KEY: Not set")
+print(f"   Secret Key: {'설정됨' if DJANGO_SECRET_KEY else '⚠️ 설정 안 됨!'}")
 print("="*60 + "\n")
 
 # --- JWT 토큰 검증 함수 ---
@@ -63,12 +63,12 @@ def get_user_from_token(auth_header):
         token = auth_header.split(' ')[1]
         print(f"🔵 Token received (first 30 chars): {token[:30]}...")
         
-        if not SECRET_KEY:
-            print("❌ SECRET_KEY not configured in .env file")
+        if not DJANGO_SECRET_KEY:
+            print("❌ DJANGO_SECRET_KEY not configured in .env file")
             return None
         
         # Django와 동일한 키로 토큰 검증
-        payload = jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+        payload = jwt.decode(token, DJANGO_SECRET_KEY, algorithms=['HS256'])
         print(f"✅ Token validated successfully")
         
         # 토큰 타입 확인
@@ -245,8 +245,11 @@ def query_chatbot():
    - 간결하면서도 필요한 정보는 빠짐없이 제공
 """
         
+        # 변수 초기화 (scope 문제 해결)
+        patient_context = None
+        
         print(f"🤖 User authenticated: {user is not None}")
-        print(f"📋 Context provided: Patient={patient_context is not None if user else False}, Public={public_info is not None}")
+        print(f"📋 Context provided: Patient={patient_context is not None}, Public={public_info is not None}")
         
         # 6. OpenAI API 호출
         if not client:

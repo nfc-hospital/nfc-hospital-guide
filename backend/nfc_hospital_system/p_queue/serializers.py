@@ -237,59 +237,80 @@ class PatientJourneySerializer(serializers.Serializer):
         return location_map.get(location, location)
     
     def get_appointments(self, obj):
-        """오늘 날짜의 모든 예약 정보를 반환합니다."""
-        user = getattr(obj, 'user', None)
-        if not user:
+        """오늘 날짜의 모든 예약 정보를 안전하게 반환합니다."""
+        try:
+            user = getattr(obj, 'user', None)
+            if not user:
+                return []
+            
+            today = timezone.now().date()
+            today_appointments = Appointment.objects.filter(
+                user=user,
+                scheduled_at__date=today
+            ).select_related('exam').order_by('scheduled_at')
+            
+            return AppointmentSerializer(today_appointments, many=True).data
+        except Exception as e:
+            # 오류 발생 시 빈 리스트 반환 (API 안정성 보장)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"get_appointments 오류: {e}")
             return []
-        
-        today = timezone.now().date()
-        today_appointments = Appointment.objects.filter(
-            user=user,
-            scheduled_at__date=today
-        ).select_related('exam').order_by('scheduled_at')
-        
-        return AppointmentSerializer(today_appointments, many=True).data
     
     def get_currentQueues(self, obj):
-        """현재 사용자가 등록된 모든 대기열 정보를 반환합니다."""
-        user = getattr(obj, 'user', None)
-        if not user:
+        """현재 사용자가 등록된 모든 대기열 정보를 안전하게 반환합니다."""
+        try:
+            user = getattr(obj, 'user', None)
+            if not user:
+                return []
+            
+            active_queues = Queue.objects.filter(
+                user=user, 
+                state__in=['waiting', 'called', 'in_progress']
+            ).select_related('exam').order_by('created_at')
+            
+            return QueueSerializer(active_queues, many=True).data
+        except Exception as e:
+            # 오류 발생 시 빈 리스트 반환 (API 안정성 보장)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"get_currentQueues 오류: {e}")
             return []
-        
-        active_queues = Queue.objects.filter(
-            user=user, 
-            state__in=['waiting', 'called', 'in_progress']
-        ).select_related('exam').order_by('created_at')
-        
-        return QueueSerializer(active_queues, many=True).data
     
     def get_waitInfo(self, obj):
-        """현재 대기 정보를 요약해서 반환합니다."""
-        user = getattr(obj, 'user', None)
-        if not user:
+        """현재 대기 정보를 안전하게 요약해서 반환합니다."""
+        try:
+            user = getattr(obj, 'user', None)
+            if not user:
+                return None
+            
+            active_queue = Queue.objects.filter(
+                user=user,
+                state__in=['waiting', 'called']
+            ).select_related('exam').first()
+            
+            if not active_queue:
+                return None
+            
+            people_ahead = Queue.objects.filter(
+                exam=active_queue.exam,
+                state='waiting',
+                queue_number__lt=active_queue.queue_number
+            ).count()
+            
+            return {
+                'queueNumber': active_queue.queue_number,
+                'estimatedWaitTime': active_queue.estimated_wait_time,
+                'peopleAhead': people_ahead,
+                'examName': active_queue.exam.title if active_queue.exam else '검사',
+                'examLocation': self.get_exam_location(active_queue.exam)
+            }
+        except Exception as e:
+            # 오류 발생 시 None 반환 (대기 정보 없음으로 처리)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"get_waitInfo 오류: {e}")
             return None
-        
-        active_queue = Queue.objects.filter(
-            user=user,
-            state__in=['waiting', 'called']
-        ).select_related('exam').first()
-        
-        if not active_queue:
-            return None
-        
-        people_ahead = Queue.objects.filter(
-            exam=active_queue.exam,
-            state='waiting',
-            queue_number__lt=active_queue.queue_number
-        ).count()
-        
-        return {
-            'queueNumber': active_queue.queue_number,
-            'estimatedWaitTime': active_queue.estimated_wait_time,
-            'peopleAhead': people_ahead,
-            'examName': active_queue.exam.title if active_queue.exam else '검사',
-            'examLocation': self.get_exam_location(active_queue.exam)
-        }
     
     def get_exam_location(self, exam):
         """검사 위치 정보를 포맷팅합니다."""
