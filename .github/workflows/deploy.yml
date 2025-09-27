@@ -67,6 +67,17 @@ jobs:
           VENV_PYTHON="$BACKEND_DIR/venv/bin/python"
           VENV_PIP="$BACKEND_DIR/venv/bin/pip"
 
+          # (여기부터 추가) --- EC2 서버 디스크 공간 확보 ---
+          echo ">>> 0. EC2 서버의 디스크 공간 확보"
+          # Docker 관련 리소스 정리 (가장 많은 공간 차지)
+          docker system prune -af || true 
+          # 저널 로그 정리
+          sudo journalctl --vacuum-time=1d || true
+          # apt 캐시 정리
+          sudo apt-get clean || true
+          df -h
+          # (여기까지 추가)
+
           # --- 1. 코드 업데이트 및 백엔드 의존성 설치 ---
           echo ">>> 1. Git 리포지토리 강제 업데이트 및 백엔드 의존성 설치"
           cd $PROJECT_DIR
