@@ -12,4 +12,5 @@ urlpatterns = [
     path('bottlenecks/', views.identify_bottlenecks, name='bottlenecks'),
     path('custom-report/', views.custom_report, name='custom-report'),
     path('export/', views.export_data, name='export'),
+    path('predictions/', views.predictions, name='predictions'),  # LSTM 예측 API
 ]

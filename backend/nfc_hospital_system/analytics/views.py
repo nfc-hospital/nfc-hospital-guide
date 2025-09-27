@@ -4,6 +4,7 @@ from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status, permissions
+from integrations.services.prediction_service import PredictionService
 from django.db.models import Count, Avg, Max, Min, Q, Sum, F, ExpressionWrapper, fields
 from django.db.models.functions import TruncHour, TruncDate, ExtractHour, ExtractWeekDay, Extract
 from django.utils import timezone
@@ -1258,5 +1259,128 @@ def _export_pdf(data, headers, data_type, start_date, end_date):
         content_type='application/pdf'
     )
     response['Content-Disposition'] = f'attachment; filename="{data_type}_export_{timezone.now().strftime("%Y%m%d")}.pdf"'
-    
+
     return response
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def predictions(request):
+    """
+    LSTM 기반 대기 시간 및 혼잡도 예측 API
+    GET /api/v1/analytics/predictions/
+    """
+    # 권한 확인
+    if not request.user.role or request.user.role not in ['super', 'dept']:
+        return APIResponse.error(
+            message="부서 관리자 이상의 권한이 필요합니다.",
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+
+    try:
+        # 예측 시간 범위 (기본값: 30분 후)
+        timeframe = request.GET.get('timeframe', '30min')
+        department = request.GET.get('department')
+
+        # 예측 서비스 호출
+        prediction_data = PredictionService.get_predictions(timeframe=timeframe)
+
+        # 특정 부서만 필터링
+        if department and department in prediction_data:
+            prediction_data = {department: prediction_data[department]}
+
+        # 전체 혼잡도 계산
+        all_congestions = [
+            dept_data.get('congestion', 0)
+            for dept_data in prediction_data.values()
+            if isinstance(dept_data, dict) and 'congestion' in dept_data
+        ]
+        overall_congestion = sum(all_congestions) / len(all_congestions) if all_congestions else 0
+
+        # 응답 데이터 구성
+        response_data = {
+            'timestamp': timezone.now().isoformat(),
+            'timeframe': timeframe,
+            'overall': {
+                'avgCongestion': round(overall_congestion, 2),
+                'congestionLevel': _get_congestion_level(overall_congestion),
+                'totalDepartments': len(prediction_data)
+            },
+            'departments': prediction_data,
+            'recommendations': _generate_recommendations(prediction_data)
+        }
+
+        return APIResponse.success(
+            data=response_data,
+            message="대기시간 예측 데이터를 조회했습니다.",
+            status_code=status.HTTP_200_OK
+        )
+
+    except Exception as e:
+        logger.error(f"Prediction API error: {str(e)}", exc_info=True)
+        return APIResponse.error(
+            message="예측 데이터 조회 중 오류가 발생했습니다.",
+            code="PREDICTION_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+def _get_congestion_level(congestion_value):
+    """혼잡도 수치를 레벨로 변환"""
+    if congestion_value < 0.2:
+        return 'very_low'
+    elif congestion_value < 0.4:
+        return 'low'
+    elif congestion_value < 0.6:
+        return 'moderate'
+    elif congestion_value < 0.8:
+        return 'high'
+    else:
+        return 'very_high'
+
+
+def _generate_recommendations(prediction_data):
+    """예측 데이터 기반 추천 생성"""
+    recommendations = []
+
+    # 혼잡도가 높은 부서 찾기
+    congested_depts = [
+        dept for dept, data in prediction_data.items()
+        if isinstance(data, dict) and data.get('congestion', 0) > 0.7
+    ]
+
+    if congested_depts:
+        recommendations.append({
+            'type': 'congestion',
+            'message': f"{', '.join(congested_depts)} 부서가 혼잡할 것으로 예상됩니다.",
+            'action': '추가 인력 배치 또는 환자 분산을 고려하세요.'
+        })
+
+    # 대기시간이 긴 부서
+    long_wait_depts = [
+        dept for dept, data in prediction_data.items()
+        if isinstance(data, dict) and data.get('predicted_wait', 0) > 60
+    ]
+
+    if long_wait_depts:
+        recommendations.append({
+            'type': 'wait_time',
+            'message': f"{', '.join(long_wait_depts)} 부서의 예상 대기시간이 60분을 초과합니다.",
+            'action': '프로세스 개선 또는 예약 시간 조정을 검토하세요.'
+        })
+
+    # 상승 추세 부서
+    rising_depts = [
+        dept for dept, data in prediction_data.items()
+        if isinstance(data, dict) and data.get('trend') == 'up'
+    ]
+
+    if rising_depts:
+        recommendations.append({
+            'type': 'trend',
+            'message': f"{', '.join(rising_depts)} 부서의 대기시간이 증가 추세입니다.",
+            'action': '사전 대응 조치를 준비하세요.'
+        })
+
+    return recommendations

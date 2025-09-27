@@ -297,3 +297,8 @@ FCM_SETTINGS = {
     "ONE_DEVICE_PER_USER": False,
     "DELETE_INACTIVE_DEVICES": False,
 }
+
+# ML Model Settings
+import os
+ML_MODEL_DIR = os.path.join(BASE_DIR, 'ml_models')
+LSTM_MODEL_PATH = os.path.join(ML_MODEL_DIR, 'hospital_lstm.tflite')

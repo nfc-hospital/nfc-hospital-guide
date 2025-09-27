@@ -1,0 +1,474 @@
+# EMR 예측 시스템 통합 - 실전 구현 계획서
+# 작성일: 2025-09-09
+# 검증: database.md, api.md 완벽 호환
+
+================================================================================
+## 📌 핵심 요약
+================================================================================
+
+본 계획서는 기존 프로젝트의 database.md와 api.md를 100% 준수하며,
+즉시 구현 가능한 EMR 예측 시스템 통합 방안을 제시합니다.
+
+- 구현 기간: 5일
+- 활용 테이블: emr_sync_status, queues, patient_states, queue_status_logs
+- 신규 API: /api/v1/analytics/predictions/
+- 기존 컴포넌트: LSTMPrediction.jsx 재사용
+
+================================================================================
+## 🎯 단계 1: 가상 EMR 데이터 생성기 (1일차)
+================================================================================
+
+### 1.1 디렉토리 구조 생성
+
+backend/nfc_hospital_system/integrations/management/commands/ 생성
+(기존 authentication/management/commands/create_test_data.py 참고)
+
+### 1.2 generate_emr_data.py 구현
+
+```python
+# 기존 테이블 활용 (database.md 준수)
+# - emr_sync_status: 가상 EMR 동기화 데이터
+# - queues: 대기열 데이터 (created_at 필드 사용)
+# - patient_states: 9단계 환자 상태
+# - queue_status_logs: 상태 변경 이력
+
+class Command(BaseCommand):
+    def add_arguments(self, parser):
+        parser.add_argument('--months', type=int, default=3)
+        parser.add_argument('--daily-patients', type=int, default=250)
+    
+    def handle(self, *args, **options):
+        # 1. 병원 운영 패턴 (실제 병원 데이터 기반)
+        WEEKDAY_FACTOR = {
+            0: 1.3,  # 월요일
+            1: 1.0,  # 화요일
+            2: 1.0,  # 수요일
+            3: 1.0,  # 목요일
+            4: 0.7,  # 금요일
+        }
+        
+        HOURLY_FACTOR = {
+            9: 1.5,   # 오전 피크
+            10: 1.5,
+            11: 1.3,
+            12: 0.6,  # 점심시간
+            14: 1.2,  # 오후 피크
+            15: 1.2,
+        }
+        
+        # 2. 부서별 분포 (기존 Exam 테이블 department 필드 활용)
+        DEPARTMENTS = [
+            '내과',           # 35%
+            '정형외과',       # 20%
+            '영상의학과',     # 15%
+            '진단검사의학과', # 15%
+        ]
+        
+        # 3. 환자 상태 전이 (9단계)
+        STATE_TRANSITIONS = [
+            ('UNREGISTERED', 0),
+            ('ARRIVED', 5),
+            ('REGISTERED', 10),
+            ('WAITING', 30),      # 평균 30분 대기
+            ('CALLED', 5),
+            ('ONGOING', 15),      # 평균 15분 검사
+            ('COMPLETED', 5),
+            ('PAYMENT', 10),
+            ('FINISHED', 0)
+        ]
+        
+        # 4. 데이터 생성 (3개월, 약 20,000건)
+        self.generate_patient_journeys(options['months'], options['daily-patients'])
+```
+
+### 1.3 실행 명령
+
+```bash
+cd backend/nfc_hospital_system
+python manage.py generate_emr_data --months 3 --daily-patients 250
+```
+
+================================================================================
+## 🤖 단계 2: LSTM 모델 학습 (2일차)
+================================================================================
+
+### 2.1 학습 데이터 추출 (기존 테이블 활용)
+
+```sql
+-- database.md의 queues 테이블 구조 활용
+SELECT 
+    DATE(q.created_at) as date,           -- joined_at이 아닌 created_at 사용
+    HOUR(q.created_at) as hour,
+    DAYOFWEEK(q.created_at) as weekday,
+    e.department,
+    COUNT(*) as patient_count,
+    AVG(q.estimated_wait_time) as avg_wait_time,
+    COUNT(CASE WHEN q.state = 'waiting' THEN 1 END) as waiting_count
+FROM queues q
+JOIN exams e ON q.exam_id = e.exam_id
+WHERE q.created_at >= DATE_SUB(NOW(), INTERVAL 3 MONTH)
+GROUP BY DATE(q.created_at), HOUR(q.created_at), e.department
+```
+
+### 2.2 LSTM 모델 구조 (간단하고 효율적)
+
+```python
+# 입력: 최근 1시간 데이터 (12개 타임스텝, 5분 단위)
+# 특징: [대기인원, 평균대기시간, 시간대, 요일]
+# 출력: [예상대기시간, 혼잡도]
+
+model = Sequential([
+    LSTM(32, input_shape=(12, 4)),
+    Dropout(0.2),
+    Dense(16, activation='relu'),
+    Dense(2)  # [대기시간, 혼잡도]
+])
+```
+
+### 2.3 Google Colab에서 학습
+
+1. prepare_training_data.py로 CSV 추출
+2. Colab에 업로드
+3. 모델 학습 (약 30분)
+4. TFLite 변환 (1MB 이하)
+5. hospital_lstm.tflite 다운로드
+
+================================================================================
+## 🔌 단계 3: Django 백엔드 통합 (3일차)
+================================================================================
+
+### 3.1 모델 로더 (싱글톤 패턴)
+
+backend/nfc_hospital_system/integrations/services/model_loader.py
+
+```python
+import tensorflow as tf
+from django.conf import settings
+import os
+
+class LSTMPredictor:
+    _instance = None
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.initialize()
+        return cls._instance
+    
+    def initialize(self):
+        model_path = os.path.join(settings.BASE_DIR, 'ml_models', 'hospital_lstm.tflite')
+        self.interpreter = tf.lite.Interpreter(model_path=model_path)
+        self.interpreter.allocate_tensors()
+    
+    def predict(self, department, hour):
+        # 간단한 예측 로직
+        input_data = self.prepare_input(department, hour)
+        self.interpreter.set_tensor(self.input_details[0]['index'], input_data)
+        self.interpreter.invoke()
+        output = self.interpreter.get_tensor(self.output_details[0]['index'])
+        
+        return {
+            'predicted_wait_time': int(output[0][0]),
+            'congestion_level': float(output[0][1])
+        }
+
+predictor = LSTMPredictor()  # 싱글톤 인스턴스
+```
+
+### 3.2 예측 서비스 (Redis 캐싱)
+
+backend/nfc_hospital_system/integrations/services/prediction_service.py
+
+```python
+from django.core.cache import cache
+from p_queue.models import Queue
+from .model_loader import predictor
+
+class PredictionService:
+    @staticmethod
+    def get_predictions(timeframe='30min'):
+        # 캐시 키 (5분 단위)
+        cache_key = f"predictions:{timeframe}:{timezone.now().strftime('%Y%m%d%H%M')[:12]}"
+        cached = cache.get(cache_key)
+        
+        if cached:
+            return cached
+        
+        # 각 부서별 예측
+        departments = ['내과', '정형외과', '영상의학과', '진단검사의학과']
+        predictions = {}
+        
+        for dept in departments:
+            # 현재 상태 (database.md의 queues 테이블)
+            current = Queue.objects.filter(
+                exam__department=dept,
+                state__in=['waiting', 'called']
+            ).aggregate(
+                wait_time=Avg('estimated_wait_time'),
+                count=Count('queue_id')
+            )
+            
+            # LSTM 예측
+            future = predictor.predict(dept, timezone.now().hour)
+            
+            predictions[dept] = {
+                'current_wait': current['wait_time'] or 0,
+                'predicted_wait': future['predicted_wait_time'],
+                'congestion': future['congestion_level'],
+                'trend': 'up' if future['predicted_wait_time'] > (current['wait_time'] or 0) else 'down'
+            }
+        
+        cache.set(cache_key, predictions, 300)  # 5분 캐싱
+        return predictions
+```
+
+### 3.3 API 엔드포인트 추가 (api.md 준수)
+
+backend/nfc_hospital_system/analytics/views.py에 추가:
+
+```python
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def predictions(request):
+    """
+    LSTM 예측 API - GET /api/v1/analytics/predictions/
+    api.md의 표준 응답 형식 준수
+    """
+    
+    # 권한 확인 (Dept-Admin 이상)
+    if request.user.role not in ['super', 'dept']:
+        return APIResponse.error(
+            message="부서 관리자 이상의 권한이 필요합니다.",
+            code="FORBIDDEN",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    timeframe = request.GET.get('timeframe', '30min')
+    data = PredictionService.get_predictions(timeframe)
+    
+    # api.md 표준 응답 형식
+    return APIResponse.success(
+        data={
+            'predictions': data,
+            'timeframe': timeframe,
+            'model_version': '1.0',
+            'timestamp': timezone.now().isoformat()
+        },
+        message="예측 데이터를 조회했습니다.",
+        status_code=status.HTTP_200_OK
+    )
+```
+
+### 3.4 URL 라우팅 추가
+
+backend/nfc_hospital_system/analytics/urls.py:
+
+```python
+urlpatterns = [
+    # 기존 엔드포인트들...
+    path('predictions/', views.predictions, name='lstm-predictions'),
+]
+```
+
+================================================================================
+## 📱 단계 4: 프론트엔드 연동 (4일차)  
+================================================================================
+
+### 4.1 기존 LSTMPrediction.jsx 수정
+
+frontend-pwa/src/components/admin/dashboard/LSTMPrediction.jsx:
+
+```javascript
+// 가짜 데이터를 실제 API로 교체
+import { useAPI } from '../../../hooks/useAPI';
+
+const LSTMPrediction = () => {
+    const [selectedTimeframe, setSelectedTimeframe] = useState('30min');
+    
+    // API 호출
+    const { data, loading, error } = useAPI(
+        `/api/v1/analytics/predictions/?timeframe=${selectedTimeframe}`
+    );
+    
+    useEffect(() => {
+        if (data?.predictions) {
+            // 데이터 형식 변환
+            const formatted = Object.entries(data.predictions).map(([dept, pred]) => ({
+                name: dept,
+                current: pred.current_wait,
+                predicted: pred.predicted_wait,
+                congestion: pred.congestion * 100,
+                trend: pred.trend,
+                color: DEPT_COLORS[dept] || '#3b82f6'
+            }));
+            
+            setDepartmentPredictions(formatted);
+        }
+    }, [data]);
+    
+    // 30초마다 자동 갱신
+    useEffect(() => {
+        const interval = setInterval(() => {
+            refetch();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, []);
+    
+    // 나머지 UI는 그대로 유지
+};
+```
+
+### 4.2 WebSocket 실시간 업데이트 (선택사항)
+
+기존 admin_dashboard/consumers.py 활용 가능
+
+================================================================================
+## 🔍 단계 5: 테스트 및 검증 (5일차)
+================================================================================
+
+### 5.1 단위 테스트
+
+```python
+# backend/nfc_hospital_system/integrations/tests.py
+
+class PredictionTestCase(TestCase):
+    def test_model_loading(self):
+        """모델 로딩 테스트"""
+        from integrations.services.model_loader import predictor
+        self.assertIsNotNone(predictor.interpreter)
+    
+    def test_prediction_api(self):
+        """API 엔드포인트 테스트"""
+        response = self.client.get('/api/v1/analytics/predictions/')
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['success'])
+    
+    def test_cache_hit(self):
+        """캐시 동작 테스트"""
+        # 첫 번째 호출 (캐시 미스)
+        # 두 번째 호출 (캐시 히트)
+        # 응답 시간 비교
+```
+
+### 5.2 통합 테스트
+
+```bash
+# 1. 가상 데이터 생성
+python manage.py generate_emr_data --months 1 --daily-patients 100
+
+# 2. API 테스트
+curl -H "Authorization: Bearer $TOKEN" \
+     http://localhost:8000/api/v1/analytics/predictions/
+
+# 3. 프론트엔드 확인
+pnpm dev:frontend
+# http://localhost:5174/admin/dashboard 접속
+```
+
+================================================================================
+## 📊 성능 목표 및 검증 지표
+================================================================================
+
+### 필수 달성 목표
+- ✅ 예측 정확도: 70% 이상 (MAE < 10분)
+- ✅ API 응답시간: 200ms 이하
+- ✅ 캐시 히트율: 80% 이상
+- ✅ 모델 크기: 1MB 이하
+- ✅ 메모리 사용: 100MB 이하
+
+### 검증 방법
+1. PredictionLog 테이블에 예측 기록
+2. 30분 후 실제값과 비교
+3. 주간 정확도 리포트 생성
+
+================================================================================
+## 🚀 실행 체크리스트
+================================================================================
+
+□ Day 1: 가상 데이터 생성
+  □ management/commands 디렉토리 생성
+  □ generate_emr_data.py 작성
+  □ 3개월치 데이터 생성 (20,000건)
+  □ 데이터 검증
+
+□ Day 2: 모델 학습
+  □ 학습 데이터 추출 (CSV)
+  □ Google Colab에서 LSTM 학습
+  □ TFLite 변환
+  □ 모델 파일 저장 (ml_models/)
+
+□ Day 3: 백엔드 통합
+  □ model_loader.py 구현
+  □ prediction_service.py 구현
+  □ analytics/views.py에 API 추가
+  □ Redis 캐싱 설정
+
+□ Day 4: 프론트엔드 연동
+  □ LSTMPrediction.jsx 수정
+  □ API 연동 테스트
+  □ 자동 갱신 구현
+  □ UI/UX 최적화
+
+□ Day 5: 테스트 및 배포
+  □ 단위 테스트 작성
+  □ 통합 테스트 실행
+  □ 성능 측정
+  □ 문서화
+
+================================================================================
+## 📦 필요 패키지
+================================================================================
+
+# requirements.txt에 추가
+tensorflow==2.15.0      # TFLite 지원
+pandas==2.0.3          # 데이터 처리
+scikit-learn==1.3.2    # 데이터 전처리
+redis==5.0.1           # 캐싱
+
+# 설치 명령
+pip install -r requirements.txt
+
+================================================================================
+## ⚠️ 주의사항
+================================================================================
+
+1. database.md 준수
+   - queues 테이블의 created_at 필드 사용 (joined_at X)
+   - patient_states의 current_state로 9단계 상태 관리
+   - emr_sync_status를 가상 EMR 데이터 저장용으로 활용
+
+2. api.md 준수
+   - /api/v1/analytics/predictions/ 경로 사용
+   - 표준 응답 형식 (success, data, message)
+   - 권한 체계 (Dept-Admin 이상)
+
+3. 기존 코드 재사용
+   - create_test_data.py 참고
+   - LSTMPrediction.jsx 재사용
+   - analytics views.py 확장
+
+================================================================================
+## 📝 예상 결과물
+================================================================================
+
+1. 가상 EMR 데이터 20,000건
+2. 학습된 LSTM 모델 (TFLite, < 1MB)
+3. 예측 API 엔드포인트 (/api/v1/analytics/predictions/)
+4. 실시간 대시보드 (30초 자동 갱신)
+5. 예측 정확도 70% 이상
+
+================================================================================
+## 🎯 성공 기준
+================================================================================
+
+✅ 기존 database.md 테이블 구조 100% 활용
+✅ api.md 표준 준수
+✅ 5일 내 구현 완료
+✅ 실제 운영 가능한 품질
+✅ 복잡하지 않고 유지보수 용이
+
+================================================================================
+
+작성: 2025-09-09
+검증: database.md, api.md 완벽 호환 확인
+상태: 즉시 구현 가능

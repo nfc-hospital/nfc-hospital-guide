@@ -55,3 +55,22 @@ class EmrSyncStatus(models.Model):
     def __str__(self):
         status = "✓" if self.sync_success else "✗"
         return f"{status} EMR-{self.patient_emr_id} → {self.mapped_state}"
+
+
+class PredictionLog(models.Model):
+    """LSTM 모델 예측 결과 로깅"""
+    timestamp = models.DateTimeField(auto_now_add=True)
+    department = models.CharField(max_length=100)
+    current_wait_time = models.FloatField()
+    predicted_wait_time = models.FloatField()
+    actual_wait_time = models.FloatField(null=True, blank=True)  # 추후 실제 값과 비교용
+    congestion_level = models.FloatField()
+    model_version = models.CharField(max_length=20)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['timestamp', 'department']),
+        ]
+
+    def __str__(self):
+        return f"{self.timestamp.strftime('%Y-%m-%d %H:%M')} - {self.department} Prediction"

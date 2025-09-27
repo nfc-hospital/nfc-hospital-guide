@@ -1,19 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
-import { TrendingUp, TrendingDown, Clock, AlertCircle, Users, Activity, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, BarChart, Bar, Legend } from 'recharts';
+import { TrendingUp, TrendingDown, Clock, AlertCircle, Users, Activity, ChevronRight, RefreshCw, Loader } from 'lucide-react';
+import { useAPI } from '../../../hooks/useAPI';
 
 const LSTMPrediction = () => {
   const [departmentPredictions, setDepartmentPredictions] = useState({});
   const [selectedTimeframe, setSelectedTimeframe] = useState('30min');
+  const [chartData, setChartData] = useState([]);
 
-  const departments = [
-    { id: 'radiology', name: '영상의학과', baseline: 25, peak: 45, color: '#10b981' },
-    { id: 'lab', name: '진단검사의학과', baseline: 15, peak: 30, color: '#eab308' },
-    { id: 'cardiology', name: '순환기내과', baseline: 20, peak: 35, color: '#ef4444' },
-    { id: 'gastro', name: '소화기내과', baseline: 22, peak: 38, color: '#a855f7' },
-    { id: 'internal', name: '내과', baseline: 30, peak: 50, color: '#3b82f6' },
-    { id: 'orthopedics', name: '정형외과', baseline: 28, peak: 42, color: '#f97316' }
-  ];
+  // API 호출
+  const { data, loading, error, refetch } = useAPI('/api/v1/analytics/predictions/');
+  const lastUpdateTime = useRef(new Date());
+
+  // 부서별 색상 매핑
+  const DEPT_COLORS = {
+    '영상의학과': '#10b981',
+    '진단검사의학과': '#eab308',
+    '순환기내과': '#ef4444',
+    '소화기내과': '#a855f7',
+    '내과': '#3b82f6',
+    '정형외과': '#f97316',
+    'CT실': '#8b5cf6',
+    'MRI실': '#ec4899',
+    'X-ray실': '#06b6d4',
+    '채혈실': '#84cc16'
+  };
 
   const timeframes = [
     { id: '30min', label: '30분 후', minutes: 30 },
@@ -21,50 +32,73 @@ const LSTMPrediction = () => {
     { id: '2hour', label: '2시간 후', minutes: 120 }
   ];
 
+  // API 데이터 처리
   useEffect(() => {
-    const generatePredictions = () => {
-      const currentTime = new Date('2025-08-25T14:00:00');
+    if (data?.departments) {
       const predictions = {};
-      
-      departments.forEach(dept => {
+      const barChartData = [];
+
+      Object.entries(data.departments).forEach(([deptName, deptData]) => {
+        if (deptData.error) return;
+
+        // 실제 API 데이터를 시뮬레이션 데이터 형식으로 변환
+        const currentWait = deptData.current_wait || 0;
+        const predictedWait = deptData.predicted_wait || 0;
+        const congestionLevel = deptData.congestion || 0;
+        const trend = deptData.trend || 'stable';
+
+        // 시간별 예측 데이터 생성 (실제 API가 시계열 데이터를 제공하지 않으므로 시뮬레이션)
         const timeData = [];
-        
-        // 현재부터 2시간까지 10분 간격으로 예측
+        const currentTime = new Date();
+
         for (let minutes = 0; minutes <= 120; minutes += 10) {
           const futureTime = new Date(currentTime.getTime() + minutes * 60000);
-          const hour = futureTime.getHours();
-          const timeStr = futureTime.toLocaleTimeString('ko-KR', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+          const timeStr = futureTime.toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit'
           });
-          
-          // 부서별 패턴
-          const peakFactor = Math.sin((hour - 9) * Math.PI / 8);
-          const randomVariation = Math.random() * 5 - 2.5;
-          
-          const waitTime = Math.round(
-            dept.baseline + (dept.peak - dept.baseline) * peakFactor * 0.7 + randomVariation
-          );
-          
-          const congestion = Math.min(100, Math.round((waitTime / dept.peak) * 100));
-          
+
+          // 선형 보간을 사용한 예측값 생성
+          let waitTime;
+          if (minutes === 0) {
+            waitTime = currentWait;
+          } else if (minutes <= 30) {
+            waitTime = currentWait + (predictedWait - currentWait) * (minutes / 30);
+          } else {
+            // 30분 이후는 추세를 반영한 예측
+            const trendFactor = trend === 'up' ? 1.1 : trend === 'down' ? 0.9 : 1.0;
+            waitTime = predictedWait * Math.pow(trendFactor, (minutes - 30) / 30);
+          }
+
+          const congestion = Math.min(100, Math.round(congestionLevel * 100 + (minutes * 0.1)));
+
           timeData.push({
             time: timeStr,
             minutes: minutes,
-            waitTime: Math.max(5, waitTime),
+            waitTime: Math.max(5, Math.round(waitTime)),
             congestion: congestion,
-            confidence: 95 - minutes * 0.15, // 신뢰도는 시간이 지날수록 감소
+            confidence: 95 - minutes * 0.15,
             status: congestion > 80 ? 'critical' : congestion > 60 ? 'warning' : 'normal'
           });
         }
-        
-        predictions[dept.id] = {
-          name: dept.name,
-          color: dept.color,
+
+        // 바 차트용 데이터 추가
+        barChartData.push({
+          name: deptName,
+          '현재 대기시간': currentWait,
+          'AI 예측 대기시간': predictedWait,
+          fill: DEPT_COLORS[deptName] || '#3b82f6'
+        });
+
+        predictions[deptName] = {
+          name: deptName,
+          color: DEPT_COLORS[deptName] || '#3b82f6',
           data: timeData,
-          current: timeData[0].waitTime,
+          current: currentWait,
+          predicted: predictedWait,
           peak: Math.max(...timeData.map(t => t.waitTime)),
-          trend: timeData[6].waitTime > timeData[0].waitTime ? 'up' : 'down',
+          trend: trend,
+          congestion: congestionLevel,
           predictions: {
             '30min': timeData[3],
             '1hour': timeData[6],
@@ -74,12 +108,18 @@ const LSTMPrediction = () => {
       });
 
       setDepartmentPredictions(predictions);
-    };
+      setChartData(barChartData);
+      lastUpdateTime.current = new Date();
+    }
+  }, [data]);
 
-    generatePredictions();
-    const interval = setInterval(generatePredictions, 30000); // 30초마다 업데이트
+  // 30초마다 자동 갱신
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetch();
+    }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refetch]);
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -97,6 +137,38 @@ const LSTMPrediction = () => {
     }
   };
 
+  // 로딩 상태
+  if (loading && Object.keys(departmentPredictions).length === 0) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="flex items-center justify-center h-64">
+          <Loader className="w-8 h-8 text-blue-600 animate-spin" />
+          <span className="ml-3 text-gray-600">AI 예측 데이터 로딩 중...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 에러 상태
+  if (error) {
+    return (
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="text-center">
+            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+            <p className="text-gray-700">예측 데이터를 불러오는 중 오류가 발생했습니다.</p>
+            <button
+              onClick={refetch}
+              className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              다시 시도
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6">
       {/* 헤더 */}
@@ -106,37 +178,66 @@ const LSTMPrediction = () => {
             <Activity className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">LSTM 혼잡도 예측</h2>
-            <p className="text-sm text-gray-500">부서별 대기시간 예측 분석</p>
+            <h2 className="text-xl font-bold text-gray-900">AI 대기시간 예측 (LSTM)</h2>
+            <p className="text-sm text-gray-500">
+              마지막 업데이트: {lastUpdateTime.current.toLocaleTimeString('ko-KR')}
+            </p>
           </div>
         </div>
-        
-        {/* 시간 선택 */}
-        <div className="flex gap-2">
-          {timeframes.map(tf => (
-            <button
-              key={tf.id}
-              onClick={() => setSelectedTimeframe(tf.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                selectedTimeframe === tf.id
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {tf.label}
-            </button>
-          ))}
+
+        {/* 시간 선택 & 새로고침 */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={refetch}
+            className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+            disabled={loading}
+          >
+            <RefreshCw className={`w-5 h-5 text-gray-600 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <div className="flex gap-2">
+            {timeframes.map(tf => (
+              <button
+                key={tf.id}
+                onClick={() => setSelectedTimeframe(tf.id)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  selectedTimeframe === tf.id
+                    ? 'bg-blue-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {tf.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* 바 차트 추가 */}
+      {chartData.length > 0 && (
+        <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">현재 vs AI 예측 대기시간</h3>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} />
+              <YAxis label={{ value: '분', angle: -90, position: 'insideLeft' }} />
+              <Tooltip />
+              <Legend />
+              <Bar dataKey="현재 대기시간" fill="#8884d8" />
+              <Bar dataKey="AI 예측 대기시간" fill="#82ca9d" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       {/* 부서별 예측 카드 그리드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Object.values(departmentPredictions).map(dept => {
           const prediction = dept.predictions?.[selectedTimeframe];
           if (!prediction) return null;
-          
+
           return (
-            <div 
+            <div
               key={dept.name}
               className={`border-2 rounded-xl p-4 transition-all hover:shadow-lg ${
                 getStatusColor(prediction.status)
@@ -171,17 +272,17 @@ const LSTMPrediction = () => {
                     {prediction.waitTime}분
                   </span>
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">현재 대기시간</span>
-                  <span className="text-sm font-medium text-gray-900">{dept.current}분</span>
+                  <span className="text-sm font-medium text-gray-900">{dept.current || 0}분</span>
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">혼잡도</span>
                   <div className="flex items-center gap-2 flex-1 ml-4">
                     <div className="flex-1 bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className={`h-2 rounded-full transition-all duration-500 ${
                           prediction.congestion > 80 ? 'bg-red-500' :
                           prediction.congestion > 60 ? 'bg-yellow-500' :
@@ -193,7 +294,7 @@ const LSTMPrediction = () => {
                     <span className="text-sm font-medium text-gray-900">{prediction.congestion}%</span>
                   </div>
                 </div>
-                
+
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">예측 신뢰도</span>
                   <span className="text-sm font-medium text-blue-600">{prediction.confidence.toFixed(1)}%</span>
@@ -210,9 +311,9 @@ const LSTMPrediction = () => {
                         <stop offset="95%" stopColor={dept.color} stopOpacity={0}/>
                       </linearGradient>
                     </defs>
-                    <Area 
-                      type="monotone" 
-                      dataKey="waitTime" 
+                    <Area
+                      type="monotone"
+                      dataKey="waitTime"
                       stroke={dept.color}
                       strokeWidth={2}
                       fill={`url(#gradient-${dept.name})`}
@@ -236,9 +337,9 @@ const LSTMPrediction = () => {
         <div className="flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-gray-900">예측 요약</p>
+            <p className="text-sm font-semibold text-gray-900">AI 예측 요약</p>
             <p className="text-xs text-gray-600 mt-1">
-              {selectedTimeframe === '30min' ? '30분' : selectedTimeframe === '1hour' ? '1시간' : '2시간'} 후 
+              LSTM 모델 예측: {selectedTimeframe === '30min' ? '30분' : selectedTimeframe === '1hour' ? '1시간' : '2시간'} 후
               {' '}가장 혼잡할 것으로 예상되는 부서는{' '}
               <span className="font-bold text-blue-600">
                 {Object.values(departmentPredictions).reduce((max, dept) => {
