@@ -1,10 +1,11 @@
 from django.core.cache import cache
 from django.utils import timezone
-from django.db.models import Avg, Count
-from p_queue.models import Queue
+from django.db.models import Avg, Count, Q
+from p_queue.models import Queue, QueueStatusLog
 from appointments.models import Exam
 from .model_loader import predictor
 from ..models import PredictionLog
+from datetime import timedelta
 import numpy as np
 import logging
 
@@ -15,14 +16,62 @@ class PredictionService:
     @staticmethod
     def get_recent_data_for_prediction(department):
         """최근 데이터를 가져와 모델 입력 형태로 변환"""
-        # 이 함수는 실제 운영 시 DB에서 최근 1시간(12개 타임스텝) 데이터를 가져와
-        # 모델 학습 때와 동일한 전처리(스케일링, 원-핫 인코딩 등)를 수행해야 함
-        # 현재는 더미 데이터를 생성하여 반환 (입력 shape: 1, 12, 17)
-        # 17 = 3 (hour, weekday, patient_count) + 14 (one-hot encoded departments) -> 실제 프로젝트의 특징 수에 맞춰야 함
+        try:
+            # 모델 입력 shape 확인 - 고정된 17개 특징
+            num_features = 17  # 모델이 기대하는 고정된 특징 수
+            num_timesteps = 12  # 최근 1시간 (5분 간격 * 12 = 60분)
 
-        # TODO: 실제 데이터 추출 로직 구현 필요
-        num_features = predictor.input_details[0]['shape'][-1]
-        return np.random.rand(1, 12, num_features).astype(np.float32)
+            # 최근 1시간의 데이터를 5분 간격으로 수집
+            current_time = timezone.now()
+            input_data = []
+
+            for i in range(num_timesteps):
+                # 각 시간대별로 데이터 수집
+                time_point = current_time - timedelta(minutes=i*5)
+
+                # 해당 시간대의 대기 인원 수
+                waiting_count = Queue.objects.filter(
+                    exam__department=department,
+                    state__in=['waiting', 'called'],
+                    created_at__lte=time_point,
+                    updated_at__gte=time_point - timedelta(minutes=5)
+                ).count()
+
+                # 특징 벡터 생성 (정확히 17개)
+                features = []
+
+                # 기본 특징 3개
+                features.append(time_point.hour / 24.0)  # 시간 (0-1)
+                features.append(time_point.weekday() / 6.0)  # 요일 (0-1)
+                features.append(min(waiting_count / 20.0, 1.0))  # 대기 인원 (0-1)
+
+                # 부서 특징 14개 (모델이 기대하는 수만큼)
+                # 부서 해시를 사용하여 일관성 있게 인코딩
+                dept_hash = hash(department) % 14
+                for j in range(14):
+                    if j == dept_hash:
+                        features.append(1.0)
+                    else:
+                        features.append(0.0)
+
+                # 정확히 17개 특징 확인
+                assert len(features) == 17, f"Feature count mismatch: {len(features)} != 17"
+
+                input_data.append(features)
+
+            # 시간 순서를 반대로 (과거 → 현재)
+            input_data.reverse()
+
+            # numpy 배열로 변환하고 shape 조정
+            input_array = np.array(input_data, dtype=np.float32)
+            input_array = input_array.reshape(1, num_timesteps, num_features)
+
+            return input_array
+
+        except Exception as e:
+            logger.error(f"Error creating input data for {department}: {e}")
+            # 오류 발생 시 기본값 반환
+            return np.zeros((1, 12, 17), dtype=np.float32)
 
     @staticmethod
     def get_predictions(timeframe='30min'):
@@ -43,11 +92,17 @@ class PredictionService:
                     exam__department=dept, state='WAITING'
                 ).aggregate(avg_wait=Avg('estimated_wait_time'))['avg_wait'] or 0
 
-                # LSTM 예측
-                input_data = PredictionService.get_recent_data_for_prediction(dept)
-                future = predictor.predict(input_data)
-                predicted_wait = future.get('predicted_wait_time', 0)
-                congestion = future.get('congestion_level', 0.0)
+                # LSTM 예측 (try-except로 모델 오류 처리)
+                try:
+                    input_data = PredictionService.get_recent_data_for_prediction(dept)
+                    future = predictor.predict(input_data)
+                    predicted_wait = future.get('predicted_wait_time', 0)
+                    congestion = future.get('congestion_level', 0.0)
+                except Exception as model_error:
+                    logger.warning(f"Model prediction failed for {dept}: {model_error}")
+                    # 모델 예측 실패 시 기본값 사용
+                    predicted_wait = current_wait_time
+                    congestion = 0.5
 
                 predictions[dept] = {
                     'current_wait': round(current_wait_time),

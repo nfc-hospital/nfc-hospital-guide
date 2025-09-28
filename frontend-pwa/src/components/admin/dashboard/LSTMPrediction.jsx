@@ -10,7 +10,7 @@ const LSTMPrediction = () => {
   const [chartData, setChartData] = useState([]);
 
   // API 호출 - 올바른 사용법: 함수를 전달
-  const { data, loading, error, refetch } = useAPI(apiService.analytics.getPredictions);
+  const { data, loading, error, execute } = useAPI(apiService.analytics.getPredictions);
   const lastUpdateTime = useRef(new Date());
 
   // 부서별 색상 매핑
@@ -35,18 +35,29 @@ const LSTMPrediction = () => {
 
   // API 데이터 처리
   useEffect(() => {
-    if (data?.departments) {
+    console.log('🔍 LSTMPrediction - 전체 API 응답:', data);
+    console.log('🔍 실제 departments 데이터:', data?.data?.departments);
+
+    // APIResponse 래퍼를 고려한 데이터 접근
+    if (data?.data?.departments) {
+      console.log('📊 부서별 예측 데이터 처리 시작');
       const predictions = {};
       const barChartData = [];
 
-      Object.entries(data.departments).forEach(([deptName, deptData]) => {
-        if (deptData.error) return;
+      Object.entries(data.data.departments).forEach(([deptName, deptData]) => {
+        console.log(`📌 ${deptName} 데이터:`, deptData);
+        if (deptData.error) {
+          console.error(`❌ ${deptName} 오류:`, deptData.error);
+          return;
+        }
 
         // 실제 API 데이터를 시뮬레이션 데이터 형식으로 변환
         const currentWait = deptData.current_wait || 0;
         const predictedWait = deptData.predicted_wait || 0;
         const congestionLevel = deptData.congestion || 0;
         const trend = deptData.trend || 'stable';
+
+        console.log(`✅ ${deptName} - 현재: ${currentWait}분, 예측: ${predictedWait}분, 혼잡도: ${congestionLevel}`);
 
         // 시간별 예측 데이터 생성 (실제 API가 시계열 데이터를 제공하지 않으므로 시뮬레이션)
         const timeData = [];
@@ -101,26 +112,30 @@ const LSTMPrediction = () => {
           trend: trend,
           congestion: congestionLevel,
           predictions: {
-            '30min': timeData[3],
-            '1hour': timeData[6],
-            '2hour': timeData[12]
+            '30min': timeData[3] || timeData[0],  // 인덱스 보호
+            '1hour': timeData[6] || timeData[0],   // 인덱스 보호
+            '2hour': timeData[12] || timeData[0]   // 인덱스 보호
           }
         };
+        console.log(`📊 ${deptName} predictions 객체 생성 완료:`, predictions[deptName].predictions);
       });
 
       setDepartmentPredictions(predictions);
       setChartData(barChartData);
       lastUpdateTime.current = new Date();
+      console.log('✅ 최종 departmentPredictions 설정:', predictions);
+    } else {
+      console.log('⚠️ API 데이터 없음 - 실제 데이터를 기다리는 중...');
     }
   }, [data]);
 
   // 30초마다 자동 갱신
   useEffect(() => {
     const interval = setInterval(() => {
-      refetch();
+      execute();
     }, 30000);
     return () => clearInterval(interval);
-  }, [refetch]);
+  }, [execute]);
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -159,7 +174,7 @@ const LSTMPrediction = () => {
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
             <p className="text-gray-700">예측 데이터를 불러오는 중 오류가 발생했습니다.</p>
             <button
-              onClick={refetch}
+              onClick={execute}
               className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               다시 시도
@@ -189,7 +204,7 @@ const LSTMPrediction = () => {
         {/* 시간 선택 & 새로고침 */}
         <div className="flex items-center gap-3">
           <button
-            onClick={refetch}
+            onClick={execute}
             className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
             disabled={loading}
           >
@@ -232,10 +247,26 @@ const LSTMPrediction = () => {
       )}
 
       {/* 부서별 예측 카드 그리드 */}
+      {Object.keys(departmentPredictions).length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-xl">
+          <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-600">AI 예측 데이터를 불러오는 중입니다...</p>
+          <p className="text-sm text-gray-500 mt-1">백엔드 서버가 실행 중인지 확인해주세요.</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {console.log('🎯 렌더링할 부서 예측 데이터:', departmentPredictions)}
+        {console.log('🎯 선택된 시간대:', selectedTimeframe)}
         {Object.values(departmentPredictions).map(dept => {
+          console.log(`📍 ${dept.name} 렌더링 시도, predictions:`, dept.predictions);
           const prediction = dept.predictions?.[selectedTimeframe];
-          if (!prediction) return null;
+          console.log(`📍 ${dept.name}의 ${selectedTimeframe} 예측:`, prediction);
+
+          // prediction이 없으면 건너뛰기 대신 경고 메시지 출력
+          if (!prediction) {
+            console.warn(`⚠️ ${dept.name}의 ${selectedTimeframe} 예측 데이터가 없습니다`);
+            return null;
+          }
 
           return (
             <div
@@ -332,6 +363,7 @@ const LSTMPrediction = () => {
           );
         })}
       </div>
+      )}
 
       {/* 하단 요약 */}
       <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl">
@@ -347,9 +379,9 @@ const LSTMPrediction = () => {
                   const prediction = dept.predictions?.[selectedTimeframe];
                   const maxPrediction = max?.predictions?.[selectedTimeframe];
                   return !maxPrediction || (prediction?.waitTime > maxPrediction?.waitTime) ? dept : max;
-                }, {})?.name || '내과'}
+                }, {})?.name || '데이터 로딩 중'}
               </span>
-              입니다.
+              {Object.keys(departmentPredictions).length > 0 ? '입니다.' : '...'}
             </p>
           </div>
         </div>
