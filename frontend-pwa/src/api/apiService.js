@@ -356,6 +356,8 @@ const apiService = {
     getBottlenecks: () => api.get('/analytics/bottlenecks'),
     createCustomReport: (data) => api.post('/analytics/custom-report', data),
     exportData: (params) => api.get('/analytics/export', { params }),
+    // LSTM 예측 API
+    getPredictions: () => api.get('/analytics/predictions/'),
   },
 
   // 관리자 대시보드 API

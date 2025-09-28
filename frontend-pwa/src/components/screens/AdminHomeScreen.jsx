@@ -108,7 +108,7 @@ const AdminHomeScreen = () => {
       
       const response = await axios({
         method: 'GET',
-        url: '/api/v1/appointments/exams/',
+        url: '/api/v1/dashboard/content/exams',
         headers: {
           'Authorization': token ? `Bearer ${token}` : undefined,
           'Content-Type': 'application/json'
@@ -1935,7 +1935,7 @@ const AnalyticsContent = ({
       
       const response = await axios({
         method: 'GET',
-        url: '/api/v1/appointments/exams/',
+        url: '/api/v1/dashboard/content/exams',
         headers: {
           'Authorization': token ? `Bearer ${token}` : undefined,
           'Content-Type': 'application/json'

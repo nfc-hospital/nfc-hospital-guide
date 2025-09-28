@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, BarChart, Bar, Legend } from 'recharts';
 import { TrendingUp, TrendingDown, Clock, AlertCircle, Users, Activity, ChevronRight, RefreshCw, Loader } from 'lucide-react';
 import { useAPI } from '../../../hooks/useAPI';
+import apiService from '../../../api/apiService';
 
 const LSTMPrediction = () => {
   const [departmentPredictions, setDepartmentPredictions] = useState({});
   const [selectedTimeframe, setSelectedTimeframe] = useState('30min');
   const [chartData, setChartData] = useState([]);
 
-  // API 호출
-  const { data, loading, error, refetch } = useAPI('/api/v1/analytics/predictions/');
+  // API 호출 - 올바른 사용법: 함수를 전달
+  const { data, loading, error, refetch } = useAPI(apiService.analytics.getPredictions);
   const lastUpdateTime = useRef(new Date());
 
   // 부서별 색상 매핑
