@@ -14,10 +14,10 @@ logger = logging.getLogger(__name__)
 
 class PredictionService:
     # 학습 시와 동일한 부서 리스트 (순서 중요!)
+    # EMRBots 데이터로 학습된 6개 부서만 포함
     DEPARTMENT_LIST = [
-        '내과', '외과', '정형외과', '신경과', '산부인과',
-        '소아청소년과', '이비인후과', '안과', '피부과', '비뇨의학과',
-        'X-ray실', 'CT실', 'MRI실', '초음파실'
+        '내과', '정형외과', '진단검사의학과',
+        'X-ray실', 'CT실', 'MRI실'
     ]
 
     @staticmethod
@@ -53,9 +53,9 @@ class PredictionService:
                 features.append(time_point.weekday() / 6.0)  # 요일 (0-1)
                 features.append(min(waiting_count / 20.0, 1.0))  # 대기 인원 (0-1)
 
-                # 부서 특징 12개 (학습 시와 동일한 원핫 인코딩, 처음 12개 부서만 사용)
-                # 학습에 사용된 12개 부서만 처리
-                train_departments = PredictionService.DEPARTMENT_LIST[:12]  # 처음 12개만
+                # 부서 특징 12개 (학습 시와 동일한 원핫 인코딩)
+                # EMRBots 학습에 사용된 6개 부서 + 패딩
+                train_departments = PredictionService.DEPARTMENT_LIST  # 6개 부서
 
                 if department in train_departments:
                     dept_idx = train_departments.index(department)

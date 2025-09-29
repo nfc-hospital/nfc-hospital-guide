@@ -1,0 +1,75 @@
+{
+  "database_validation": {
+    "data_overview": {
+      "total_queues": 5921,
+      "total_appointments": 5921,
+      "total_logs": 6090,
+      "date_range": "2025-08-30 to 2025-09-29"
+    },
+    "consistency_checks": {
+      "wait_time_stats": {
+        "avg_wait": 17.4838,
+        "min_wait": 5.0,
+        "max_wait": 106.0,
+        "std_wait": 11.434563014076637
+      }
+    },
+    "realistic_patterns": {
+      "hourly_distribution": {
+        "14": 273,
+        "15": 273,
+        "16": 299,
+        "17": 224,
+        "18": 192,
+        "19": 233,
+        "20": 272,
+        "21": 317,
+        "22": 210,
+        "23": 265,
+        "0": 249,
+        "1": 158,
+        "2": 210,
+        "3": 183,
+        "4": 239,
+        "5": 257,
+        "6": 246,
+        "7": 191,
+        "8": 359,
+        "9": 359,
+        "10": 252,
+        "11": 240,
+        "12": 220,
+        "13": 205
+      },
+      "department_distribution": {
+        "\ub0b4\uacfc": 1227,
+        "\uc9c4\ub2e8\uac80\uc0ac\uc758\ud559\uacfc": 2869,
+        "X-ray\uc2e4": 483,
+        "CT\uc2e4": 388,
+        "\uc815\ud615\uc678\uacfc": 727,
+        "MRI\uc2e4": 232
+      }
+    },
+    "state_integrity": {
+      "state_distribution": {
+        "called": 1235,
+        "completed": 868,
+        "in_progress": 1368,
+        "waiting": 2455
+      }
+    },
+    "warnings": [
+      "High night-time activity: 1493 queues between 0-5 AM"
+    ],
+    "errors": []
+  },
+  "metadata": {
+    "generated_at": "2025-09-29 14:16:58.440068+00:00",
+    "version": "1.0"
+  },
+  "summary": {
+    "total_warnings": 1,
+    "total_errors": 0,
+    "quality_score": 98
+  }
+}

@@ -12,13 +12,13 @@ print("🚀 GUARANTEED TFLite Conversion Script for Hospital Data")
 print("=" * 60)
 
 # 1. 데이터 로드
-print("\n[1/5] Loading 'lstm_training_data.csv'...")
+print("\n[1/5] Loading 'emrbots_training_data.csv'...")
 try:
-    # 우리가 생성한 실제 시계열 데이터 파일을 로드합니다.
-    df = pd.read_csv('lstm_training_data.csv')
+    # EMRBots 패턴 기반 실제 시계열 데이터 파일을 로드합니다.
+    df = pd.read_csv('emrbots_training_data.csv')
     print(f"✓ Data loaded: {df.shape}")
 except FileNotFoundError:
-    print("❌ ERROR: 'lstm_training_data.csv' file not found.")
+    print("❌ ERROR: 'emrbots_training_data.csv' file not found.")
     print("Please upload your CSV file to Colab first.")
     # 파일이 없으면 여기서 스크립트를 멈춥니다.
     exit()

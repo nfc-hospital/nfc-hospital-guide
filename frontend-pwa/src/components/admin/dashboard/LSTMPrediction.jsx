@@ -13,18 +13,14 @@ const LSTMPrediction = () => {
   const { data, loading, error, execute } = useAPI(apiService.analytics.getPredictions);
   const lastUpdateTime = useRef(new Date());
 
-  // 부서별 색상 매핑
+  // 부서별 색상 매핑 (EMRBots 학습 데이터의 6개 부서만)
   const DEPT_COLORS = {
-    '영상의학과': '#10b981',
-    '진단검사의학과': '#eab308',
-    '순환기내과': '#ef4444',
-    '소화기내과': '#a855f7',
     '내과': '#3b82f6',
     '정형외과': '#f97316',
+    '진단검사의학과': '#eab308',
     'CT실': '#8b5cf6',
     'MRI실': '#ec4899',
-    'X-ray실': '#06b6d4',
-    '채혈실': '#84cc16'
+    'X-ray실': '#06b6d4'
   };
 
   const timeframes = [
@@ -45,6 +41,12 @@ const LSTMPrediction = () => {
       const barChartData = [];
 
       Object.entries(data.data.departments).forEach(([deptName, deptData]) => {
+        // 학습된 6개 부서만 처리
+        if (!DEPT_COLORS[deptName]) {
+          console.log(`⏩ ${deptName}은(는) 학습되지 않은 부서입니다. 건너뜁니다.`);
+          return;
+        }
+
         console.log(`📌 ${deptName} 데이터:`, deptData);
         if (deptData.error) {
           console.error(`❌ ${deptName} 오류:`, deptData.error);
@@ -196,7 +198,7 @@ const LSTMPrediction = () => {
           <div>
             <h2 className="text-xl font-bold text-gray-900">AI 대기시간 예측 (LSTM)</h2>
             <p className="text-sm text-gray-500">
-              마지막 업데이트: {lastUpdateTime.current.toLocaleTimeString('ko-KR')}
+              학습 부서: {Object.keys(DEPT_COLORS).length}개 | 마지막 업데이트: {lastUpdateTime.current.toLocaleTimeString('ko-KR')}
             </p>
           </div>
         </div>
@@ -250,8 +252,10 @@ const LSTMPrediction = () => {
       {Object.keys(departmentPredictions).length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-xl">
           <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <p className="text-gray-600">AI 예측 데이터를 불러오는 중입니다...</p>
-          <p className="text-sm text-gray-500 mt-1">백엔드 서버가 실행 중인지 확인해주세요.</p>
+          <p className="text-gray-600">학습된 부서의 예측 데이터를 불러오는 중입니다...</p>
+          <p className="text-sm text-gray-500 mt-1">
+            현재 6개 부서만 학습되어 있습니다: 내과, 정형외과, 진단검사의학과, CT실, MRI실, X-ray실
+          </p>
         </div>
       ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
