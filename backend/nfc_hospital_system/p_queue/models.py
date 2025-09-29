@@ -85,12 +85,12 @@ class Queue(models.Model):
     )
 
     created_at = models.DateTimeField(
-        auto_now_add=True,
+        default=timezone.now,
         verbose_name='대기열 등록 시간'
     )
 
     updated_at = models.DateTimeField(
-        auto_now=True,
+        default=timezone.now,
         verbose_name='대기열 상태 변경 시간'
     )
 

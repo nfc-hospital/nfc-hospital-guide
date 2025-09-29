@@ -13,12 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 class PredictionService:
+    # 학습 시와 동일한 부서 리스트 (순서 중요!)
+    DEPARTMENT_LIST = [
+        '내과', '외과', '정형외과', '신경과', '산부인과',
+        '소아청소년과', '이비인후과', '안과', '피부과', '비뇨의학과',
+        'X-ray실', 'CT실', 'MRI실', '초음파실'
+    ]
+
     @staticmethod
     def get_recent_data_for_prediction(department):
         """최근 데이터를 가져와 모델 입력 형태로 변환"""
         try:
-            # 모델 입력 shape 확인 - 고정된 17개 특징
-            num_features = 17  # 모델이 기대하는 고정된 특징 수
+            # 모델 입력 shape 확인 - 새 모델은 15개 특징 사용
+            num_features = 15  # 모델이 기대하는 고정된 특징 수 (3 + 12 부서)
             num_timesteps = 12  # 최근 1시간 (5분 간격 * 12 = 60분)
 
             # 최근 1시간의 데이터를 5분 간격으로 수집
@@ -29,12 +36,13 @@ class PredictionService:
                 # 각 시간대별로 데이터 수집
                 time_point = current_time - timedelta(minutes=i*5)
 
-                # 해당 시간대의 대기 인원 수
+                # 해당 시간대의 대기 인원 수 (더 넓은 범위로 조회)
                 waiting_count = Queue.objects.filter(
                     exam__department=department,
                     state__in=['waiting', 'called'],
-                    created_at__lte=time_point,
-                    updated_at__gte=time_point - timedelta(minutes=5)
+                    created_at__lte=time_point
+                ).exclude(
+                    state__in=['completed', 'cancelled', 'no_show']
                 ).count()
 
                 # 특징 벡터 생성 (정확히 17개)
@@ -45,17 +53,23 @@ class PredictionService:
                 features.append(time_point.weekday() / 6.0)  # 요일 (0-1)
                 features.append(min(waiting_count / 20.0, 1.0))  # 대기 인원 (0-1)
 
-                # 부서 특징 14개 (모델이 기대하는 수만큼)
-                # 부서 해시를 사용하여 일관성 있게 인코딩
-                dept_hash = hash(department) % 14
-                for j in range(14):
-                    if j == dept_hash:
+                # 부서 특징 12개 (학습 시와 동일한 원핫 인코딩, 처음 12개 부서만 사용)
+                # 학습에 사용된 12개 부서만 처리
+                train_departments = PredictionService.DEPARTMENT_LIST[:12]  # 처음 12개만
+
+                if department in train_departments:
+                    dept_idx = train_departments.index(department)
+                else:
+                    dept_idx = 0  # 알 수 없는 부서는 첫 번째로 매핑
+
+                for j in range(12):  # 12개 부서 원핫 인코딩
+                    if j == dept_idx:
                         features.append(1.0)
                     else:
                         features.append(0.0)
 
-                # 정확히 17개 특징 확인
-                assert len(features) == 17, f"Feature count mismatch: {len(features)} != 17"
+                # 정확히 15개 특징 확인 (3 + 12 = 15)
+                assert len(features) == 15, f"Feature count mismatch: {len(features)} != 15"
 
                 input_data.append(features)
 
@@ -70,8 +84,9 @@ class PredictionService:
 
         except Exception as e:
             logger.error(f"Error creating input data for {department}: {e}")
-            # 오류 발생 시 기본값 반환
-            return np.zeros((1, 12, 17), dtype=np.float32)
+            logger.error(f"Department: {department}, Time: {timezone.now()}")
+            # 오류 발생 시 기본값 반환 (15개 특징)
+            return np.zeros((1, 12, 15), dtype=np.float32)
 
     @staticmethod
     def get_predictions(timeframe='30min'):
@@ -95,14 +110,33 @@ class PredictionService:
                 # LSTM 예측 (try-except로 모델 오류 처리)
                 try:
                     input_data = PredictionService.get_recent_data_for_prediction(dept)
+                    logger.debug(f"Input shape for {dept}: {input_data.shape}")
+
                     future = predictor.predict(input_data)
-                    predicted_wait = future.get('predicted_wait_time', 0)
-                    congestion = future.get('congestion_level', 0.0)
+
+                    if 'error' in future:
+                        logger.warning(f"Model returned error for {dept}: {future['error']}")
+                        # 부서별 기본 대기시간 사용
+                        dept_defaults = {
+                            '내과': 35, '외과': 25, 'X-ray실': 10, 'MRI실': 45,
+                            'CT실': 20, '초음파실': 15
+                        }
+                        predicted_wait = dept_defaults.get(dept, 20)
+                        congestion = min(predicted_wait / 60.0, 1.0)
+                    else:
+                        predicted_wait = future.get('predicted_wait_time', current_wait_time)
+                        congestion = future.get('congestion_level', 0.5)
+                        logger.debug(f"Prediction for {dept}: {predicted_wait}분, congestion: {congestion}")
+
                 except Exception as model_error:
                     logger.warning(f"Model prediction failed for {dept}: {model_error}")
-                    # 모델 예측 실패 시 기본값 사용
-                    predicted_wait = current_wait_time
-                    congestion = 0.5
+                    # 모델 예측 실패 시 부서별 기본값 사용
+                    dept_defaults = {
+                        '내과': 35, '외과': 25, 'X-ray실': 10, 'MRI실': 45,
+                        'CT실': 20, '초음파실': 15
+                    }
+                    predicted_wait = dept_defaults.get(dept, current_wait_time if current_wait_time > 0 else 20)
+                    congestion = min(predicted_wait / 60.0, 1.0)
 
                 predictions[dept] = {
                     'current_wait': round(current_wait_time),
