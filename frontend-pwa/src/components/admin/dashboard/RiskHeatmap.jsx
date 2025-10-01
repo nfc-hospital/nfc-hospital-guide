@@ -1,60 +1,87 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, Clock, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Clock, TrendingUp, Loader } from 'lucide-react';
+import apiService from '../../../api/apiService';
 
 const RiskHeatmap = () => {
   const [heatmapData, setHeatmapData] = useState([]);
   const [selectedCell, setSelectedCell] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
-  const departments = ['영상의학과', '내과', '정형외과', '진단검사', '응급실'];
-  const timeSlots = ['9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'];
+  const departments = ['영상의학과', '내과', '정형외과', '진단검사의학과', '응급실'];
+  const timeSlots = ['9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];  // Backend와 일치하는 형식
 
-  useEffect(() => {
-    const generateHeatmap = () => {
-      const currentHour = new Date().getHours();
-      const data = [];
+  const fetchHeatmapData = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-      departments.forEach((dept, deptIdx) => {
-        timeSlots.forEach((time, timeIdx) => {
-          const hour = parseInt(time.split(':')[0]);
-          const timeFactor = Math.sin((hour - 9) / 8 * Math.PI);
-          
-          // 부서별 패턴
-          let baseCongestion = 30;
-          if (dept === '영상의학과') baseCongestion = 40;
-          if (dept === '응급실') baseCongestion = 50;
-          if (dept === '내과') baseCongestion = 35;
-          
-          // 시간대별 변동
-          let congestion = baseCongestion + timeFactor * 25;
-          
-          // 점심시간 효과
-          if (hour >= 12 && hour <= 13) {
-            congestion += 15;
-          }
-          
-          // 랜덤 변동
-          congestion += Math.random() * 10 - 5;
-          
-          // 예측 대기시간
-          const waitTime = Math.round(congestion * 0.8 + Math.random() * 5);
-          const queueSize = Math.floor(congestion * 0.3 + Math.random() * 3);
-          
-          data.push({
-            department: dept,
-            time: time,
-            congestion: Math.round(Math.max(0, Math.min(100, congestion))),
-            waitTime: waitTime,
-            queueSize: queueSize,
-            risk: congestion > 70 ? 'high' : congestion > 50 ? 'medium' : 'low'
-          });
-        });
+      console.log('🔍 Heatmap API 호출 시작');
+
+      const response = await apiService.analytics.getHeatmapPredictions();
+
+      console.log('✅ Heatmap API 응답 받음:', response);
+      console.log('응답 타입:', typeof response);
+      console.log('응답 키:', response ? Object.keys(response) : 'null');
+      console.log('response.success:', response?.success);
+      console.log('response.data:', response?.data);
+      console.log('data 타입:', Array.isArray(response?.data));
+
+      // Backend 응답 구조 확인
+      // Case 1: { success: true, data: [...] } - 배열 직접
+      // Case 2: { success: true, data: { heatmap: [...] } } - 객체로 감싸짐
+      const actualData = Array.isArray(response.data)
+        ? response.data
+        : response.data?.heatmap || response.data?.data || [];
+
+      if (response && response.success && Array.isArray(actualData) && actualData.length > 0) {
+        // API 데이터를 컴포넌트 형식에 맞게 변환
+        console.log('📊 데이터 변환 시작, 배열 길이:', actualData.length);
+        const formattedData = actualData.map(item => ({
+          department: item.department,
+          time: item.time,
+          congestion: item.congestion,
+          waitTime: item.wait_time,
+          queueSize: item.queue_size,
+          risk: item.risk
+        }));
+
+        console.log('✅ 변환 완료:', formattedData.length, '개 데이터');
+        setHeatmapData(formattedData);
+        setLastUpdate(new Date());
+      } else {
+        console.error('❌ 응답 형식 오류:', response);
+        throw new Error(`Invalid response format: ${JSON.stringify(response)}`);
+      }
+    } catch (err) {
+      console.error('❌ Heatmap 데이터 로드 실패:', err);
+      console.error('에러 타입:', typeof err);
+      console.error('에러 상세:', {
+        message: err?.message || 'No message',
+        response: err?.response?.data || 'No response data',
+        status: err?.response?.status || 'No status',
+        isAxiosError: err?.isAxiosError,
+        fullError: err
       });
 
-      setHeatmapData(data);
-    };
+      if (err?.response) {
+        console.error('전체 응답:', err.response);
+      }
 
-    generateHeatmap();
-    const interval = setInterval(generateHeatmap, 8000);
+      setError(`히트맵 데이터 로드 실패: ${err?.message || 'Unknown error'}`);
+      setHeatmapData([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // 초기 데이터 로드
+    fetchHeatmapData();
+
+    // 주기적 업데이트 (30초마다 실제 데이터 조회)
+    const interval = setInterval(fetchHeatmapData, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -65,136 +92,126 @@ const RiskHeatmap = () => {
     return 'bg-green-400';
   };
 
-  const getCellOpacity = (congestion) => {
-    return `opacity-${Math.min(100, Math.max(30, congestion))}`;
+  const getCellTextColor = (congestion) => {
+    if (congestion > 50) return 'text-white';
+    return 'text-gray-700';
+  };
+
+  const getHeatmapValue = (dept, time) => {
+    const cell = heatmapData.find(d => d.department === dept && d.time === time);
+    return cell || { congestion: 0, waitTime: 0, queueSize: 0, risk: 'low' };
   };
 
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6">
-      {/* 헤더 */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-red-100 rounded-xl">
             <AlertTriangle className="w-6 h-6 text-red-600" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-gray-900">리스크 히트맵</h2>
-            <p className="text-sm text-gray-500">향후 4시간 혼잡도 예측 (LSTM)</p>
+            <h2 className="text-xl font-bold text-gray-900">혼잡도 위험 히트맵</h2>
+            <p className="text-sm text-gray-500">시간대별 부서별 혼잡 예측</p>
           </div>
         </div>
-        
-        {/* 범례 */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-green-400 rounded"></div>
-            <span className="text-xs text-gray-600">원활</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-yellow-400 rounded"></div>
-            <span className="text-xs text-gray-600">보통</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-orange-400 rounded"></div>
-            <span className="text-xs text-gray-600">혼잡</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 bg-red-500 rounded"></div>
-            <span className="text-xs text-gray-600">매우혼잡</span>
-          </div>
-        </div>
+        {lastUpdate && (
+          <span className="text-xs text-gray-500">
+            마지막 업데이트: {lastUpdate.toLocaleTimeString()}
+          </span>
+        )}
       </div>
 
-      {/* 히트맵 그리드 */}
-      <div className="overflow-x-auto">
-        <div className="min-w-[600px]">
-          {/* 시간 헤더 */}
-          <div className="grid grid-cols-9 gap-1 mb-1">
-            <div className="h-8"></div>
-            {timeSlots.map(time => (
-              <div key={time} className="text-xs text-center text-gray-600 font-medium flex items-center justify-center">
-                {time}
-              </div>
-            ))}
+      {error ? (
+        <div className="text-center py-8 text-red-600">
+          {error}
+        </div>
+      ) : isLoading ? (
+        <div className="text-center py-8">
+          <Loader className="w-8 h-8 text-gray-400 animate-spin mx-auto" />
+          <p className="text-sm text-gray-500 mt-2">데이터를 불러오는 중...</p>
+        </div>
+      ) : heatmapData.length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          히트맵 데이터가 없습니다.
+        </div>
+      ) : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="text-left text-xs font-medium text-gray-600 py-2 pr-2">부서</th>
+                  {timeSlots.map(time => (
+                    <th key={time} className="text-center text-xs font-medium text-gray-600 py-2 px-1 min-w-[60px]">
+                      {time}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {departments.map(dept => (
+                  <tr key={dept}>
+                    <td className="text-sm font-medium text-gray-700 py-2 pr-2 whitespace-nowrap">
+                      {dept}
+                    </td>
+                    {timeSlots.map(time => {
+                      const cellData = getHeatmapValue(dept, time);
+                      return (
+                        <td key={`${dept}-${time}`} className="p-1">
+                          <div
+                            className={`rounded-lg p-2 text-center cursor-pointer transition-all hover:scale-105 ${getCellColor(cellData.congestion)} ${getCellTextColor(cellData.congestion)}`}
+                            onClick={() => setSelectedCell(cellData)}
+                          >
+                            <div className="text-xs font-bold">{cellData.congestion}%</div>
+                            <div className="text-[10px] opacity-90">{cellData.waitTime}분</div>
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          {/* 히트맵 본체 */}
-          {departments.map(dept => (
-            <div key={dept} className="grid grid-cols-9 gap-1 mb-1">
-              <div className="text-xs text-gray-700 font-medium pr-2 flex items-center justify-end h-12">
-                {dept}
-              </div>
-              {timeSlots.map(time => {
-                const cell = heatmapData.find(d => d.department === dept && d.time === time);
-                if (!cell) return <div key={time} className="bg-gray-100 rounded"></div>;
-                
-                return (
-                  <div
-                    key={time}
-                    className={`relative rounded cursor-pointer transition-all duration-300 hover:scale-105 ${getCellColor(cell.congestion)}`}
-                    style={{ opacity: cell.congestion / 100 }}
-                    onClick={() => setSelectedCell(cell)}
-                  >
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-xs font-bold text-white">
-                        {cell.congestion}%
-                      </span>
-                    </div>
-                    {cell.risk === 'high' && (
-                      <div className="absolute top-0 right-0 w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                    )}
-                  </div>
-                );
-              })}
+          <div className="mt-4 flex items-center justify-center gap-6">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-400 rounded"></div>
+              <span className="text-xs text-gray-600">원활 (0-30%)</span>
             </div>
-          ))}
-        </div>
-      </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-yellow-400 rounded"></div>
+              <span className="text-xs text-gray-600">보통 (31-50%)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-orange-400 rounded"></div>
+              <span className="text-xs text-gray-600">혼잡 (51-70%)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-500 rounded"></div>
+              <span className="text-xs text-gray-600">매우혼잡 (71%+)</span>
+            </div>
+          </div>
 
-      {/* 선택된 셀 상세 정보 */}
-      {selectedCell && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-xl">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-gray-700">
-              {selectedCell.department} - {selectedCell.time}
-            </h3>
-            <button
-              onClick={() => setSelectedCell(null)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              ✕
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-lg p-2">
-              <p className="text-xs text-gray-500">혼잡도</p>
-              <p className="text-lg font-bold text-gray-900">{selectedCell.congestion}%</p>
+          {selectedCell && (
+            <div className="mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <TrendingUp className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {selectedCell.department} - {selectedCell.time}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-1">
+                    혼잡도: {selectedCell.congestion}% |
+                    대기시간: {selectedCell.waitTime}분 |
+                    대기인원: {selectedCell.queueSize}명
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="bg-white rounded-lg p-2">
-              <p className="text-xs text-gray-500">예상 대기</p>
-              <p className="text-lg font-bold text-gray-900">{selectedCell.waitTime}분</p>
-            </div>
-            <div className="bg-white rounded-lg p-2">
-              <p className="text-xs text-gray-500">대기 인원</p>
-              <p className="text-lg font-bold text-gray-900">{selectedCell.queueSize}명</p>
-            </div>
-          </div>
-        </div>
+          )}
+        </>
       )}
-
-      {/* 위험 슬롯 알림 */}
-      <div className="mt-4 bg-red-50 border border-red-200 rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-gray-900">위험 시간대 감지</p>
-            <p className="text-xs text-gray-600 mt-1">
-              {heatmapData.filter(d => d.risk === 'high').length > 0 
-                ? `${heatmapData.filter(d => d.risk === 'high').slice(0, 3).map(d => `${d.department} ${d.time}`).join(', ')} 시간대에 혼잡이 예상됩니다.`
-                : '향후 4시간 동안 정상 운영 예상'}
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

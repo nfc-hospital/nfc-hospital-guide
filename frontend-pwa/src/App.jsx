@@ -29,6 +29,7 @@ import MapManager from './pages/admin/MapManager';
 import ChatbotTest from './pages/ChatbotTest';
 import MapTest from './pages/MapTest';
 import MapEditor from './pages/MapEditor';
+import LSTMTest from './pages/LSTMTest';
 // New Chatbot System
 import ChatbotSystem from './components/chatbot-v2';
 // Mock NFC Panel for development
@@ -176,7 +177,10 @@ function AppContent() {
                 <MapManager />
               </PrivateRoute>
             } />
-            
+
+            {/* LSTM 테스트 페이지 - 로그인 없이 접근 가능 */}
+            <Route path="/lstm-test" element={<LSTMTest />} />
+
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

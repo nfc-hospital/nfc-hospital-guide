@@ -28,6 +28,12 @@ const AdminHomeScreen = () => {
     end: '2025-01-15'
   });
 
+  // 데모 모드 상태
+  const [demoActive, setDemoActive] = useState(false);
+  const [demoCountdown, setDemoCountdown] = useState(0);
+  const [demoLoading, setDemoLoading] = useState(false);
+  const countdownInterval = useRef(null);
+
   const [stats, setStats] = useState({
     todayPatients: 0,
     avgTreatmentTime: 0,
@@ -51,12 +57,81 @@ const AdminHomeScreen = () => {
     { id: 'schedule', icon: '📅', label: 'LSTM 스케줄' },
     { id: 'nfc', icon: '📱', label: 'NFC 태그 관리' },
     { id: 'queue', icon: '👥', label: '대기열 모니터링' },
-    { id: 'analytics', icon: '📈', label: '통계 및 분석' }
+    { id: 'analytics', icon: '📈', label: '통계 및 분석' },
+    { id: 'demo', icon: '🚀', label: '데모 모드', special: true }
   ];
+
+  // 데모 시작 함수
+  const startDemo = async () => {
+    try {
+      setDemoLoading(true);
+      await apiService.demo.start();
+      setDemoActive(true);
+      setDemoCountdown(300); // 5분 = 300초
+
+      // 카운트다운 타이머 (3초 간격으로 최적화)
+      countdownInterval.current = setInterval(async () => {
+        try {
+          const status = await apiService.demo.status();
+          // Backend 응답 구조: { success, data: { active, remaining, ... } }
+          const demoData = status?.data || status;
+
+          console.log('📊 데모 상태 체크:', {
+            active: demoData?.active,
+            remaining: demoData?.remaining,
+            fullResponse: demoData
+          });
+
+          if (demoData?.active) {
+            setDemoCountdown(demoData.remaining || 0);
+          } else {
+            console.log('⏹️ 데모 종료 감지, interval 정리');
+            clearInterval(countdownInterval.current);
+            setDemoActive(false);
+            setDemoCountdown(0);
+          }
+        } catch (error) {
+          console.log('⚠️ 데모 상태 확인 실패:', error);
+          clearInterval(countdownInterval.current);
+          setDemoActive(false);
+          setDemoCountdown(0);
+        }
+      }, 3000);  // 1000ms → 3000ms로 변경 (네트워크 부하 66% 감소)
+    } catch (error) {
+      console.error('데모 시작 실패:', error);
+      alert('데모를 시작할 수 없습니다.');
+    } finally {
+      setDemoLoading(false);
+    }
+  };
+
+  // 데모 정지 함수
+  const stopDemo = async () => {
+    try {
+      await apiService.demo.stop();
+    } catch (error) {
+      console.error('데모 정지 실패:', error);
+    } finally {
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+      }
+      setDemoActive(false);
+      setDemoCountdown(0);
+    }
+  };
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     console.log('🚀 컴포넌트 마운트!');
-    
+
     // 데이터 로드
     const loadData = async () => {
       await Promise.all([
@@ -397,24 +472,84 @@ const AdminHomeScreen = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* 데모 컨트롤 패널 */}
+      {(demoActive || demoLoading) && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-green-500 to-blue-500 text-white p-4 shadow-lg">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="animate-pulse">
+                  <div className="w-3 h-3 bg-white rounded-full"></div>
+                </div>
+                <span className="font-bold text-lg">
+                  {demoLoading ? '데모 준비 중...' : '데모 모드 실행 중'}
+                </span>
+              </div>
+              {demoActive && (
+                <div className="text-xl font-mono bg-white/20 px-3 py-1 rounded">
+                  {Math.floor(demoCountdown/60)}:{(demoCountdown%60).toString().padStart(2,'0')}
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-4">
+              <p className="text-sm">
+                모든 대시보드가 실시간으로 업데이트되고 있습니다
+              </p>
+              {demoActive && (
+                <button
+                  onClick={stopDemo}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
+                >
+                  데모 종료
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Container */}
-      <div className="flex">
+      <div className={`flex ${demoActive ? 'pt-16' : ''}`}>
         {/* Sidebar */}
-        <div className="w-64 bg-white border-r border-gray-200 fixed left-0 top-0 bottom-0">
-          <nav className="pt-20 pb-5">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                className={`w-full flex items-center px-5 py-3 text-sm font-medium transition-all duration-200
-                  ${activeTab === item.id 
-                    ? 'bg-blue-50 text-blue-600 border-r-3 border-blue-600' 
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-blue-600'}`}
-                onClick={() => setActiveTab(item.id)}
-              >
-                <span className="text-lg mr-3">{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            ))}
+        <div className={`w-64 bg-white border-r border-gray-200 fixed left-0 bottom-0 ${demoActive ? 'top-16' : 'top-0'}`}>
+          <nav className="pt-20 pb-5 h-full flex flex-col">
+            <div className="flex-1">
+              {navItems.filter(item => !item.special).map(item => (
+                <button
+                  key={item.id}
+                  className={`w-full flex items-center px-5 py-3 text-sm font-medium transition-all duration-200
+                    ${activeTab === item.id
+                      ? 'bg-blue-50 text-blue-600 border-r-3 border-blue-600'
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-blue-600'}`}
+                  onClick={() => setActiveTab(item.id)}
+                >
+                  <span className="text-lg mr-3">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* 데모 버튼 - 하단에 고정 */}
+            <div className="border-t border-gray-200 p-4">
+              {!demoActive ? (
+                <button
+                  onClick={startDemo}
+                  disabled={demoLoading}
+                  className="w-full flex items-center px-5 py-3 text-sm font-medium transition-all duration-200 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="text-lg mr-3">🚀</span>
+                  <span>{demoLoading ? '데모 준비 중...' : '5분 실시간 데모 시작'}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={stopDemo}
+                  className="w-full flex items-center px-5 py-3 text-sm font-medium transition-all duration-200 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  <span className="text-lg mr-3">⏹️</span>
+                  <span>데모 종료</span>
+                </button>
+              )}
+            </div>
           </nav>
         </div>
 

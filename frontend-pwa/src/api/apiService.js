@@ -357,7 +357,10 @@ const apiService = {
     createCustomReport: (data) => api.post('/analytics/custom-report', data),
     exportData: (params) => api.get('/analytics/export', { params }),
     // LSTM 예측 API
-    getPredictions: () => api.get('/analytics/predictions/'),
+    getPredictions: (timeframe = '30min') => api.get('/analytics/predictions/', { params: { timeframe } }),
+    getTimelinePredictions: () => api.get('/analytics/predictions/timeline/'),
+    getDominoPredictions: (data) => api.post('/analytics/predictions/domino/', data),
+    getHeatmapPredictions: () => api.get('/analytics/predictions/heatmap/'),
   },
 
   // 관리자 대시보드 API
@@ -468,11 +471,18 @@ const apiService = {
 
   // 지도 및 경로 관리 API
   maps: mapService,
-  
+
   // 지도 관련 단축 메서드
   getMaps: () => mapService.getMaps(),
   getFacilityRoute: (facilityName) => mapService.getFacilityRoute(facilityName),
   saveFacilityRoute: (routeData) => mapService.saveFacilityRoute(routeData),
+
+  // 데모 제어 API
+  demo: {
+    start: () => api.post('/dashboard/demo/control/'),
+    stop: () => api.delete('/dashboard/demo/control/'),
+    status: () => api.get('/dashboard/demo/control/')
+  },
 };
 
 export default apiService;

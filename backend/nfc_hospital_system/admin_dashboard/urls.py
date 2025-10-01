@@ -3,12 +3,13 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views 
 from .views import (
-    NotificationViewSet, NotificationSettingsAPIView, 
+    NotificationViewSet, NotificationSettingsAPIView,
     FCMTokenRegistrationAPIView, DeviceTokenViewSet,
     NotificationTestAPIView,
     # 병원 모니터링 관련 클래스 뷰 추가
     HospitalStatusMonitoringView,
-    SystemAlertsMonitoringView
+    SystemAlertsMonitoringView,
+    DemoControlView  # 데모 컨트롤러 추가
 )
 from .exam_views import ExamContentViewSet
 from nfc.views import (
@@ -24,10 +25,13 @@ router.register(r'nfc/tags', AdminNFCTagViewSet, basename='admin-nfc-tags')
 router.register(r'notifications', NotificationViewSet, basename='notifications')
 router.register(r'devices', DeviceTokenViewSet, basename='notification-devices')
 
-urlpatterns = [ 
+urlpatterns = [
     # 병원 모니터링 관련 API (추가)
     path('monitor/hospital-status/', HospitalStatusMonitoringView.as_view(), name='hospital-status-monitoring'),
     path('monitor/system-alerts/', SystemAlertsMonitoringView.as_view(), name='system-alerts-monitoring'),
+
+    # 데모 제어 API
+    path('demo/control/', DemoControlView.as_view(), name='demo-control'),
 
     # 알림 관련 API (router보다 우선순위 높게 배치)
     path('notifications/settings/', NotificationSettingsAPIView.as_view(), name='notification-settings'),

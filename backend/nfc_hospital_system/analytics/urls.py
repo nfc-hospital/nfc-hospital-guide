@@ -13,4 +13,7 @@ urlpatterns = [
     path('custom-report/', views.custom_report, name='custom-report'),
     path('export/', views.export_data, name='export'),
     path('predictions/', views.predictions, name='predictions'),  # LSTM 예측 API
+    path('predictions/timeline/', views.predictions_timeline, name='predictions-timeline'),  # 시계열 예측
+    path('predictions/domino/', views.predictions_domino, name='predictions-domino'),  # 도미노 효과
+    path('predictions/heatmap/', views.predictions_heatmap, name='predictions-heatmap'),  # 히트맵
 ]

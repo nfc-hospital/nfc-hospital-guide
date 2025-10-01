@@ -13,6 +13,9 @@ from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
+from django.core.cache import cache
+from datetime import datetime, timedelta
+import json
 
 from authentication.models import DeviceToken
 from .models import Notification, NotificationSettings
@@ -480,4 +483,159 @@ class SystemAlertsMonitoringView(APIView):
                 'success': False,
                 'error': str(e),
                 'message': '시스템 알림을 가져오는 중 오류가 발생했습니다.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class DemoControlView(APIView):
+    """
+    데모 시뮬레이션 제어 API
+    - POST: 5분간 데모 시작 (타임라인 데이터 생성 및 캐시)
+    - GET: 현재 데모 상태 확인
+    - DELETE: 데모 강제 종료
+    """
+    # 테스트를 위해 인증 임시 비활성화
+    permission_classes = []  # [permissions.IsAuthenticated]
+
+    DEMO_ACTIVE_KEY = "demo_mode_active"
+    DEMO_START_TIME_KEY = "demo_start_time"
+    DEMO_TIMELINE_KEY = "demo_timeline"
+    DEMO_DURATION = 300  # 5분 (300초)
+
+    def post(self, request):
+        """데모 시작 - 5분치 예측 데이터를 미리 생성하여 캐시"""
+        try:
+            # 이미 데모가 실행 중인지 확인
+            if cache.get(self.DEMO_ACTIVE_KEY):
+                return Response({
+                    "status": "already_running",
+                    "message": "데모가 이미 실행 중입니다."
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+            # prediction_service import (순환 참조 방지를 위해 메서드 내부에서)
+            from integrations.services.prediction_service import PredictionService
+
+            # 5분간의 예측 데이터 미리 생성
+            timeline = {}
+            start_time = timezone.now()
+
+            # 10초 간격으로 데이터 생성 (총 30개 데이터 포인트)
+            for second in range(0, self.DEMO_DURATION + 1, 10):
+                # 각 시점별로 예측 데이터 생성
+                predictions = PredictionService.get_predictions(timeframe='30min')
+
+                # 시간 경과에 따른 변화 시뮬레이션
+                if isinstance(predictions, dict):
+                    for dept_name, dept_data in predictions.items():
+                        if isinstance(dept_data, dict) and 'predicted_wait' in dept_data:
+                            # 시간이 지날수록 대기시간 증가 시뮬레이션
+                            time_factor = 1 + (second / 300) * 0.3  # 최대 30% 증가
+                            dept_data['predicted_wait'] = int(dept_data.get('predicted_wait', 20) * time_factor)
+                            dept_data['current_wait'] = int(dept_data.get('current_wait', 15) * time_factor)
+
+                            # 혼잡도도 시간에 따라 증가
+                            congestion = min(1.0, dept_data.get('congestion', 0.5) * time_factor)
+                            dept_data['congestion'] = round(congestion, 2)
+
+                            # 추세 업데이트
+                            dept_data['trend'] = 'up' if second > 150 else 'stable'
+
+                timeline[str(second)] = predictions
+
+            # 캐시에 저장 (TTL 5분)
+            cache.set(self.DEMO_ACTIVE_KEY, True, timeout=self.DEMO_DURATION)
+            cache.set(self.DEMO_START_TIME_KEY, start_time.isoformat(), timeout=self.DEMO_DURATION)
+            cache.set(self.DEMO_TIMELINE_KEY, json.dumps(timeline, default=str), timeout=self.DEMO_DURATION)
+
+            return Response({
+                "status": "started",
+                "duration": self.DEMO_DURATION,
+                "start_time": start_time.isoformat(),
+                "message": "데모가 시작되었습니다. 모든 대시보드가 실시간 데이터를 표시합니다.",
+                "data_points": len(timeline)
+            }, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": f"데모 시작 중 오류 발생: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        """데모 상태 확인"""
+        try:
+            if not cache.get(self.DEMO_ACTIVE_KEY):
+                return Response({
+                    "active": False,
+                    "message": "데모가 실행 중이지 않습니다."
+                }, status=status.HTTP_200_OK)
+
+            # 시작 시간 가져오기
+            start_time_str = cache.get(self.DEMO_START_TIME_KEY)
+            if not start_time_str:
+                return Response({
+                    "active": False,
+                    "message": "데모 시작 시간을 찾을 수 없습니다."
+                }, status=status.HTTP_200_OK)
+
+            start_time = datetime.fromisoformat(start_time_str)
+            current_time = timezone.now()
+
+            # 타임존 정보 맞추기
+            if start_time.tzinfo is None:
+                start_time = timezone.make_aware(start_time)
+
+            elapsed = int((current_time - start_time).total_seconds())
+            remaining = max(0, self.DEMO_DURATION - elapsed)
+
+            # 5분 경과 체크
+            if elapsed >= self.DEMO_DURATION:
+                # 캐시 자동 만료되었을 것이지만 확실히 삭제
+                cache.delete(self.DEMO_ACTIVE_KEY)
+                cache.delete(self.DEMO_START_TIME_KEY)
+                cache.delete(self.DEMO_TIMELINE_KEY)
+
+                return Response({
+                    "active": False,
+                    "message": "데모가 종료되었습니다."
+                }, status=status.HTTP_200_OK)
+
+            return Response({
+                "active": True,
+                "elapsed": elapsed,
+                "remaining": remaining,
+                "progress": round((elapsed / self.DEMO_DURATION) * 100, 1),
+                "start_time": start_time.isoformat(),
+                "message": f"데모 진행 중 ({elapsed}초 경과, {remaining}초 남음)"
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": f"상태 확인 중 오류: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request):
+        """데모 강제 종료"""
+        try:
+            was_active = cache.get(self.DEMO_ACTIVE_KEY)
+
+            # 캐시에서 데모 데이터 삭제
+            cache.delete(self.DEMO_ACTIVE_KEY)
+            cache.delete(self.DEMO_START_TIME_KEY)
+            cache.delete(self.DEMO_TIMELINE_KEY)
+
+            if was_active:
+                message = "데모가 성공적으로 종료되었습니다."
+            else:
+                message = "실행 중인 데모가 없습니다."
+
+            return Response({
+                "status": "stopped",
+                "message": message
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": f"데모 종료 중 오류: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

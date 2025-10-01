@@ -1,70 +1,102 @@
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, ChevronRight, Clock, Users, Zap, ArrowRight } from 'lucide-react';
+import { AlertTriangle, ChevronRight, Clock, Users, Zap, ArrowRight, Loader } from 'lucide-react';
+import apiService from '../../../api/apiService';
 
 const DelayDominoPrediction = () => {
   const [predictions, setPredictions] = useState([]);
-  const [inputDelay, setInputDelay] = useState({ department: 'CT', minutes: 30 });
-  const [isSimulating, setIsSimulating] = useState(false);
+  const [inputDelay, setInputDelay] = useState({ department: 'CT실', minutes: 30 });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
 
   const departments = [
-    { id: 'CT', name: 'CT 촬영실' },
-    { id: 'MRI', name: 'MRI 촬영실' },
-    { id: 'XRAY', name: 'X-Ray' },
-    { id: 'LAB', name: '진단검사실' },
-    { id: 'US', name: '초음파실' }
+    { id: 'CT실', name: 'CT 촬영실' },
+    { id: 'MRI실', name: 'MRI 촬영실' },
+    { id: 'X-ray실', name: 'X-Ray' },
+    { id: '진단검사의학과', name: '진단검사실' },
+    { id: '초음파실', name: '초음파실' }
   ];
 
-  const simulateDelayImpact = (source, delayMinutes) => {
-    // 도미노 효과 시뮬레이션
-    const impactMatrix = {
-      'CT': { '내과': 0.7, '신경과': 0.9, '응급실': 0.8, '정형외과': 0.5 },
-      'MRI': { '신경과': 0.9, '정형외과': 0.8, '내과': 0.6, '재활의학과': 0.7 },
-      'XRAY': { '정형외과': 0.9, '응급실': 0.7, '내과': 0.5, '호흡기내과': 0.8 },
-      'LAB': { '내과': 0.8, '감염내과': 0.9, '혈액종양내과': 0.9, '응급실': 0.7 },
-      'US': { '소화기내과': 0.8, '산부인과': 0.9, '비뇨기과': 0.7, '내과': 0.6 }
-    };
+  const fetchDominoPredictions = async (sourceDept, delayMinutes) => {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-    const impacts = impactMatrix[source] || {};
-    const predictions = [];
+      console.log('🔍 Domino API 호출 시작:', { sourceDept, delayMinutes });
 
-    Object.entries(impacts).forEach(([dept, factor]) => {
-      const delayImpact = Math.round(delayMinutes * factor);
-      const affectedPatients = Math.floor(15 + Math.random() * 20 + delayImpact / 2);
-      
-      predictions.push({
-        department: dept,
-        originalDelay: delayMinutes,
-        impactDelay: delayImpact,
-        affectedPatients,
-        severity: delayImpact > 20 ? 'high' : delayImpact > 10 ? 'medium' : 'low',
-        probability: (factor * 100).toFixed(0)
+      const response = await apiService.analytics.getDominoPredictions({
+        source_department: sourceDept,
+        delay_minutes: delayMinutes
       });
-    });
 
-    return predictions.sort((a, b) => b.impactDelay - a.impactDelay);
+      console.log('✅ Domino API 응답 받음:', response);
+      console.log('응답 타입:', typeof response);
+      console.log('응답 키:', response ? Object.keys(response) : 'null');
+      console.log('response.success:', response?.success);
+      console.log('response.data:', response?.data);
+      console.log('data 타입:', Array.isArray(response?.data));
+
+      // Backend 응답 구조 확인
+      // Case 1: { success: true, data: [...] } - 배열 직접
+      // Case 2: { success: true, data: { impacts: [...] } } - 객체로 감싸짐
+      const actualData = Array.isArray(response.data)
+        ? response.data
+        : response.data?.impacts || response.data?.data || [];
+
+      if (response && response.success && Array.isArray(actualData) && actualData.length > 0) {
+        // API 응답 데이터를 컴포넌트의 형식에 맞게 변환
+        console.log('📊 데이터 변환 시작, 배열 길이:', actualData.length);
+        const formattedPredictions = actualData.map(pred => ({
+          department: pred.department,
+          originalDelay: pred.original_delay,
+          impactDelay: pred.impact_delay,
+          affectedPatients: pred.affected_patients,
+          severity: pred.severity,
+          probability: String(pred.probability)
+        }));
+
+        console.log('✅ 변환 완료:', formattedPredictions);
+        setPredictions(formattedPredictions);
+        setLastUpdate(new Date());
+      } else {
+        console.error('❌ 응답 형식 오류:', response);
+        throw new Error(`Invalid response format: ${JSON.stringify(response)}`);
+      }
+    } catch (err) {
+      console.error('❌ Domino predictions 실패:', err);
+      console.error('에러 타입:', typeof err);
+      console.error('에러 상세:', {
+        message: err?.message || 'No message',
+        response: err?.response?.data || 'No response data',
+        status: err?.response?.status || 'No status',
+        isAxiosError: err?.isAxiosError,
+        fullError: err
+      });
+
+      if (err?.response) {
+        console.error('전체 응답:', err.response);
+      }
+
+      setError(`예측 데이터 로드 실패: ${err?.message || 'Unknown error'}`);
+      setPredictions([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSimulation = () => {
-    setIsSimulating(true);
-    setTimeout(() => {
-      const newPredictions = simulateDelayImpact(inputDelay.department, inputDelay.minutes);
-      setPredictions(newPredictions);
-      setIsSimulating(false);
-    }, 1000);
+    fetchDominoPredictions(inputDelay.department, inputDelay.minutes);
   };
 
   useEffect(() => {
-    // 초기 시뮬레이션
-    const initialPredictions = simulateDelayImpact('CT', 30);
-    setPredictions(initialPredictions);
+    // 초기 데이터 로드
+    fetchDominoPredictions('CT실', 30);
 
-    // 주기적 자동 업데이트
+    // 주기적 업데이트 (실제 데이터 기반, 30초마다)
     const interval = setInterval(() => {
-      const randomDept = departments[Math.floor(Math.random() * departments.length)].id;
-      const randomDelay = Math.floor(15 + Math.random() * 30);
-      const newPredictions = simulateDelayImpact(randomDept, randomDelay);
-      setPredictions(newPredictions);
-    }, 10000);
+      // 현재 입력값 기준으로 재조회
+      fetchDominoPredictions(inputDelay.department, inputDelay.minutes);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, []);
@@ -124,10 +156,10 @@ const DelayDominoPrediction = () => {
           </div>
           <button
             onClick={handleSimulation}
-            disabled={isSimulating}
+            disabled={isLoading}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
-            {isSimulating ? '분석 중...' : '영향 분석'}
+            {isLoading ? '분석 중...' : '영향 분석'}
           </button>
         </div>
       </div>
@@ -164,9 +196,30 @@ const DelayDominoPrediction = () => {
 
       {/* 도미노 효과 시각화 */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-700">예상 연쇄 영향</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-gray-700">예상 연쇄 영향</h3>
+          {lastUpdate && (
+            <span className="text-xs text-gray-500">
+              마지막 업데이트: {lastUpdate.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
         
-        {predictions.map((prediction, idx) => (
+        {error ? (
+          <div className="text-center py-4 text-red-600">
+            {error}
+          </div>
+        ) : isLoading ? (
+          <div className="text-center py-4">
+            <Loader className="w-6 h-6 text-gray-400 animate-spin mx-auto" />
+            <p className="text-sm text-gray-500 mt-2">데이터를 불러오는 중...</p>
+          </div>
+        ) : predictions.length === 0 ? (
+          <div className="text-center py-4 text-gray-500">
+            예측 데이터가 없습니다.
+          </div>
+        ) : (
+          predictions.map((prediction, idx) => (
           <div key={idx} className={`border rounded-xl p-4 transition-all duration-300 ${getSeverityColor(prediction.severity)}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -206,7 +259,8 @@ const DelayDominoPrediction = () => {
               </div>
             </div>
           </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* 권장 조치 */}
