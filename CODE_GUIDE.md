@@ -52,6 +52,52 @@
 
 ---
 
+## 5. 핵심 코드 분석
+
+### 5-1. LSTM 예측 알고리즘
+
+6개 부서별 전용 학습 모델을 사용하여 30분/1시간/2시간 단위로 대기 시간을 예측합니다.
+
+```python
+# integrations/services/prediction_service.py
+class PredictionService:
+    # 학습된 6개 부서 (EMRBots 데이터셋 기반)
+    DEPARTMENT_LIST = ['내과', '정형외과', '진단검사의학과', 'X-ray실', 'CT실', 'MRI실']
+
+    @staticmethod
+    def get_predictions(timeframe='30min'):
+        """부서별 대기시간 예측 (다중 시간대 지원)"""
+        # 시간대별 분 단위 변환
+        timeframe_minutes = {'30min': 30, '1hour': 60, '2hour': 120}
+        target_minutes = timeframe_minutes.get(timeframe, 30)
+
+        predictions = {}
+        for dept in departments:
+            # LSTM 예측
+            input_data = PredictionService.get_recent_data_for_prediction(dept)
+            future = predictor.predict(input_data)
+
+            predicted_wait_30min = future.get('predicted_wait_time')
+
+            # 시간대별 예측값 계산 (선형 보간)
+            if target_minutes == 30:
+                predicted_wait = predicted_wait_30min
+            elif target_minutes == 60:
+                predicted_wait = round(predicted_wait_30min * 1.5)  # 1시간 후
+            elif target_minutes == 120:
+                predicted_wait = round(predicted_wait_30min * 2.0)  # 2시간 후
+
+            predictions[dept] = {
+                'predicted_wait': predicted_wait,
+                'timeframe': timeframe,
+                'target_minutes': target_minutes
+            }
+
+        return predictions
+```
+
+---
+
 ### 5-2. 환자 상태 전이 서비스
 
 Backend에서 9단계 환자 여정 상태를 중앙 관리하며, Frontend는 액션만 전송합니다.
