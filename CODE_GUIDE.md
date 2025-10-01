@@ -52,43 +52,6 @@
 
 ---
 
-## 5. 핵심 코드 분석
-
-### 5-1. LSTM 예측 알고리즘
-
-6개 부서별 전용 학습 모델을 사용하여 30분/1시간/2시간 단위로 대기 시간을 예측합니다.
-
-```python
-# integrations/services/prediction_service.py
-class PredictionService:
-    TRAINED_DEPARTMENTS = {'내과', '정형외과', '진단검사의학과', 'CT실', 'MRI실', 'X-ray실'}
-
-    def predict_wait_times(self, department, timeframe='1h'):
-        """LSTM 모델로 대기 시간 예측"""
-        # 1. 모델 로드 (캐시 활용)
-        model_key = f"{department}_{timeframe}"
-        if model_key not in self.models:
-            interpreter = tf.lite.Interpreter(model_path=f"models/lstm_{model_key}.tflite")
-            interpreter.allocate_tensors()
-            self.models[model_key] = interpreter
-
-        # 2. 현재 상태 feature 추출 (대기 인원, 시간대, 요일, 계절 등 15개)
-        current_features = self._extract_features(department)
-
-        # 3. LSTM 입력 형태로 변환 (sequence_length=10)
-        input_sequence = self._prepare_sequence(current_features)
-        input_data = np.array([input_sequence], dtype=np.float32)
-
-        # 4. TFLite 모델 추론
-        interpreter.set_tensor(input_details[0]['index'], input_data)
-        interpreter.invoke()
-        prediction = interpreter.get_tensor(output_details[0]['index'])
-
-        return {'predicted_wait_minutes': int(prediction[0][0])}
-```
-
----
-
 ### 5-2. 환자 상태 전이 서비스
 
 Backend에서 9단계 환자 여정 상태를 중앙 관리하며, Frontend는 액션만 전송합니다.
@@ -96,33 +59,36 @@ Backend에서 9단계 환자 여정 상태를 중앙 관리하며, Frontend는 �
 ```python
 # p_queue/services.py
 class PatientJourneyService:
-    VALID_TRANSITIONS = {
-        PatientJourneyState.UNREGISTERED: [PatientJourneyState.ARRIVED],
-        PatientJourneyState.ARRIVED: [PatientJourneyState.REGISTERED],
-        # ... 생략
-    }
+    @transaction.atomic
+    def perform_action(self, action_type: str, payload: Dict[str, Any] = None):
+        """액션을 수행하고 상태를 전이시킴"""
+        # 현재 상태 조회
+        patient_state = self._get_or_create_patient_state()
+        current_state = PatientJourneyState(patient_state.current_state)
 
-    @classmethod
-    def transition_state(cls, user, new_state, trigger_source=None, metadata=None):
-        """상태 전이 실행 및 검증"""
-        patient_state, _ = PatientState.objects.get_or_create(user=user)
-        current_state = patient_state.current_state
+        # 상태 전이 가능 여부 확인
+        transitions = STATE_TRANSITIONS[current_state]
+        if action not in transitions:
+            raise InvalidActionError(f"Action '{action_type}' is not allowed")
 
-        # 1. 전이 유효성 검증
-        if new_state not in cls.VALID_TRANSITIONS.get(current_state, []):
-            raise InvalidStateTransitionError(f"허용되지 않은 전이: {current_state} → {new_state}")
+        new_state = transitions[action]
 
-        # 2. 상태 업데이트
-        patient_state.current_state = new_state
+        # 상태 변경 수행
+        patient_state.current_state = new_state.value
         patient_state.save()
 
-        # 3. StateTransition 로그 기록 (감사 추적)
-        StateTransition.objects.create(user=user, from_state=current_state, to_state=new_state)
+        # 상태 전환 로그 생성
+        StateTransition.objects.create(
+            user=self.user, from_state=old_state_value, to_state=new_state.value
+        )
 
-        # 4. WebSocket 알림 전송
-        channel_layer.group_send(f"patient_{user.user_id}", {'type': 'state_update', 'new_state': new_state})
+        # WebSocket 알림 전송
+        async_to_sync(self.channel_layer.group_send)(
+            f"patient_{self.user.id}",
+            {"type": "state_update", "journey_state": new_state}
+        )
 
-        return patient_state
+        return self._build_response(patient_state)
 ```
 
 ---
@@ -133,38 +99,45 @@ class PatientJourneyService:
 
 ```python
 # chatbot-server/app.py
-def build_system_prompt(user_info=None, patient_data=None):
-    """인증 상태별 동적 프롬프트 생성"""
-    prompt = """당신은 HC_119 종합병원의 AI 안내원 '차비서'입니다.
+def build_system_prompt(user_info=None, patient_data=None, public_data=None):
+    """상황에 맞는 시스템 프롬프트 생성"""
+    prompt = """당신은 HC_119 종합병원의 친절한 AI 안내원입니다.
 [병원 기본 정보]
 - 대표전화: 1588-0000, 진료시간: 평일 08:30-17:30
 """
 
-    # 로그인 사용자 개인 정보 주입
+    # 로그인 사용자 개인 정보
     if user_info and patient_data:
-        prompt += f"""
-[환자 개인 정보] ⭐ {user_info['name']}님
-- 현재 상태: {patient_data.get('stateDescription')}
-- 대기번호: {patient_data['currentQueues'][0]['queue_number']}번
-- 예상 대기시간: 약 {patient_data['currentQueues'][0]['estimated_wait_time']}분
+        current_queues = patient_data.get('currentQueues', [])
+        if current_queues:
+            queue = current_queues[0]
+            prompt += f"""
+[환자 개인 정보] 
+- 대기번호: {queue.get('queue_number')}번
+- 예상 대기시간: 약 {queue.get('estimated_wait_time')}분
 """
 
     prompt += """
 [답변 규칙]
-1. 개인 정보 질문 시 → [환자 개인 정보]가 있으면 구체적 답변, 없으면 "로그인하시면 확인 가능"
-2. 일반 정보 질문 시 → 로그인 여부 무관하게 [병원 기본 정보] 활용
+1. 개인 정보 질문 → [환자 개인 정보]가 있으면 구체적 답변, 없으면 "로그인하시면 확인"
+2. 일반 정보 질문 → 로그인 여부 무관하게 [병원 기본 정보] 활용
 """
     return prompt
 
 @app.route('/api/chatbot/query', methods=['POST'])
 def chatbot_query():
+    # JWT 토큰 검증
     user_info = verify_jwt_token(request.headers.get('Authorization'))
     patient_data = fetch_patient_info(user_info['user_id']) if user_info else None
 
-    system_prompt = build_system_prompt(user_info, patient_data)
+    # GPT 프롬프트 생성
+    system_prompt = build_system_prompt(user_info, patient_data, public_data)
+
+    # OpenAI API 호출
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": question}]
+        messages=[{"role": "system", "content": system_prompt},
+                  {"role": "user", "content": question}]
     )
     return jsonify({"answer": response.choices[0].message.content})
 ```
@@ -178,27 +151,26 @@ def chatbot_query():
 ```python
 # nfc/views.py
 @api_view(['POST'])
-@permission_classes([permissions.IsAuthenticated])
-def nfc_scan(request):
-    """로그인 사용자용 NFC 스캔 - 맞춤형 안내"""
-    user = request.user
-    tag = NFCTag.objects.get(tag_id=request.data.get('tag_id'), is_active=True)
+@permission_classes([permissions.AllowAny])
+def nfc_public_scan(request):
+    """비로그인 사용자용 NFC 태그 스캔 - 공개 정보만"""
+    tag_id = request.data.get('tag_id')
 
-    # 1. TagLog 기록 (동선 분석용)
-    TagLog.objects.create(user=user, tag=tag, action_type='scan')
+    # 태그 유효성 검증
+    tag = NFCTag.objects.get(tag_id=tag_id, is_active=True)
 
-    # 2. 현재 환자 상태 조회
-    patient_state = PatientState.objects.get(user=user)
-    current_queue = Queue.objects.filter(user=user, state__in=['waiting', 'called']).first()
+    # 주변 편의시설 조회
+    nearby_facilities = _get_nearby_facilities(tag)
 
-    # 3. 위치 확인 및 맞춤 안내 생성
-    if tag.room == current_queue.exam.room:
-        personalized_message = f"{user.name}님, {current_queue.exam.title} 대기번호 {current_queue.queue_number}번입니다."
-        next_action = {"type": "wait_here", "estimated_wait": current_queue.estimated_wait_time}
-    else:
-        personalized_message = f"현재 위치는 {tag.room}입니다. {current_queue.exam.room}으로 이동해주세요."
+    # 마지막 스캔 시각 업데이트
+    tag.last_scanned_at = timezone.now()
+    tag.save(update_fields=['last_scanned_at'])
 
-    return Response({"personalized_message": personalized_message, "next_action": next_action})
+    return Response({
+        "location": f"{tag.building} {tag.floor}층 {tag.room}",
+        "description": tag.description,
+        "nearby_facilities": nearby_facilities
+    })
 ```
 
 ---
@@ -213,25 +185,27 @@ const JourneyContainer = ({ taggedLocation }) => {
   const patientState = useJourneyStore(state => state.patientState);
   const todaysAppointments = useJourneyStore(state => state.todaysAppointments);
 
-  // 1. 상태별 Template/Content 조합 결정
+  // 상태별 Template/Content 조합 결정
   const currentState = patientState?.current_state || PatientJourneyState.FINISHED;
   const { Template, Content } = getJourneyComponents(currentState);
 
-  // 2. 완료 통계 계산
+  // 완료 통계 계산
   const journeySummary = React.useMemo(() => {
-    const completedTasks = todaysAppointments.filter(apt =>
-      ['completed', 'examined'].includes(apt.status)
+    const completedTasks = todaysAppointments.filter(
+      apt => ['completed', 'examined'].includes(apt.status)
     );
+
     const totalMinutes = completedTasks.reduce((sum, apt) => {
-      const duration = apt.completed_at && apt.started_at
-        ? (new Date(apt.completed_at) - new Date(apt.started_at)) / 60000
-        : apt.exam?.average_duration || 30;
-      return sum + duration;
+      if (apt.started_at && apt.completed_at) {
+        const duration = (new Date(apt.completed_at) - new Date(apt.started_at)) / 60000;
+        return sum + duration;
+      }
+      return sum + (apt.exam?.average_duration || 30);
     }, 0);
+
     return { completedCount: completedTasks.length, totalDuration: totalMinutes };
   }, [todaysAppointments]);
 
-  // 3. Template에 데이터 전달하여 렌더링
   return (
     <Template
       patientState={currentState}
