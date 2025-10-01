@@ -139,47 +139,39 @@ class PatientJourneyService:
 
 ---
 
-### 5-3. GPT-4o 챗봇 동적 프롬프트 생성
+### 5-3. JWT 기반 인증 및 Django API 컨텍스트 조회
 
-사용자 인증 여부에 따라 시스템 프롬프트를 동적으로 생성하여 맞춤형 응답을 제공합니다.
+챗봇 서버는 JWT 토큰을 검증하여 사용자를 식별하고, Django API에서 실시간 환자 컨텍스트를 조회합니다.
 
 ```python
 # chatbot-server/app.py
-def build_system_prompt(user_info=None, patient_data=None, public_data=None):
-    """상황에 맞는 시스템 프롬프트 생성"""
-    prompt = """당신은 HC_119 종합병원의 친절한 AI 안내원입니다.
-[병원 기본 정보]
-- 대표전화: 1588-0000, 진료시간: 평일 08:30-17:30
-"""
+def verify_jwt_token(auth_header):
+    """JWT 토큰 검증하여 사용자 정보 반환"""
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return None
 
-    # 로그인 사용자 개인 정보
-    if user_info and patient_data:
-        current_queues = patient_data.get('currentQueues', [])
-        if current_queues:
-            queue = current_queues[0]
-            prompt += f"""
-[환자 개인 정보] 
-- 대기번호: {queue.get('queue_number')}번
-- 예상 대기시간: 약 {queue.get('estimated_wait_time')}분
-"""
+    try:
+        token = auth_header.split(' ')[1]
+        payload = jwt.decode(token, DJANGO_SECRET_KEY, algorithms=['HS256'])
 
-    prompt += """
-[답변 규칙]
-1. 개인 정보 질문 → [환자 개인 정보]가 있으면 구체적 답변, 없으면 "로그인하시면 확인"
-2. 일반 정보 질문 → 로그인 여부 무관하게 [병원 기본 정보] 활용
-"""
-    return prompt
+        return {
+            'user_id': payload.get('user_id'),
+            'name': payload.get('name', '환자'),
+            'role': payload.get('role', 'patient')
+        }
+    except jwt.ExpiredSignatureError:
+        return None
 
 @app.route('/api/chatbot/query', methods=['POST'])
 def chatbot_query():
-    # JWT 토큰 검증
+    # 1. JWT 검증 → user_info 추출
     user_info = verify_jwt_token(request.headers.get('Authorization'))
+
+    # 2. Django API 호출 → 환자 실시간 상태 조회
     patient_data = fetch_patient_info(user_info['user_id']) if user_info else None
 
-    # GPT 프롬프트 생성
-    system_prompt = build_system_prompt(user_info, patient_data, public_data)
-
-    # OpenAI API 호출
+    # 3. 동적 프롬프트 생성 및 GPT-4o API 호출
+    system_prompt = build_system_prompt(user_info, patient_data)
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "system", "content": system_prompt},
