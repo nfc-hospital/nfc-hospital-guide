@@ -87,17 +87,26 @@ apiClient.interceptors.response.use(
     return response.data;
   },
   async (error) => {
-    // 🐛 디버깅: 에러 응답 상세 로깅
-    console.error(`❌ API 응답 에러:`, {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      url: error.config?.url,
-      method: error.config?.method?.toUpperCase(),
-      message: error.message,
-      responseData: error.response?.data,
-      isNetworkError: !error.response,
-      errorCode: error.code
-    });
+    // 🐛 디버깅: 에러 응답 상세 로깅 (404와 500 구분)
+    const errorStatus = error.response?.status;
+    const errorUrl = error.config?.url;
+
+    if (errorStatus === 404) {
+      console.error(`❌ API 404 Not Found:`, errorUrl);
+    } else if (errorStatus === 500) {
+      console.error(`❌ API 500 Server Error:`, errorUrl);
+    } else {
+      console.error(`❌ API 응답 에러:`, {
+        status: errorStatus,
+        statusText: error.response?.statusText,
+        url: errorUrl,
+        method: error.config?.method?.toUpperCase(),
+        message: error.message,
+        responseData: error.response?.data,
+        isNetworkError: !error.response,
+        errorCode: error.code
+      });
+    }
     
     const originalRequest = error.config;
 

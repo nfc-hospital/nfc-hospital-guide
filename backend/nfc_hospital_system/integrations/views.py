@@ -259,7 +259,8 @@ def test_patient_list(request):
                             'state': current_queue.state,
                             'priority': current_queue.priority,
                             'exam_title': current_queue.exam.title if current_queue.exam else None,
-                            'estimated_wait_time': current_queue.estimated_wait_time
+                            'estimated_wait_time': current_queue.estimated_wait_time,
+                            'appointment_id': str(current_queue.appointment_id) if current_queue.appointment_id else None
                         }
                 except:
                     pass  # Queue 없어도 계속 진행
@@ -557,9 +558,9 @@ def test_add_exam_to_patient(request):
         else:
             scheduled_time = now
         
-        # appointment_id를 UUID로 생성
+        # appointment_id를 EMR_ 접두사와 함께 생성 (기존 데이터 형식과 일치)
         import uuid as uuid_module
-        appointment_id = str(uuid_module.uuid4())
+        appointment_id = f"EMR_{uuid_module.uuid4().hex[:8]}"
         
         # Appointment 생성
         appointment = Appointment.objects.create(
@@ -613,6 +614,73 @@ def test_add_exam_to_patient(request):
         return APIResponse.error(
             message=f"검사 추가 중 오류가 발생했습니다: {str(e)}",
             code="ADD_EXAM_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['DELETE'])
+@permission_classes([permissions.AllowAny])
+def test_remove_exam_from_patient(request, appointment_id):
+    """
+    시연용 환자의 검사/진료 삭제
+    DELETE /api/v1/test/remove-exam/{appointment_id}/
+
+    Body:
+    {
+        "user_id": "uuid"  // 검증용
+    }
+    """
+    user_id = request.data.get('user_id')
+
+    try:
+        from appointments.models import Appointment
+        from p_queue.models import Queue
+
+        # Appointment 조회 및 검증
+        appointment = Appointment.objects.get(appointment_id=appointment_id)
+
+        # 사용자 검증 (선택적)
+        if user_id and str(appointment.user.user_id) != user_id:
+            return APIResponse.error(
+                message="권한이 없습니다.",
+                code="UNAUTHORIZED",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        # 관련된 Queue가 있으면 함께 삭제
+        try:
+            queue = Queue.objects.get(appointment_id=appointment_id)
+            queue.delete()
+            logger.info(f"Queue {queue.queue_id} deleted with appointment {appointment_id}")
+        except Queue.DoesNotExist:
+            pass  # Queue가 없어도 계속 진행
+
+        # 검사 정보 백업
+        exam_title = appointment.exam.title
+        patient_name = appointment.user.name
+
+        # Appointment 삭제
+        appointment.delete()
+
+        return APIResponse.success(
+            data={
+                'appointment_id': appointment_id,
+                'exam_title': exam_title,
+                'patient_name': patient_name
+            },
+            message=f"{patient_name}님의 {exam_title} 검사를 삭제했습니다."
+        )
+
+    except Appointment.DoesNotExist:
+        return APIResponse.error(
+            message="해당 예약을 찾을 수 없습니다.",
+            code="APPOINTMENT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Remove exam from patient error: {str(e)}")
+        return APIResponse.error(
+            message=f"검사 삭제 중 오류가 발생했습니다: {str(e)}",
+            code="REMOVE_EXAM_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

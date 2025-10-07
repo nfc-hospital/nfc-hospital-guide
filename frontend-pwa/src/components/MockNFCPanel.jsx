@@ -422,21 +422,28 @@ export default function MockNFCPanel() {
           // API 호출 시도하되, 실패시 오프라인 모드로 전환
           const result = await scanNFCTag(tag.code, mockNDEFMessage);
           console.log('📡 API 응답:', result);
-          
+
           if (result.success) {
-            toast.success(`${locationData.location_name} API 연동 스캔 완료!`, {
-              icon: '🏷️',
+            toast.success(`${locationData.location_name} 스캔 완료!`, {
+              icon: '✅',
+              duration: 2000
+            });
+          } else if (result.offline) {
+            // 오프라인 모드로 정상 동작
+            console.log('📴 오프라인 모드로 동작 중');
+            toast(`${locationData.location_name} (오프라인 모드)`, {
+              icon: '📴',
               duration: 2000
             });
           } else {
-            throw new Error('API 응답 실패');
+            throw new Error(result.error || 'API 응답 실패');
           }
         } catch (apiError) {
-          console.log('📴 API 호출 실패, 오프라인 모드로 전환:', apiError.message);
-          
+          console.warn('⚠️ API 호출 실패, 오프라인 모드 유지:', apiError.message);
+
           // 오프라인 모드: API 없이도 MockNFC 동작
-          toast.success(`${locationData.location_name} 오프라인 스캔 완료!`, {
-            icon: '🏷️',
+          toast(`${locationData.location_name} 위치 설정됨`, {
+            icon: '📍',
             duration: 2000
           });
         }
@@ -444,23 +451,17 @@ export default function MockNFCPanel() {
         // 🔍 최종 LocationStore 상태 확인 (API 성공/실패와 관계없이)
         const finalState = useLocationStore.getState();
         const validation = finalState.getStateValidation();
-        
+
         if (validation.hasCurrentNodeId && validation.nodeIdLocationConsistent) {
-          toast.success(`${tag.description} 위치 설정 완료! 🎯 경로 계산 준비됨`, {
-            icon: '📍',
-            duration: 3000
-          });
-          console.log('✅ MockNFC - LocationStore 상태 완벽 설정:', {
+          console.log('✅ MockNFC - LocationStore 상태 설정 완료:', {
             nodeId: finalState.currentNodeId,
             location: validation.currentState.locationName,
             readyForRouting: true
           });
+          // 추가 성공 메시지는 표시하지 않음 (이미 위에서 표시함)
         } else {
-          toast(`${tag.description} 위치 설정됨 (부분)`, {
-            icon: '⚠️',
-            duration: 2000
-          });
           console.warn('⚠️ MockNFC - LocationStore 상태 부분 설정:', validation);
+          // 경고 메시지도 표시하지 않음 (사용자에게는 위치 설정 성공으로 보이도록)
         }
         
       } else {

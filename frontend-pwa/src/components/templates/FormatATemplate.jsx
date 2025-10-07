@@ -5,6 +5,8 @@ import { CheckIcon } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
 import { PatientJourneyState, QueueDetailState } from '../../constants/states';
+import { getDemoRouteForScreen } from '../../data/demoRoutes';
+import { getDefaultLocationForState, generateDemoSchedule, generateDemoWaitingInfo } from '../../data/demoLocationData';
 
 // 상태와 NFC 태그 정보를 기반으로 다음 행동 안내 문구 생성
 const getNextActionText = (patientState, currentExam, taggedLocation, locationInfo) => {
@@ -177,7 +179,7 @@ const FormatATemplate = ({
   
   // 실제 현재 위치 정보 우선 사용
   const actualCurrentLocation = taggedLocationInfo || taggedLocation || currentLocation;
-  
+
   // currentExam을 useMemo로 계산
   const currentExam = React.useMemo(() => {
     const activeQueue = currentQueues?.find(
@@ -186,8 +188,32 @@ const FormatATemplate = ({
     return activeQueue?.exam || todaysAppointments?.[0]?.exam || null;
   }, [currentQueues, todaysAppointments]);
 
-  // nextAction 자동 생성
-  const displayNextAction = getNextActionText(patientState, currentExam, actualCurrentLocation, locationInfo);
+  // 데모 모드 데이터 사용 (locationInfo가 없을 때)
+  const effectiveLocationInfo = React.useMemo(() => {
+    if (locationInfo) return locationInfo;
+
+    // 데모 데이터 사용
+    const demoLocation = getDefaultLocationForState(patientState);
+    return demoLocation;
+  }, [locationInfo, patientState]);
+
+  // 데모 일정 사용 (todaySchedule이 비어있을 때)
+  const effectiveSchedule = React.useMemo(() => {
+    if (todaySchedule && todaySchedule.length > 0) return todaySchedule;
+    return generateDemoSchedule();
+  }, [todaySchedule]);
+
+  // 데모 대기 정보 사용 (waitingInfo가 없을 때)
+  const effectiveWaitingInfo = React.useMemo(() => {
+    if (waitingInfo) return waitingInfo;
+    if (patientState === 'WAITING' || patientState === 'CALLED') {
+      return generateDemoWaitingInfo();
+    }
+    return null;
+  }, [waitingInfo, patientState]);
+
+  // nextAction 자동 생성 (effectiveLocationInfo 사용)
+  const displayNextAction = getNextActionText(patientState, currentExam, actualCurrentLocation, effectiveLocationInfo);
 
   const toggleExpanded = (index) => {
     setExpandedItems(prev => 
@@ -268,13 +294,13 @@ const FormatATemplate = ({
             </div>
 
             {/* 대기 정보 카드 - 반투명 유리 효과 */}
-            {waitingInfo && (
+            {effectiveWaitingInfo && (
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div className="bg-white/20 backdrop-blur-lg rounded-2xl sm:rounded-3xl px-4 py-2 sm:py-2.5 border border-white/30 hover:bg-white/25 transition-all duration-300">
                   <div className="text-center">
                     <p className="text-white/80 text-xs sm:text-sm whitespace-nowrap">내 앞에</p>
                     <p className="text-white text-lg sm:text-xl font-bold">
-                      {waitingInfo.peopleAhead}<span className="text-sm sm:text-base font-normal ml-0.5">명</span>
+                      {effectiveWaitingInfo.peopleAhead}<span className="text-sm sm:text-base font-normal ml-0.5">명</span>
                     </p>
                   </div>
                 </div>
@@ -282,7 +308,7 @@ const FormatATemplate = ({
                   <div className="text-center">
                     <p className="text-white/80 text-xs sm:text-sm whitespace-nowrap">예상 대기</p>
                     <p className="text-white text-lg sm:text-xl font-bold">
-                      {waitingInfo.estimatedTime}<span className="text-sm sm:text-base font-normal ml-0.5">분</span>
+                      {effectiveWaitingInfo.estimatedTime}<span className="text-sm sm:text-base font-normal ml-0.5">분</span>
                     </p>
                   </div>
                 </div>
@@ -347,7 +373,7 @@ const FormatATemplate = ({
             {activeTab === 'location' ? (
               <div className="space-y-4">
                 {/* 위치 정보 - 깔끔한 카드 디자인 */}
-                {locationInfo ? (
+                {effectiveLocationInfo ? (
                   <div className="mb-4">
                     {/* 목적지 정보 - 현재 위치 -> 목적지 형식 */}
                     <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
@@ -371,7 +397,7 @@ const FormatATemplate = ({
                         <div className="flex items-center gap-2">
                           <span className="text-gray-600">목적지:</span>
                           <span className="font-semibold text-blue-700">
-                            {locationInfo.name || locationInfo.room || '목적지'}
+                            {effectiveLocationInfo.name || effectiveLocationInfo.room || '목적지'}
                           </span>
                         </div>
                       </div>
@@ -380,13 +406,32 @@ const FormatATemplate = ({
                 ) : (
                   <div className="mb-4">
                     {/* 기본 위치 안내 (데이터가 없을 때) */}
-                    <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-200">
                       <div className="text-center">
-                        <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <span className="text-xl">🏥</span>
+                        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <MapPinIcon className="w-6 h-6 text-blue-600" />
                         </div>
-                        <h4 className="text-lg font-semibold text-gray-900 mb-2">위치 정보를 불러오는 중...</h4>
-                        <p className="text-sm text-gray-600">NFC 태그를 스캔하거나 백엔드 연결을 확인해주세요</p>
+                        <h4 className="text-lg font-semibold text-gray-900 mb-2">위치 안내 준비 중</h4>
+                        <p className="text-sm text-gray-700 mb-3">
+                          {patientState === 'UNREGISTERED'
+                            ? '로그인하시면 맞춤 경로를 안내받을 수 있습니다'
+                            : 'NFC 태그를 스캔하면 정확한 경로를 안내받을 수 있습니다'}
+                        </p>
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => navigate('/login')}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                            style={{ display: patientState === 'UNREGISTERED' ? 'block' : 'none' }}
+                          >
+                            로그인하기
+                          </button>
+                          <button
+                            onClick={() => setShowDemoMap(true)}
+                            className="px-4 py-2 bg-white text-blue-600 border border-blue-300 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
+                          >
+                            데모 보기
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -412,13 +457,15 @@ const FormatATemplate = ({
                     {/* 실제 지도 (데이터 연동) */}
                     <div className={showDemoMap ? 'opacity-30' : ''}>
                       <div className="p-6">
-                        <MapNavigator 
-                          mapId={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
-                          highlightRoom={locationInfo?.name || ''}
-                          facilityName={locationInfo?.name || ''}
+                        <MapNavigator
+                          mapId={effectiveLocationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
+                          highlightRoom={effectiveLocationInfo?.name || ''}
+                          facilityName={effectiveLocationInfo?.name || ''}
                           multiFloor={false} // 실제 데이터는 단일 층만
                           startFloor="main_1f"
-                          endFloor={locationInfo?.mapFile?.replace('.svg', '') || 'main_2f'}
+                          endFloor={effectiveLocationInfo?.mapFile?.replace('.svg', '') || 'main_2f'}
+                          pathNodes={[]} // 실제 경로는 API 연동 시 표시
+                          pathEdges={[]}
                         />
                       </div>
                     </div>
@@ -426,15 +473,38 @@ const FormatATemplate = ({
                     {/* 시연용 지도 오버레이 */}
                     {showDemoMap && (
                       <div className="absolute inset-0 bg-white transition-all duration-300">
-                        {/* 시연용 지도 내용 - 심플하게 */}
+                        {/* 시연용 지도 내용 - 상태별 자동 선택 */}
                         <div className="p-4 h-full">
-                          <MapNavigator 
-                            mapId="main_1f"
-                            highlightRoom="내과 대기실"
-                            facilityName="시연_1층_로비에서_엘리베이터" // 시연용 경로 사용
-                            multiFloor={true} // 시연용은 다중 층 활성화
+                          <MapNavigator
+                            mapId={(() => {
+                              // 상태별 적절한 지도 선택
+                              const demoRoute = getDemoRouteForScreen(patientState) || getDemoRouteForScreen(screenType);
+                              return demoRoute?.mapId || 'main_1f';
+                            })()}
+                            highlightRoom={effectiveLocationInfo?.name || ''}
+                            facilityName={(() => {
+                              // 상태별 시연 경로 이름
+                              const demoRoute = getDemoRouteForScreen(patientState) || getDemoRouteForScreen(screenType);
+                              return demoRoute?.facilityName || '시연_경로';
+                            })()}
+                            multiFloor={false} // 단일 층 표시
                             startFloor="main_1f"
                             endFloor="main_2f"
+                            pathNodes={(() => {
+                              // 현재 상태에 맞는 시연 경로
+                              const demoRoute = getDemoRouteForScreen(patientState) || getDemoRouteForScreen(screenType);
+                              console.log('🎬 시연 모드 경로:', {
+                                state: patientState,
+                                screenType: screenType,
+                                route: demoRoute?.facilityName,
+                                nodeCount: demoRoute?.nodes?.length || 0
+                              });
+                              return demoRoute?.nodes || [];
+                            })()}
+                            pathEdges={(() => {
+                              const demoRoute = getDemoRouteForScreen(patientState) || getDemoRouteForScreen(screenType);
+                              return demoRoute?.edges || [];
+                            })()}
                           />
                         </div>
                       </div>

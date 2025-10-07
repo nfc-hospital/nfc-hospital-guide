@@ -189,6 +189,44 @@ const TestDataManager = () => {
     }
   };
 
+  // 환자의 검사 삭제
+  const removeExamFromPatient = async (userId, appointmentId) => {
+    if (!confirm('이 검사를 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const response = await apiService.api.delete(`/test/remove-exam/${appointmentId}/`, {
+        data: { user_id: userId }
+      });
+
+      if (response.data && response.data.message) {
+        alert(response.data.message);
+      }
+
+      await fetchPatients(); // 목록 새로고침
+
+      // 모달이 열려있으면 데이터 업데이트
+      if (showAllExamsModal && selectedPatientForAllExams) {
+        const updatedPatient = patients.find(p => p.user_id === userId);
+        if (updatedPatient) {
+          setSelectedPatientForAllExams(updatedPatient);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to remove exam:', error);
+
+      let errorMessage = '검사 삭제에 실패했습니다.';
+      if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = `오류: ${error.message}`;
+      }
+
+      alert(errorMessage);
+    }
+  };
+
   // 환자 위치 업데이트
   const updatePatientLocation = async (userId, locationKey) => {
     try {
@@ -345,7 +383,7 @@ const TestDataManager = () => {
                       {patient.current_queue ? (
                         <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
                           <div className="flex items-center justify-between mb-2">
-                            <div>
+                            <div className="flex-1">
                               <span className="text-sm font-semibold text-indigo-900">
                                 현재 대기: {patient.current_queue.exam_title}
                               </span>
@@ -358,15 +396,29 @@ const TestDataManager = () => {
                                 </span>
                               </div>
                             </div>
-                            <button
-                              onClick={() => {
-                                setSelectedPatientForAllExams(patient);
-                                setShowAllExamsModal(true);
-                              }}
-                              className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                            >
-                              전체 검사 ({patient.appointments?.length || 0}개)
-                            </button>
+                            <div className="flex items-center gap-2">
+                              {/* 현재 검사 삭제 버튼 */}
+                              {patient.current_queue.appointment_id && (
+                                <button
+                                  onClick={() => removeExamFromPatient(patient.user_id, patient.current_queue.appointment_id)}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                  title="현재 검사 삭제"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setSelectedPatientForAllExams(patient);
+                                  setShowAllExamsModal(true);
+                                }}
+                                className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                              >
+                                전체 검사 ({patient.appointments?.length || 0}개)
+                              </button>
+                            </div>
                           </div>
                           
                           {patient.current_queue.queue_id && (
@@ -599,17 +651,29 @@ const TestDataManager = () => {
                             <div className="col-span-2">
                               <span className="text-gray-500">예약 시간:</span>
                               <span className="ml-2 text-gray-900 font-medium">
-                                {new Date(appt.scheduled_at).toLocaleString('ko-KR', { 
+                                {new Date(appt.scheduled_at).toLocaleString('ko-KR', {
                                   year: 'numeric',
-                                  month: 'long', 
-                                  day: 'numeric', 
-                                  hour: '2-digit', 
+                                  month: 'long',
+                                  day: 'numeric',
+                                  hour: '2-digit',
                                   minute: '2-digit',
                                   weekday: 'short'
                                 })}
                               </span>
                             </div>
                           </div>
+                        </div>
+                        {/* 삭제 버튼 추가 */}
+                        <div className="ml-4">
+                          <button
+                            onClick={() => removeExamFromPatient(selectedPatientForAllExams.user_id, appt.appointment_id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="검사 삭제"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     </div>

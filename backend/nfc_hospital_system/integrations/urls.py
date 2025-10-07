@@ -18,6 +18,7 @@ urlpatterns = [
     # 시연용 검사/진료 관리 API
     path('available-exams/', views.test_get_available_exams, name='test-available-exams'),
     path('add-exam/', views.test_add_exam_to_patient, name='test-add-exam'),
+    path('remove-exam/<str:appointment_id>/', views.test_remove_exam_from_patient, name='test-remove-exam'),
     
     # 시연용 위치 관리 API
     path('locations/', views.test_get_locations, name='test-locations'),

@@ -1,0 +1,569 @@
+⚠️ Firebase Admin SDK가 설치되지 않았습니다. FCM 기능이 비활성화됩니다.
+   설치 방법: pip install firebase-admin
+DB_HOST: nfc-hospital-db-1.clku4gauwp7r.ap-northeast-2.rds.amazonaws.com
+DB_NAME: nfc_hospital_db
+DB_USER: nfchospital
+개발 환경으로 Django 서버가 시작됩니다!
+Django Environment: development
+Database: django.db.backends.mysql
+Debug Mode: True
+[
+{
+  "model": "appointments.exam",
+  "pk": "basic_checkup",
+  "fields": {
+    "title": "기본 검사",
+    "description": "기본 건강 검진",
+    "department": "가정의학과",
+    "average_duration": 15,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-08-04T12:30:13.138Z",
+    "updated_at": "2025-08-04T12:30:13.138Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "blood_test",
+  "fields": {
+    "title": "혈액검사",
+    "description": "혈액검사 검사",
+    "department": "채혈실",
+    "average_duration": 10,
+    "buffer_time": 10,
+    "location_tag": null,
+    "category": null,
+    "base_price": "15000",
+    "insurance_coverage": "0.80",
+    "is_active": true,
+    "created_at": "2025-08-16T08:22:48.850Z",
+    "updated_at": "2025-09-19T07:32:11.952Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "blood-test",
+  "fields": {
+    "title": "혈액검사",
+    "description": "일반 혈액 검사",
+    "department": "진단검사의학과",
+    "average_duration": 10,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "15000",
+    "insurance_coverage": "0.80",
+    "is_active": true,
+    "created_at": "2025-08-16T19:21:50.934Z",
+    "updated_at": "2025-09-19T07:32:11.940Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "BLOOD01",
+  "fields": {
+    "title": "기본 혈액검사",
+    "description": "혈당, 콜레스테롤, 간기능 등 기본 항목 포함",
+    "department": "진단검사의학과",
+    "average_duration": 10,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "15000",
+    "insurance_coverage": "0.80",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.916Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "BONEDEXA",
+  "fields": {
+    "title": "골밀도 검사",
+    "description": "골다공증 진단을 위한 이중에너지 X선 흡수계측법",
+    "department": "영상의학과",
+    "average_duration": 25,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "35000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.838Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "COVIDPCR",
+  "fields": {
+    "title": "코로나19 PCR 검사",
+    "description": "COVID-19 감염 여부를 분자 진단 방식으로 확인",
+    "department": "진단검사의학과",
+    "average_duration": 40,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-07-25T04:03:42Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "ct_scan",
+  "fields": {
+    "title": "CT 촬영",
+    "description": "CT 촬영 검사",
+    "department": "CT실",
+    "average_duration": 35,
+    "buffer_time": 10,
+    "location_tag": null,
+    "category": null,
+    "base_price": "150000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-08-16T08:22:48.962Z",
+    "updated_at": "2025-09-19T07:32:11.751Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "CT001",
+  "fields": {
+    "title": "복부 CT",
+    "description": "복부 장기 이상 유무를 단층 촬영으로 진단",
+    "department": "영상의학과",
+    "average_duration": 35,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "150000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.866Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EKG001",
+  "fields": {
+    "title": "심전도 검사",
+    "description": "심장 리듬 이상 여부를 측정하는 기본 검사",
+    "department": "심장내과",
+    "average_duration": 15,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "30000",
+    "insurance_coverage": "0.80",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.827Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_CT실",
+  "fields": {
+    "title": "CT실 진료",
+    "description": "CT실 일반 진료",
+    "department": "CT실",
+    "average_duration": 10,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "검사",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.501Z",
+    "updated_at": "2025-09-28T16:46:14.501Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_MRI실",
+  "fields": {
+    "title": "MRI실 진료",
+    "description": "MRI실 일반 진료",
+    "department": "MRI실",
+    "average_duration": 30,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "검사",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.551Z",
+    "updated_at": "2025-09-28T16:46:14.551Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_X-ray실",
+  "fields": {
+    "title": "X-ray실 진료",
+    "description": "X-ray실 일반 진료",
+    "department": "X-ray실",
+    "average_duration": 5,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "검사",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.449Z",
+    "updated_at": "2025-09-28T16:46:14.449Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_가정의학과",
+  "fields": {
+    "title": "가정의학과 진료",
+    "description": "가정의학과 일반 진료",
+    "department": "가정의학과",
+    "average_duration": 15,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "진료",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.789Z",
+    "updated_at": "2025-09-28T16:46:14.789Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_내과",
+  "fields": {
+    "title": "내과 진료",
+    "description": "내과 일반 진료",
+    "department": "내과",
+    "average_duration": 15,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "진료",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.226Z",
+    "updated_at": "2025-09-28T16:46:14.226Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_소아과",
+  "fields": {
+    "title": "소아과 진료",
+    "description": "소아과 일반 진료",
+    "department": "소아과",
+    "average_duration": 15,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "진료",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.710Z",
+    "updated_at": "2025-09-28T16:46:14.710Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_심장내과",
+  "fields": {
+    "title": "심장내과 진료",
+    "description": "심장내과 일반 진료",
+    "department": "심장내과",
+    "average_duration": 25,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "진료",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.658Z",
+    "updated_at": "2025-09-28T16:46:14.658Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_영상의학과",
+  "fields": {
+    "title": "영상의학과 진료",
+    "description": "영상의학과 일반 진료",
+    "department": "영상의학과",
+    "average_duration": 10,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "진료",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.372Z",
+    "updated_at": "2025-09-28T16:46:14.372Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_정형외과",
+  "fields": {
+    "title": "정형외과 진료",
+    "description": "정형외과 일반 진료",
+    "department": "정형외과",
+    "average_duration": 20,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "진료",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.319Z",
+    "updated_at": "2025-09-28T16:46:14.319Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "EX_진단검사의학과",
+  "fields": {
+    "title": "진단검사의학과 진료",
+    "description": "진단검사의학과 일반 진료",
+    "department": "진단검사의학과",
+    "average_duration": 10,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": "진료",
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-09-28T16:46:14.607Z",
+    "updated_at": "2025-09-28T16:46:14.607Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "exam_002",
+  "fields": {
+    "title": "X-Ray 촬영",
+    "description": "흉부 X-Ray",
+    "department": "영상의학과",
+    "average_duration": 20,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-08-15T08:19:58.521Z",
+    "updated_at": "2025-08-15T08:19:58.521Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "exam_003",
+  "fields": {
+    "title": "심전도 검사",
+    "description": "기본 심전도 검사",
+    "department": "순환기내과",
+    "average_duration": 15,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "30000",
+    "insurance_coverage": "0.80",
+    "is_active": true,
+    "created_at": "2025-08-15T08:19:58.571Z",
+    "updated_at": "2025-09-19T07:32:11.815Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "GASTRO01",
+  "fields": {
+    "title": "위내시경",
+    "description": "위염, 궤양, 위암 등의 진단을 위한 내시경 검사",
+    "department": "소화기내과",
+    "average_duration": 30,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "150000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.802Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "internal_med",
+  "fields": {
+    "title": "내과진료",
+    "description": "내과진료 검사",
+    "department": "내과",
+    "average_duration": 60,
+    "buffer_time": 10,
+    "location_tag": null,
+    "category": null,
+    "base_price": "20000",
+    "insurance_coverage": "0.90",
+    "is_active": true,
+    "created_at": "2025-08-16T08:22:48.907Z",
+    "updated_at": "2025-09-19T07:32:11.790Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "internal-medicine",
+  "fields": {
+    "title": "내과 진료",
+    "description": "내과 전문의 진료",
+    "department": "내과",
+    "average_duration": 60,
+    "buffer_time": 10,
+    "location_tag": null,
+    "category": null,
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-08-16T19:21:51.023Z",
+    "updated_at": "2025-08-16T19:21:51.024Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "mri_scan",
+  "fields": {
+    "title": "MRI 촬영",
+    "description": "MRI 촬영 검사",
+    "department": "MRI실",
+    "average_duration": 50,
+    "buffer_time": 10,
+    "location_tag": null,
+    "category": null,
+    "base_price": "500000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-08-16T08:22:49.019Z",
+    "updated_at": "2025-09-19T07:32:11.764Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "MRI001",
+  "fields": {
+    "title": "뇌 MRI",
+    "description": "뇌출혈, 뇌종양 등을 정밀하게 확인하는 자기공명영상",
+    "department": "영상의학과",
+    "average_duration": 50,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "500000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.853Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "ultrasound",
+  "fields": {
+    "title": "초음파검사",
+    "description": "복부 초음파 검사",
+    "department": "영상의학과",
+    "average_duration": 25,
+    "buffer_time": 10,
+    "location_tag": null,
+    "category": null,
+    "base_price": "80000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-08-16T19:21:50.982Z",
+    "updated_at": "2025-09-19T07:32:11.892Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "URINE01",
+  "fields": {
+    "title": "소변검사",
+    "description": "단백뇨, 혈뇨, 요로감염 등 기본 소변 분석",
+    "department": "진단검사의학과",
+    "average_duration": 10,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "10000",
+    "insurance_coverage": "0.80",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.928Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "USG001",
+  "fields": {
+    "title": "복부 초음파",
+    "description": "간, 담낭, 신장 등의 구조 확인",
+    "department": "영상의학과",
+    "average_duration": 25,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "80000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.878Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "xray",
+  "fields": {
+    "title": "X-ray 촬영",
+    "description": "X-ray 촬영 검사",
+    "department": "X-ray실",
+    "average_duration": 20,
+    "buffer_time": 10,
+    "location_tag": null,
+    "category": null,
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-08-16T08:22:49.078Z",
+    "updated_at": "2025-09-19T07:32:11.776Z"
+  }
+},
+{
+  "model": "appointments.exam",
+  "pk": "XRAY001",
+  "fields": {
+    "title": "흉부 X-ray",
+    "description": "폐렴, 결핵 등의 확인을 위한 기본 방사선 촬영",
+    "department": "영상의학과",
+    "average_duration": 20,
+    "buffer_time": 5,
+    "location_tag": null,
+    "category": null,
+    "base_price": "25000",
+    "insurance_coverage": "0.70",
+    "is_active": true,
+    "created_at": "2025-07-25T04:03:42Z",
+    "updated_at": "2025-09-19T07:32:11.903Z"
+  }
+}
+]

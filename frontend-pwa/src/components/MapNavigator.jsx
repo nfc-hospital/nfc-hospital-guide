@@ -66,19 +66,36 @@ const MapNavigator = ({
   
   // Props의 mapId 우선순위: stage > props > store
   const mapId = stageMapId || propMapId || currentMapId || 'main_1f';
-  
+
   // Store에서 경로 데이터 가져오기 (navigationRoute 우선)
   const routeData = navigationRoute || activeRoute || {};
-  
+
   // 경로 데이터 우선순위: store > stage > props
-  const corridorNodes = routeData.nodes?.length > 0 ? routeData.nodes : 
+  let corridorNodes = routeData.nodes?.length > 0 ? routeData.nodes :
     (stageNodes.length > 0 ? stageNodes : propPathNodes);
-  const corridorEdges = routeData.edges?.length > 0 ? routeData.edges : 
+  let corridorEdges = routeData.edges?.length > 0 ? routeData.edges :
     (stageEdges.length > 0 ? stageEdges : propPathEdges);
-  
+
+  // 폴백: 경로 데이터가 전혀 없으면 기본 샘플 경로 사용 (시연용)
+  if (corridorNodes.length === 0 && !stage?.isTransition) {
+    // 기본 샘플 경로 (현재 위치만 표시)
+    corridorNodes = [
+      { id: 'default-location', x: 150, y: 400, name: '현재 위치' }
+    ];
+    corridorEdges = [];
+
+    // props에서 목적지가 있으면 경로 생성
+    if (targetLocation || highlightRoom || facilityName) {
+      corridorNodes.push(
+        { id: 'default-destination', x: 450, y: 300, name: targetLocation || highlightRoom || facilityName }
+      );
+      corridorEdges.push(['default-location', 'default-destination']);
+    }
+  }
+
   // 현재 위치 설정 - 첫 번째 노드를 현재 위치로 사용
-  const currentLocation = corridorNodes.length > 0 ? corridorNodes[0] : 
-    (storeCurrentLocation || propCurrentLocation || null);
+  const currentLocation = corridorNodes.length > 0 ? corridorNodes[0] :
+    (storeCurrentLocation || propCurrentLocation || { x: 150, y: 400, name: '현재 위치' });
   
   // 디버깅용 로그
   console.log('🗺️ MapNavigator 경로 데이터:', {
