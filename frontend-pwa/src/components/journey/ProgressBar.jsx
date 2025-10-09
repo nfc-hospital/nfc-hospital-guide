@@ -125,16 +125,43 @@ export default function ProgressBar(props) {
     );
   }
 
-  // 현재 진행 중인 단계 찾기
-  const currentStepIndex = appointments.findIndex(apt => apt.status === QueueDetailState.IN_PROGRESS);
-  const nextStepIndex = currentStepIndex === -1 
-    ? appointments.findIndex(apt => apt.status === 'pending' || apt.status === QueueDetailState.WAITING)
-    : -1;
+  // 접수와 수납을 포함한 전체 단계 구성
+  const buildCompleteJourney = () => {
+    const steps = [];
 
-  // 완료된 마지막 단계 인덱스
-  const lastCompletedIndex = appointments.reduce((lastIndex, apt, index) => {
-    return apt.status === QueueDetailState.COMPLETED ? index : lastIndex;
-  }, -1);
+    // 1. 접수 단계 추가
+    const currentState = patientState?.current_state || patientState;
+    const isRegistered = currentState && currentState !== 'UNREGISTERED' && currentState !== 'ARRIVED';
+
+    steps.push({
+      name: '접수',
+      type: 'registration',
+      status: isRegistered ? 'completed' : 'pending'
+    });
+
+    // 2. 검사 단계들 추가
+    appointments.forEach((apt, index) => {
+      const examName = getAppointmentName(apt);
+      steps.push({
+        name: examName,
+        type: 'exam',
+        status: apt.status || 'pending',
+        appointment: apt
+      });
+    });
+
+    // 3. 수납 단계 추가
+    const isPaymentStage = currentState === 'PAYMENT' || currentState === 'FINISHED';
+    const isFinished = currentState === 'FINISHED';
+
+    steps.push({
+      name: '수납',
+      type: 'payment',
+      status: isFinished ? 'completed' : (isPaymentStage ? 'in_progress' : 'pending')
+    });
+
+    return steps;
+  };
 
   // appointment에서 이름 가져오기 (여러 경로에서 찾기)
   const getAppointmentName = (appointment) => {
@@ -157,35 +184,34 @@ export default function ProgressBar(props) {
     return name;
   };
 
-  // 현재 상태에 따른 헤더 텍스트
-  const getStatusText = () => {
-    if (currentStepIndex !== -1) {
-      return `${getAppointmentName(appointments[currentStepIndex])} 진행 중`;
-    } else if (nextStepIndex !== -1) {
-      return `다음: ${getAppointmentName(appointments[nextStepIndex])}`;
-    } else if (lastCompletedIndex === appointments.length - 1) {
-      return '모든 검사가 완료되었습니다';
-    }
-    return '오늘의 검사 일정';
-  };
+  // 전체 여정 단계 구성
+  const journeySteps = buildCompleteJourney();
 
   // 진행률 계산 (완료된 단계 기준)
-  const completedCount = appointments.filter(apt => apt.status === QueueDetailState.COMPLETED).length;
-  const progressPercentage = (completedCount / appointments.length) * 100;
+  const completedCount = journeySteps.filter(step => step.status === 'completed').length;
+  const currentStepIndex = journeySteps.findIndex(step => step.status === 'in_progress');
+  const progressPercentage = (completedCount / journeySteps.length) * 100;
 
   // Template의 파란색 배경에 맞는 스타일로 수정
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center flex-1">
         {/* 단계별 마커 - Template 스타일에 맞게 컴팩트하게 */}
-        {appointments.map((appointment, index) => {
-          const isCompleted = appointment.status === QueueDetailState.COMPLETED;
-          const isInProgress = appointment.status === QueueDetailState.IN_PROGRESS;
-          const isCurrent = index === currentStepIndex || index === nextStepIndex;
-          const isPending = appointment.status === 'pending' || appointment.status === QueueDetailState.WAITING;
+        {journeySteps.map((step, index) => {
+          const isCompleted = step.status === 'completed' || step.status === QueueDetailState.COMPLETED;
+          const isInProgress = step.status === 'in_progress' || step.status === QueueDetailState.IN_PROGRESS;
+          const isCurrent = isInProgress || (step.status === 'waiting' || step.status === QueueDetailState.WAITING);
+
+          // 단계별 색상 구분
+          const getStepColor = () => {
+            if (step.type === 'registration' || step.type === 'payment') {
+              return isCompleted ? 'bg-white' : isCurrent ? 'bg-amber-400' : 'bg-white/15';
+            }
+            return isCompleted ? 'bg-white' : isCurrent ? 'bg-amber-400' : 'bg-white/15';
+          };
 
           return (
-            <div key={appointment.id || appointment.appointment_id || index} className="flex flex-col items-center relative" style={{ flex: '1 1 0%' }}>
+            <div key={`${step.type}-${index}`} className="flex flex-col items-center relative" style={{ flex: '1 1 0%' }}>
               {/* 연결선 */}
               {index > 0 && (
                 <div className="absolute top-3 sm:top-4 h-0.5" style={{
@@ -202,12 +228,8 @@ export default function ProgressBar(props) {
                 <div className={`
                   relative w-5 h-5 sm:w-6 sm:h-6 rounded-full
                   flex items-center justify-center transition-all duration-500
-                  ${isCompleted
-                    ? 'bg-white shadow-md'
-                    : isCurrent
-                    ? 'bg-amber-400 shadow-lg ring-2 ring-white/30 scale-110'
-                    : 'bg-white/15 backdrop-blur-sm border border-white/25'
-                  }
+                  ${getStepColor()} ${isCurrent ? 'shadow-lg ring-2 ring-white/30 scale-110' : 'shadow-md'}
+                  ${!isCompleted && !isCurrent ? 'backdrop-blur-sm border border-white/25' : ''}
                 `}>
                   {isCompleted ? (
                     <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -227,8 +249,8 @@ export default function ProgressBar(props) {
               <div className="mt-1">
                 <div className={`text-[11px] sm:text-xs font-medium transition-all duration-300 whitespace-nowrap text-center ${
                   isCurrent ? 'text-white' : isCompleted ? 'text-white/90' : 'text-white/60'
-                }`}>
-                  {getAppointmentName(appointment)}
+                } ${step.type === 'registration' || step.type === 'payment' ? 'font-bold' : ''}`}>
+                  {step.name}
                 </div>
               </div>
             </div>
@@ -241,7 +263,7 @@ export default function ProgressBar(props) {
         <div className="text-white/70 text-xs sm:text-sm">진행</div>
         <div className="text-white flex items-baseline gap-0.5">
           <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{completedCount}</span>
-          <span className="text-sm sm:text-base lg:text-xl text-white/70">/{appointments.length}</span>
+          <span className="text-sm sm:text-base lg:text-xl text-white/70">/{journeySteps.length}</span>
         </div>
       </div>
     </div>

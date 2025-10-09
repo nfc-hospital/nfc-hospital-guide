@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
 import useMapStore from '../store/mapStore';
+import useLocationStore from '../store/locationStore';
 
 // 시설별 SVG element ID 매핑 (컴포넌트 밖으로 이동)
 const facilityMapping = {
@@ -58,6 +59,13 @@ const MapNavigator = ({
   const navigationRoute = useMapStore(state => state.navigationRoute);
   const storeCurrentLocation = useMapStore(state => state.currentLocation);
   const currentMapId = useMapStore(state => state.currentMapId);
+
+  // ✅ LocationStore에서 실제 물리적 위치 정보 가져오기
+  // 개별 값으로 선택하여 무한 렌더링 방지
+  const storeNodeId = useLocationStore(state => state.currentNodeId);
+  const storePositionX = useLocationStore(state => state.currentPosition.x);
+  const storePositionY = useLocationStore(state => state.currentPosition.y);
+  const storeMapId = useLocationStore(state => state.currentMapId);
   
   // stage에서 데이터 추출
   const stageMapId = stage?.mapName;
@@ -93,18 +101,33 @@ const MapNavigator = ({
     }
   }
 
-  // 현재 위치 설정 - 첫 번째 노드를 현재 위치로 사용
-  const currentLocation = corridorNodes.length > 0 ? corridorNodes[0] :
-    (storeCurrentLocation || propCurrentLocation || { x: 150, y: 400, name: '현재 위치' });
+  // 현재 위치 설정 - LocationStore의 위치 정보를 우선 사용
+  const currentLocation = storeNodeId && storePositionX ? {
+    x: storePositionX,
+    y: storePositionY,
+    node_id: storeNodeId,
+    name: '현재 위치'
+  } : (corridorNodes.length > 0 ? corridorNodes[0] :
+       (storeCurrentLocation || propCurrentLocation || { x: 150, y: 400, name: '현재 위치' }));
   
   // 디버깅용 로그
-  console.log('🗺️ MapNavigator 경로 데이터:', {
-    routeNodes: routeData.nodes,
-    routeEdges: routeData.edges,
-    propPathNodes,
-    propPathEdges,
-    corridorNodes,
-    corridorEdges,
+  console.log('🗺️ MapNavigator 렌더링:', {
+    // LocationStore 실시간 데이터
+    locationStore: {
+      nodeId: storeNodeId,
+      x: storePositionX,
+      y: storePositionY,
+      mapId: storeMapId
+    },
+    // 계산된 현재 위치
+    currentLocation,
+    // 경로 데이터
+    routeData: {
+      nodes: routeData.nodes?.length || 0,
+      edges: routeData.edges?.length || 0
+    },
+    corridorNodes: corridorNodes.length,
+    corridorEdges: corridorEdges.length,
     showNodes
   });
   
@@ -475,7 +498,12 @@ const MapNavigator = ({
         }
         
         // 2. 그 다음에 현재 위치 마커 추가 (경로보다 위에 그려짐)
-        const locationToShow = currentLocation || (corridorNodes.length > 0 ? corridorNodes[0] : null);
+        // LocationStore의 위치를 우선 사용
+        const locationToShow = (storeNodeId && storePositionX !== 0) ? {
+          x: storePositionX,
+          y: storePositionY
+        } : (currentLocation || (corridorNodes.length > 0 ? corridorNodes[0] : null));
+
         if (locationToShow) {
           const xCoord = locationToShow.x_coord || locationToShow.x || 150;
           const yCoord = locationToShow.y_coord || locationToShow.y || 400;
@@ -580,8 +608,14 @@ const MapNavigator = ({
 
   // 경로와 현재 위치만 업데이트하는 useEffect
   useEffect(() => {
+    console.log('🔄 MapNavigator 위치 업데이트 Effect 실행:', {
+      nodeId: storeNodeId,
+      x: storePositionX,
+      y: storePositionY
+    });
+
     if (!svgContainerRef.current) return;
-    
+
     const svgElement = svgContainerRef.current.querySelector('svg');
     if (!svgElement) {
       // SVG가 아직 로드되지 않았으면 기다림
@@ -733,11 +767,20 @@ const MapNavigator = ({
     }
     
     // 2. 그 다음에 현재 위치 마커 추가 (경로보다 위에 그려짐)
-    const locationToShow = currentLocation || (corridorNodes.length > 0 ? corridorNodes[0] : null);
+    // LocationStore의 위치를 우선 사용
+    const locationToShow = (storeNodeId && storePositionX !== 0) ? {
+      x: storePositionX,
+      y: storePositionY
+    } : (currentLocation || (corridorNodes.length > 0 ? corridorNodes[0] : null));
+
     if (locationToShow) {
+      const xPos = locationToShow.x || locationToShow.x_coord;
+      const yPos = locationToShow.y || locationToShow.y_coord;
+      console.log('📍 현재 위치 마커 설정:', { x: xPos, y: yPos });
+
       const markerGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       markerGroup.setAttribute('id', 'current-location-marker');
-      markerGroup.setAttribute('transform', `translate(${locationToShow.x || locationToShow.x_coord}, ${locationToShow.y || locationToShow.y_coord})`);
+      markerGroup.setAttribute('transform', `translate(${xPos}, ${yPos})`);
       
       // 펍스 효과를 위한 큰 원
       const pulseCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -798,7 +841,7 @@ const MapNavigator = ({
       
       svgElement.appendChild(markerGroup);
     }
-  }, [showNodes, corridorNodes, corridorEdges, currentLocation]); // 경로 데이터 변경 시에만 업데이트
+  }, [showNodes, corridorNodes, corridorEdges, currentLocation, storeNodeId, storePositionX, storePositionY]); // 경로 데이터 및 위치 변경 시 업데이트
 
   return (
     <div className="relative w-full">
