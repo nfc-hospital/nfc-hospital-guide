@@ -67,7 +67,7 @@ const useLocationStore = create(
        */
       setCurrentLocation: (locationData, coordinateData = {}) => {
         const timestamp = new Date().toISOString();
-        
+
         set((state) => ({
           currentLocation: {
             ...locationData,
@@ -129,7 +129,7 @@ const useLocationStore = create(
           currentMapId: mapId,
           lastScanTime: timestamp,
           locationError: null,
-          
+
           // 기존 currentLocation도 업데이트 (호환성 유지)
           currentLocation: {
             node_id: nodeId,
@@ -137,7 +137,7 @@ const useLocationStore = create(
             map_id: mapId,
             location_name: additionalInfo.location_name || '',
             building: additionalInfo.building || '',
-            floor: additionalInfo.floor || 1,
+            floor: additionalInfo.floor || '1층',
             room: additionalInfo.room || '',
             timestamp,
           }
@@ -217,10 +217,11 @@ const useLocationStore = create(
       getCurrentLocationName: () => {
         const location = get().currentLocation;
         if (!location) return '위치 정보 없음';
-        
-        return location.location_name || 
-               location.room || 
-               `${location.building} ${location.floor}층` ||
+
+        // 데이터가 이미 표준화되었으므로 복잡한 처리 없이 바로 사용합니다.
+        return location.location_name ||
+               location.room ||
+               `${location.building} ${location.floor}` ||
                '알 수 없는 위치';
       },
 

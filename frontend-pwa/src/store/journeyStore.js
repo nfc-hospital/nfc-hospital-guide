@@ -54,7 +54,7 @@ const useJourneyStore = create(
           return appointments.map((apt, index) => {
             // 장소 정보 생성 - room이 없으면 title 사용
             const building = apt.exam?.building || '본관';
-            const floor = apt.exam?.floor ? `${apt.exam.floor}층` : '';
+            const floor = apt.exam?.floor || '';
             const room = apt.exam?.room || apt.exam?.title || '';
             
             // 장소 문자열 조합 - 빈 값 제외하고 조합
@@ -863,7 +863,7 @@ const useJourneyStore = create(
                 const locationInfo = nextExam ? {
                   name: nextExam.title,
                   building: nextExam.building || '본관',
-                  floor: nextExam.floor ? `${nextExam.floor}층` : '1층',
+                  floor: nextExam.floor || '1층',
                   room: nextExam.room || nextExam.title,
                   department: nextExam.department || '',
                   description: nextExam.description,

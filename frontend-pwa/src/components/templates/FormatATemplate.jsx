@@ -89,7 +89,7 @@ const getNextActionText = (patientState, currentExam, taggedLocation, locationIn
           return '원무과에서 수납하기';
         }
         if (building && floor) {
-          return `${building} ${floor}층 ${destination}실로 이동하기`;
+          return `${building} ${floor} ${destination}실로 이동하기`;
         }
         return `다음 검사: ${destination}실로 이동하기`;
       }
@@ -387,7 +387,7 @@ const FormatATemplate = ({
                               }
                               if (actualCurrentLocation?.building && actualCurrentLocation?.floor) {
                                 const room = actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : '';
-                                return `${actualCurrentLocation.building} ${actualCurrentLocation.floor}층${room}`;
+                                return `${actualCurrentLocation.building} ${actualCurrentLocation.floor}${room}`;
                               }
                               return '현재 위치';
                             })()}

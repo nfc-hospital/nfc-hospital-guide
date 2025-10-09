@@ -429,7 +429,7 @@ const FormatBTemplate = ({
                 <span className="text-gray-600">현재:</span>
                 <span className="font-medium text-gray-800">
                   {actualCurrentLocation?.description || actualCurrentLocation?.building && actualCurrentLocation?.floor 
-                    ? `${actualCurrentLocation.building} ${actualCurrentLocation.floor}층${actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : ''}`
+                    ? `${actualCurrentLocation.building} ${actualCurrentLocation.floor}${actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : ''}`
                     : '병원 입구'}
                 </span>
               </div>

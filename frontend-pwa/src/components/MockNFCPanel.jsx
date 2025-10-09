@@ -155,29 +155,7 @@ export default function MockNFCPanel() {
       const locationName = currentLocation.location_name;
       const building = currentLocation.building;
       const room = currentLocation.room;
-      let floor = currentLocation.floor;
-
-      // 디버깅을 위한 콘솔 출력
-      console.log('📍 현재 위치 데이터:', {
-        locationName,
-        building,
-        floor,
-        room,
-        fullLocation: currentLocation
-      });
-
-      // floor 데이터 정리 - string/number 타입과 중복 처리
-      if (typeof floor === 'number') {
-        floor = `${floor}층`;
-      } else if (typeof floor === 'string') {
-        // '1층F' → '1층', '1층층' → '1층', '1' → '1층'
-        if (!floor.includes('층')) {
-          floor = `${floor}층`;
-        } else {
-          // 중복된 '층' 제거 및 'F' 제거
-          floor = floor.replace(/층+/g, '층').replace(/F$/, '');
-        }
-      }
+      const floor = currentLocation.floor; // 이미 표준화된 데이터
 
       // 정문인 경우 특별 메시지
       if (locationName === '정문') {
