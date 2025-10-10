@@ -56,11 +56,11 @@ const useJourneyStore = create(
             const building = apt.exam?.building || '본관';
             const floor = apt.exam?.floor || '';
             const room = apt.exam?.room || apt.exam?.title || '';
-            
+
             // 장소 문자열 조합 - 빈 값 제외하고 조합
             const locationParts = [building, floor, room].filter(part => part);
             const location = locationParts.length > 0 ? locationParts.join(' ') : '위치 미정';
-            
+
             return {
               id: apt.appointment_id,
               examName: apt.exam?.title || `검사 ${index + 1}`,
@@ -72,7 +72,10 @@ const useJourneyStore = create(
               duration: apt.exam?.average_duration || 30,
               scheduled_at: apt.scheduled_at,
               department: apt.exam?.department,
-              exam: apt.exam // 원본 exam 객체도 포함
+              exam: apt.exam ? {
+                ...apt.exam,
+                location: location  // ✅ exam 객체에 location 필드 추가
+              } : null
             };
           });
         },

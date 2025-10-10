@@ -3,10 +3,10 @@ import { QueueDetailState } from '../../constants/states';
 
 /**
  * ProgressBar - 환자의 전체 진료/검사 과정을 시각화하는 컴포넌트
- * 
+ *
  * @param {Object|Array} props - 여정 데이터 또는 appointments 배열
  * @param {Object} props.journeyData - 여정 데이터 객체 (선택적)
- * @param {string} props.journeyData.patientState - 환자의 9단계 상태
+ * @param {string} props.journeyData.patientState - 환자의 8단계 상태 (COMPLETED 제거됨)
  * @param {Array} props.journeyData.appointments - 오늘의 전체 일정 목록
  * @param {Array} props.appointments - appointments 배열 (레거시 지원)
  */
@@ -46,7 +46,7 @@ export default function ProgressBar(props) {
       } else if (currentState === 'UNREGISTERED' || currentState === 'ARRIVED') {
         return 0; // 접수 단계
       } else {
-        return 1; // 검사 단계 (REGISTERED, WAITING, CALLED, IN_PROGRESS, COMPLETED)
+        return 1; // 검사 단계 (REGISTERED, WAITING, CALLED, IN_PROGRESS)
       }
     };
 
@@ -131,21 +131,51 @@ export default function ProgressBar(props) {
 
     // 1. 접수 단계 추가
     const currentState = patientState?.current_state || patientState;
-    const isRegistered = currentState && currentState !== 'UNREGISTERED' && currentState !== 'ARRIVED';
+
+    // 접수 단계 상태 결정
+    // UNREGISTERED: pending (아직 도착 안함)
+    // ARRIVED: in_progress (도착해서 접수 진행 중)
+    // REGISTERED 이상: completed (접수 완료)
+    let registrationStatus = 'pending';
+    if (currentState === 'ARRIVED') {
+      registrationStatus = 'in_progress';
+    } else if (currentState && currentState !== 'UNREGISTERED' && currentState !== 'ARRIVED') {
+      registrationStatus = 'completed';
+    }
 
     steps.push({
       name: '접수',
       type: 'registration',
-      status: isRegistered ? 'completed' : 'pending'
+      status: registrationStatus
     });
 
-    // 2. 검사 단계들 추가
+    // 2. 검사 단계들 추가 - Backend의 apt.status를 그대로 사용 (Single Source of Truth)
+
+    // 현재 진행 중인 검사 찾기 (백엔드 상태 기반)
+    const inProgressIndex = appointments.findIndex(apt => apt.status === 'in_progress');
+
     appointments.forEach((apt, index) => {
       const examName = getAppointmentName(apt);
+
+      // ✅ Backend Queue 상태를 정확히 반영
+      let examStatus = 'pending'; // 기본값
+
+      if (apt.status === 'completed') {
+        examStatus = 'completed';  // 완료된 검사
+      } else if (apt.status === 'in_progress') {
+        examStatus = 'in_progress';  // 현재 진행 중 (노란 원)
+      } else if (inProgressIndex > -1 && index < inProgressIndex) {
+        // in_progress 검사보다 앞에 있는 검사들은 완료된 것으로 표시
+        examStatus = 'completed';
+      } else {
+        // 나머지는 pending (회색 원)
+        examStatus = 'pending';
+      }
+
       steps.push({
         name: examName,
         type: 'exam',
-        status: apt.status || 'pending',
+        status: examStatus,
         appointment: apt
       });
     });
@@ -200,7 +230,8 @@ export default function ProgressBar(props) {
         {journeySteps.map((step, index) => {
           const isCompleted = step.status === 'completed' || step.status === QueueDetailState.COMPLETED;
           const isInProgress = step.status === 'in_progress' || step.status === QueueDetailState.IN_PROGRESS;
-          const isCurrent = isInProgress || (step.status === 'waiting' || step.status === QueueDetailState.WAITING);
+          // isCurrent는 오직 in_progress 상태만 노란색으로 표시
+          const isCurrent = isInProgress;
 
           // 단계별 색상 구분
           const getStepColor = () => {

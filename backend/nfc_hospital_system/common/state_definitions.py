@@ -9,7 +9,7 @@ class PatientJourneyState(Enum):
     WAITING = 'WAITING'
     CALLED = 'CALLED'
     IN_PROGRESS = 'IN_PROGRESS'  # ONGOING 대신 통일
-    COMPLETED = 'COMPLETED'
+    # COMPLETED 제거 - IN_PROGRESS 완료 시 services.py에서 동적 결정 (WAITING or PAYMENT)
     PAYMENT = 'PAYMENT'
     FINISHED = 'FINISHED'
 
@@ -62,12 +62,9 @@ STATE_TRANSITIONS = {
         StaffAction.MARK_NO_SHOW: PatientJourneyState.WAITING,  # 다시 대기
     },
     PatientJourneyState.IN_PROGRESS: {
-        PatientAction.COMPLETE_EXAM: PatientJourneyState.COMPLETED,
-        StaffAction.COMPLETE_EXAM: PatientJourneyState.COMPLETED,
-    },
-    PatientJourneyState.COMPLETED: {
-        PatientAction.CONFIRM_ARRIVAL: PatientJourneyState.WAITING,  # 다음 검사
-        PatientAction.MAKE_PAYMENT: PatientJourneyState.PAYMENT,
+        # COMPLETE_EXAM 액션 시 services.py에서 동적으로 WAITING 또는 PAYMENT로 분기
+        # - 다음 대기 중인 appointment가 있으면 → WAITING
+        # - 없으면 → PAYMENT
     },
     PatientJourneyState.PAYMENT: {
         PatientAction.MAKE_PAYMENT: PatientJourneyState.FINISHED,
@@ -84,8 +81,10 @@ QUEUE_TO_JOURNEY_MAPPING = {
     QueueDetailState.CALLED: PatientJourneyState.CALLED,
     QueueDetailState.NO_SHOW: PatientJourneyState.WAITING,
     QueueDetailState.IN_PROGRESS: PatientJourneyState.IN_PROGRESS,
-    QueueDetailState.COMPLETED: PatientJourneyState.COMPLETED,
-    QueueDetailState.CANCELLED: PatientJourneyState.COMPLETED,
+    # QueueDetailState.COMPLETED는 services.py에서 동적 처리:
+    # - 다음 대기 중인 appointment가 있으면 → WAITING
+    # - 없으면 → PAYMENT
+    QueueDetailState.CANCELLED: PatientJourneyState.WAITING,  # 취소 시 대기로 복귀
 }
 
 # Journey 상태와 Queue 상태 역매핑
@@ -93,5 +92,5 @@ JOURNEY_TO_QUEUE_MAPPING = {
     PatientJourneyState.WAITING: QueueDetailState.WAITING,
     PatientJourneyState.CALLED: QueueDetailState.CALLED,
     PatientJourneyState.IN_PROGRESS: QueueDetailState.IN_PROGRESS,
-    PatientJourneyState.COMPLETED: QueueDetailState.COMPLETED,
+    # COMPLETED 제거됨 - Queue의 completed는 Journey 상태로 직접 매핑하지 않음
 }

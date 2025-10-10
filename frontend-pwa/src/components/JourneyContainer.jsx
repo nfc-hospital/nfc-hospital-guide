@@ -55,14 +55,9 @@ const getJourneyComponents = (patientState) => {
         Content: WaitingContent,
         screenType: 'waiting'
       };
-    
-    case PatientJourneyState.COMPLETED:
-      return {
-        Template: FormatATemplate,
-        Content: RegisteredContent, // 완료 후 다음 검사 안내
-        screenType: 'registered'
-      };
-    
+
+    // COMPLETED 케이스 제거 - Backend에서 동적으로 WAITING 또는 PAYMENT로 전환됨
+
     case PatientJourneyState.PAYMENT:
       return {
         Template: FormatATemplate,
@@ -133,7 +128,7 @@ const JourneyContainer = ({ taggedLocation }) => {
       'WAITING': '검사 대기',
       'CALLED': '호출됨',
       'IN_PROGRESS': '검사 중',
-      'COMPLETED': '검사 완료',
+      // 'COMPLETED': '검사 완료', // 제거 - Backend에서 동적 분기
       'PAYMENT': '수납 대기',
       'FINISHED': '모든 일정 완료'
     };

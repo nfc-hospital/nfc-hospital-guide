@@ -1,0 +1,1138 @@
+================================================================================
+     환자 상태 간소화 최종 분석: COMPLETED 단계만 제거하는 방안
+================================================================================
+
+작성일: 2025-10-10
+프로젝트: NFC 기반 병원 안내 시스템 (한이음 공모전)
+분석 기반: 팀원 논의 + 실제 코드 구조 분석
+
+================================================================================
+목차
+================================================================================
+
+1. 팀 논의 요약 및 핵심 통찰
+2. 현재 시스템 구조 재분석 (2단계 구조)
+3. ARRIVED/CALLED를 제거하면 안 되는 이유
+4. COMPLETED만 제거해도 되는 이유
+5. 최종 권장안: 8단계 → 7단계
+6. 구현 방법 (최소 수정)
+7. 데이터베이스 영향 분석
+8. 코드 수정 범위
+9. 마이그레이션 전략
+10. 결론
+
+================================================================================
+1. 팀 논의 요약 및 핵심 통찰
+================================================================================
+
+[지현님 최초 제안]
+- 문제 인식: 9단계가 너무 많고 매끄럽지 않음
+- 간소화 필요성 제기
+- UNREGISTERED, PAYMENT는 필수 유지
+
+[윤기님 핵심 통찰] ⭐⭐⭐
+> "환자 상태가 있고, 검사 대기열의 환자 상태가 여러가지라서
+>  데이터적으로 그걸 받아오는 용도라서 어쩔 수 없다"
+
+→ **PatientState vs Queue.state의 역할 차이 명확히 인지**
+
+[윤기님 이전 결론]
+> "그래서 COMPLETED만 없애면 되겠다는게 저번 결론이었어"
+
+→ **데이터 구조 이해 기반 현실적 판단**
+
+[서윤님 질문]
+> "CALLED 없애면 호출 모달은 어떤 기준으로 뜨는 거여?"
+
+→ **구현 디테일에 대한 정확한 질문**
+
+[지현님 추가 의견]
+> "원무과 방문 필요하다 안하다 < 이거를 또 만들어서 계산해야 되는 세부 상태 같애"
+
+→ **ARRIVED와 REGISTERED 통합 시 복잡도 증가 우려**
+
+[최종 공감대]
+- COMPLETED는 제거 가능
+- ARRIVED, CALLED는 데이터 구조상 필요할 수도
+
+================================================================================
+2. 현재 시스템 구조 재분석 (2단계 구조)
+================================================================================
+
+[시스템 아키텍처]
+
+현재 시스템은 **2단계 상태 관리 구조**를 사용합니다:
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    Level 1: 환자 전체 여정 상태                 │
+│                    (PatientJourneyState)                        │
+│  - 목적: 병원 전체 프로세스에서 환자의 현재 위치 추적          │
+│  - 관리: patient_states 테이블의 current_state 필드             │
+│  - 범위: 병원 도착부터 귀가까지 전체 과정                       │
+└─────────────────────────────────────────────────────────────────┘
+                               ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                   Level 2: 검사별 대기열 상태                   │
+│                   (Queue.state / QueueDetailState)              │
+│  - 목적: 각 검사/진료의 세부 진행 상황 추적                     │
+│  - 관리: queues 테이블의 state 필드                             │
+│  - 범위: 특정 검사의 대기 ~ 완료                                │
+└─────────────────────────────────────────────────────────────────┘
+
+[구체적 예시: 환자가 3개 검사를 받는 경우]
+
+시나리오: 혈액검사, X-ray, 내과진료
+
+1) 병원 도착
+   PatientState: ARRIVED
+   Queue: 없음 (아직 대기열 미등록)
+
+2) 접수 완료
+   PatientState: REGISTERED
+   Queue: 없음 (검사실 이동 전)
+
+3) 혈액검사실 도착, 대기열 등록
+   PatientState: WAITING
+   Queue (혈액검사): state='waiting', queue_number=3
+
+4) 혈액검사 호출
+   PatientState: CALLED  ← 중요!
+   Queue (혈액검사): state='called', called_at=14:30
+   Queue (X-ray): 아직 없음
+   Queue (내과진료): 아직 없음
+
+   **이 순간, 환자는 "호출받은 상태"임**
+   → CalledModal 팝업 표시
+
+5) 혈액검사 진행 중
+   PatientState: IN_PROGRESS
+   Queue (혈액검사): state='in_progress'
+
+6) 혈액검사 완료, X-ray 대기
+   PatientState: COMPLETED  ← 제거 대상
+   Queue (혈액검사): state='completed'
+
+   즉시 전환 →
+   PatientState: WAITING
+   Queue (X-ray): state='waiting', queue_number=5
+
+7) X-ray 호출
+   PatientState: CALLED  ← 다시 CALLED!
+   Queue (X-ray): state='called'
+
+[핵심 인사이트]
+
+PatientState.CALLED는:
+  - "현재 어떤 검사에서 호출받았다" 상태
+  - Queue.state='called'는 "어느 검사의" 호출인지만 표시
+  - PatientState.CALLED가 있어야 "지금 호출받은 상태"를 전체 UI에 반영 가능
+
+ARRIVED는:
+  - 아직 어떤 Queue에도 등록되지 않은 상태
+  - "병원에 왔지만 접수 안 함" vs "접수 완료" 구분 필요
+
+COMPLETED는:
+  - 즉시 WAITING 또는 PAYMENT로 전환됨
+  - 의미 있는 체류 상태가 아님
+  - **제거 가능**
+
+================================================================================
+3. ARRIVED/CALLED를 제거하면 안 되는 이유
+================================================================================
+
+[ARRIVED 제거 시 문제점]
+
+문제 1: "도착 vs 접수 완료" 구분 불가
+
+  시나리오: 환자가 병원에 도착했지만 원무과에 가지 않음
+
+  현재:
+    UNREGISTERED → [병원 도착] → ARRIVED → [원무과 접수] → REGISTERED
+
+  ARRIVED 제거 시:
+    UNREGISTERED → [병원 도착] → REGISTERED ???
+
+  문제:
+    - 병원 도착만 해도 REGISTERED가 되는가?
+    - NFC 스캔만으로 자동 접수 처리하는가?
+    - 원무과 방문이 필요한지 판단하는 로직 추가 필요
+      → "원무과 방문 필요 여부" 플래그 또는 서브 상태 필요
+      → 오히려 복잡도 증가 (지현님 우려 정확함)
+
+문제 2: 준비사항 확인 타이밍 모호
+
+  현재 ARRIVED 화면:
+    - 검사별 준비사항 체크리스트 표시
+    - ExamPreparationChecklist 컴포넌트
+    - 준비 안 된 경우 예약 변경 모달
+
+  REGISTERED에 통합 시:
+    - 접수 완료 메시지 + 준비사항 동시 표시 → 혼란
+    - 준비 안 됐는데 이미 접수 완료? → 사용자 혼동
+
+문제 3: 데이터 일관성
+
+  Backend Queue 생성 시점:
+    - REGISTERED → WAITING 전환 시 Queue 생성
+    - ARRIVED에서는 Queue 없음
+
+  ARRIVED 제거 시:
+    - REGISTERED 상태에서 Queue가 있을 수도, 없을 수도
+    - Queue 존재 여부에 따른 분기 로직 필요
+    - 복잡도 증가
+
+[CALLED 제거 시 문제점]
+
+문제 1: 호출 모달 표시 기준 불명확 (서윤님 질문의 핵심)
+
+  현재 코드 (WaitingContent.jsx:40):
+  ```javascript
+  const shouldShowModal = (
+    isCalled ||                              // PatientJourneyState === CALLED
+    currentTask?.state === 'called' ||       // Queue.state === 'called'
+    patientState === PatientJourneyState.CALLED
+  );
+  ```
+
+  CALLED 제거 시:
+  ```javascript
+  const shouldShowModal = currentTask?.state === 'called';
+  ```
+
+  문제:
+    - currentTask: 현재 활성 Queue (하나만)
+    - 하지만 환자는 여러 검사 예약 가능
+    - 어느 Queue를 currentTask로 선택할지 복잡한 로직 필요
+
+  예시:
+    Queue (혈액검사): state='completed'
+    Queue (X-ray): state='called'  ← 이것을 currentTask로?
+    Queue (내과진료): state='waiting'
+
+    PatientState: WAITING? CALLED?
+    → CALLED가 없으면 "지금 호출받은 상태"를 표현 못함
+
+문제 2: 전체 UI 상태 표현 어려움
+
+  PatientState.CALLED의 역할:
+    - 헤더의 상태 배지: "호출됨" (녹색)
+    - ProgressBar: 5/9 단계 표시
+    - 전체 화면 톤: 긴급성 강조 (파란색 → 녹색)
+
+  Queue.state='called'만 사용 시:
+    - 특정 검사는 호출, 다른 검사는 대기
+    - 전체 환자 상태를 하나로 표현 불가
+    - UI 일관성 깨짐
+
+문제 3: 상태 전이 로직 복잡화
+
+  현재:
+    WAITING → [Staff: call_patient] → CALLED → [Patient: enter_room] → IN_PROGRESS
+
+  CALLED 제거 시:
+    WAITING → [Staff: call_patient] → ???
+
+    Queue.state만 'called'로 변경?
+    → 그럼 PatientState는 WAITING 유지?
+    → "대기 중인데 호출받음" 상태를 어떻게 표현?
+    → 모순 발생
+
+문제 4: Backend 매핑 로직 복잡화
+
+  현재 (state_definitions.py):
+  ```python
+  QUEUE_TO_JOURNEY_MAPPING = {
+      QueueDetailState.CALLED: PatientJourneyState.CALLED,
+      # Queue.state='called' → PatientState='CALLED'로 자동 매핑
+  }
+  ```
+
+  CALLED 제거 시:
+  ```python
+  QUEUE_TO_JOURNEY_MAPPING = {
+      QueueDetailState.CALLED: PatientJourneyState.WAITING,  ???
+  }
+  ```
+
+  문제:
+    - Queue가 'called'인데 Patient는 'WAITING'? → 의미 불일치
+    - 대기 중인지 호출받았는지 구분 불가
+    - 별도 플래그 필요 (예: is_called: boolean)
+    - 오히려 복잡도 증가
+
+[결론]
+
+ARRIVED와 CALLED는 **데이터 구조상 필수적**입니다.
+- ARRIVED: Queue 생성 전 상태 표현
+- CALLED: Queue별 호출 상태를 전체 환자 상태로 승격
+
+제거하면 오히려 **복잡도가 증가**합니다.
+
+================================================================================
+4. COMPLETED만 제거해도 되는 이유
+================================================================================
+
+[COMPLETED의 현재 역할]
+
+정의:
+  - "검사/진료가 완료된 상태"
+  - IN_PROGRESS 완료 후 즉시 전환
+
+실제 동작 (state_definitions.py:68-71):
+```python
+PatientJourneyState.COMPLETED: {
+    PatientAction.CONFIRM_ARRIVAL: PatientJourneyState.WAITING,  # 다음 검사
+    PatientAction.MAKE_PAYMENT: PatientJourneyState.PAYMENT,     # 수납
+}
+```
+
+문제점:
+  - 실제로는 "전환 상태"일 뿐
+  - 의미 있는 체류 시간 없음 (0초)
+  - 사용자가 "완료" 화면을 볼 새도 없이 다음 단계로
+
+[COMPLETED 제거 시 로직]
+
+변경 전:
+  IN_PROGRESS → [검사 완료] → COMPLETED → [조건 분기] → WAITING or PAYMENT
+
+변경 후:
+  IN_PROGRESS → [검사 완료 + 조건 분기] → WAITING or PAYMENT
+
+조건 분기 로직 (services.py에 추가):
+```python
+def perform_action(self, action_type, payload=None):
+    # ...
+
+    # IN_PROGRESS 완료 시 특수 처리
+    if (current_state == PatientJourneyState.IN_PROGRESS and
+        action in [PatientAction.COMPLETE_EXAM, StaffAction.COMPLETE_EXAM]):
+
+        # 다음 검사 확인
+        next_appointment = self._get_next_pending_appointment()
+
+        if next_appointment:
+            # 다음 검사 있음 → WAITING
+            new_state = PatientJourneyState.WAITING
+            # 자동으로 다음 검사 Queue 생성
+            Queue.create_from_appointment(next_appointment)
+        else:
+            # 다음 검사 없음 → PAYMENT
+            new_state = PatientJourneyState.PAYMENT
+    else:
+        new_state = transitions[action]
+```
+
+[제거해도 문제없는 이유]
+
+1. **즉시 전환 상태**
+   - 체류 시간 0초
+   - UI 표시 의미 없음
+   - 제거해도 사용자 경험 변화 없음
+
+2. **조건 분기만 필요**
+   - "다음 검사 있음/없음" 판단만 하면 됨
+   - 별도 상태로 분리할 필요 없음
+   - IN_PROGRESS 완료 시점에서 바로 처리
+
+3. **Frontend 간소화**
+   - 현재 RegisteredContent 재사용 중
+   - 전용 CompletedContent 없음
+   - 제거해도 UI 변경 없음
+
+4. **데이터 무결성**
+   - Queue.state='completed'는 유지
+   - PatientState.COMPLETED만 제거
+   - 데이터 손실 없음
+
+5. **로직 단순화**
+   - 상태 전이 규칙 감소
+   - 테스트 케이스 감소
+   - 버그 발생 가능성 감소
+
+[검사 완료 순간 표현 방법]
+
+UI에서 "완료" 표현은 여전히 가능:
+
+방법 1: 전환 시 Toast 메시지
+```javascript
+// IN_PROGRESS → WAITING 전환 시
+showToast('혈액검사가 완료되었습니다. 다음 검사를 위해 대기 중입니다.');
+```
+
+방법 2: WaitingContent에서 표시
+```javascript
+const WaitingContent = () => {
+  const { justCompleted, nextExam } = useJourneyStore();
+
+  return (
+    <>
+      {justCompleted && (
+        <div className="bg-green-50 mb-4">
+          <p>✅ {justCompleted.title} 완료</p>
+        </div>
+      )}
+
+      <div className="bg-blue-50">
+        <p>다음 검사: {nextExam.title}</p>
+      </div>
+    </>
+  );
+};
+```
+
+방법 3: PaymentContent에서 완료 목록 표시
+```javascript
+// PAYMENT 화면에서 완료된 모든 검사 목록 표시
+// (이미 구현되어 있음)
+```
+
+================================================================================
+5. 최종 권장안: 8단계 → 7단계
+================================================================================
+
+[최종 구조]
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ 1. UNREGISTERED  → 병원 도착 전 (예약만 있음)                       │
+│                                                                       │
+│ 2. ARRIVED       → 병원 도착, 접수 전 (준비사항 확인)               │
+│                                                                       │
+│ 3. REGISTERED    → 접수 완료, 첫 검사 이동 전                       │
+│                                                                       │
+│ 4. WAITING       → 검사 대기열 등록, 순서 대기                      │
+│                                                                       │
+│ 5. CALLED        → 의료진 호출, 검사실 입장 중                       │
+│                                                                       │
+│ 6. IN_PROGRESS   → 검사/진료 진행 중                                 │
+│    ↓                                                                  │
+│    [검사 완료 시 자동 분기]                                          │
+│    - 다음 검사 있음 → 4. WAITING                                    │
+│    - 다음 검사 없음 → 7. PAYMENT                                    │
+│                                                                       │
+│ ❌ COMPLETED 제거 (즉시 전환 상태, 불필요)                          │
+│                                                                       │
+│ 7. PAYMENT       → 수납 대기/완료                                    │
+│                                                                       │
+│ 8. FINISHED      → 모든 일정 완료, 귀가                              │
+└──────────────────────────────────────────────────────────────────────┘
+
+[변경 사항 요약]
+
+제거:
+  - ❌ COMPLETED (8번째 단계)
+
+유지:
+  - ✅ UNREGISTERED (필수)
+  - ✅ ARRIVED (Queue 생성 전 상태)
+  - ✅ REGISTERED (접수 완료)
+  - ✅ WAITING (대기 중)
+  - ✅ CALLED (호출받음)
+  - ✅ IN_PROGRESS (진행 중)
+  - ✅ PAYMENT (필수)
+  - ✅ FINISHED (종료)
+
+총 단계: 9 → 8단계
+
+[간소화 효과]
+
+효과:
+  ✅ 상태 수 11% 감소 (9→8)
+  ✅ 상태 전이 규칙 감소
+  ✅ Frontend 컴포넌트 1개 제거 (RegisteredContent 재사용 중)
+  ✅ 테스트 케이스 감소
+  ✅ 즉시 전환 상태 제거로 로직 명확화
+
+유지:
+  ✅ 데이터 구조 일관성
+  ✅ Queue-PatientState 매핑 명확
+  ✅ UI 표현 완전성
+  ✅ 사용자 경험 저하 없음
+
+================================================================================
+6. 구현 방법 (최소 수정)
+================================================================================
+
+[Backend 수정]
+
+1. state_definitions.py
+
+변경 전:
+```python
+class PatientJourneyState(Enum):
+    UNREGISTERED = 'UNREGISTERED'
+    ARRIVED = 'ARRIVED'
+    REGISTERED = 'REGISTERED'
+    WAITING = 'WAITING'
+    CALLED = 'CALLED'
+    IN_PROGRESS = 'IN_PROGRESS'
+    COMPLETED = 'COMPLETED'      # ← 제거
+    PAYMENT = 'PAYMENT'
+    FINISHED = 'FINISHED'
+
+STATE_TRANSITIONS = {
+    # ...
+    PatientJourneyState.IN_PROGRESS: {
+        PatientAction.COMPLETE_EXAM: PatientJourneyState.COMPLETED,
+        StaffAction.COMPLETE_EXAM: PatientJourneyState.COMPLETED,
+    },
+    PatientJourneyState.COMPLETED: {
+        PatientAction.CONFIRM_ARRIVAL: PatientJourneyState.WAITING,
+        PatientAction.MAKE_PAYMENT: PatientJourneyState.PAYMENT,
+    },
+    # ...
+}
+
+QUEUE_TO_JOURNEY_MAPPING = {
+    # ...
+    QueueDetailState.COMPLETED: PatientJourneyState.COMPLETED,
+    # ...
+}
+```
+
+변경 후:
+```python
+class PatientJourneyState(Enum):
+    UNREGISTERED = 'UNREGISTERED'
+    ARRIVED = 'ARRIVED'
+    REGISTERED = 'REGISTERED'
+    WAITING = 'WAITING'
+    CALLED = 'CALLED'
+    IN_PROGRESS = 'IN_PROGRESS'
+    # COMPLETED 제거
+    PAYMENT = 'PAYMENT'
+    FINISHED = 'FINISHED'
+
+STATE_TRANSITIONS = {
+    # ...
+    PatientJourneyState.IN_PROGRESS: {
+        # COMPLETED 제거, services.py에서 직접 분기
+        PatientAction.COMPLETE_EXAM: None,  # 동적 결정
+        StaffAction.COMPLETE_EXAM: None,    # 동적 결정
+    },
+    # PatientJourneyState.COMPLETED 전체 제거
+    # ...
+}
+
+QUEUE_TO_JOURNEY_MAPPING = {
+    # ...
+    QueueDetailState.COMPLETED: PatientJourneyState.WAITING,  # 또는 PAYMENT
+    # → services.py에서 동적 결정
+    # ...
+}
+```
+
+2. services.py (PatientJourneyService)
+
+추가:
+```python
+def _get_next_pending_appointment(self):
+    """다음 대기 중인 당일 예약 조회"""
+    from appointments.models import Appointment
+
+    today = timezone.now().date()
+    return Appointment.objects.filter(
+        user=self.user,
+        scheduled_at__date=today,
+        status='pending'
+    ).order_by('scheduled_at').first()
+
+def perform_action(self, action_type: str, payload: Dict[str, Any] = None):
+    """액션 수행 및 상태 전이"""
+    # ... 기존 코드 ...
+
+    # ✨ IN_PROGRESS 완료 시 특수 처리
+    if (current_state == PatientJourneyState.IN_PROGRESS and
+        action in [PatientAction.COMPLETE_EXAM, StaffAction.COMPLETE_EXAM]):
+
+        # 다음 검사 확인
+        next_appointment = self._get_next_pending_appointment()
+
+        if next_appointment:
+            # 다음 검사 있음 → WAITING
+            new_state = PatientJourneyState.WAITING
+
+            # 다음 검사 대기열 자동 등록
+            from p_queue.models import Queue
+            Queue.create_from_appointment(
+                appointment=next_appointment,
+                priority='normal'
+            )
+
+            # 로그에 다음 검사 정보 기록
+            payload['next_exam'] = next_appointment.exam.exam_id
+            payload['auto_enqueue'] = True
+        else:
+            # 다음 검사 없음 → PAYMENT
+            new_state = PatientJourneyState.PAYMENT
+    else:
+        # 일반 전환
+        new_state = transitions[action]
+
+    # ... 나머지 코드 ...
+```
+
+3. models.py (PatientState)
+
+변경 전:
+```python
+STATE_CHOICES = [
+    ('UNREGISTERED', 'UNREGISTERED'),
+    ('ARRIVED', 'ARRIVED'),
+    ('REGISTERED', 'REGISTERED'),
+    ('WAITING', 'WAITING'),
+    ('CALLED', 'CALLED'),
+    ('IN_PROGRESS', 'IN_PROGRESS'),
+    ('COMPLETED', 'COMPLETED'),    # ← 제거
+    ('PAYMENT', 'PAYMENT'),
+    ('FINISHED', 'FINISHED'),
+]
+```
+
+변경 후:
+```python
+STATE_CHOICES = [
+    ('UNREGISTERED', 'UNREGISTERED'),
+    ('ARRIVED', 'ARRIVED'),
+    ('REGISTERED', 'REGISTERED'),
+    ('WAITING', 'WAITING'),
+    ('CALLED', 'CALLED'),
+    ('IN_PROGRESS', 'IN_PROGRESS'),
+    # ('COMPLETED', 'COMPLETED'),  # 제거
+    ('PAYMENT', 'PAYMENT'),
+    ('FINISHED', 'FINISHED'),
+]
+```
+
+StateTransition 모델도 동일 수정
+
+[Frontend 수정]
+
+1. constants/states.js
+
+변경 전:
+```javascript
+export const PatientJourneyState = {
+  UNREGISTERED: 'UNREGISTERED',
+  ARRIVED: 'ARRIVED',
+  REGISTERED: 'REGISTERED',
+  WAITING: 'WAITING',
+  CALLED: 'CALLED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',      // ← 제거
+  PAYMENT: 'PAYMENT',
+  FINISHED: 'FINISHED'
+};
+
+export const getStateDisplay = (state) => {
+  const displays = {
+    // ...
+    [PatientJourneyState.COMPLETED]: '완료',  // ← 제거
+    // ...
+  };
+  // ...
+};
+
+export const getStateColorClass = (state) => {
+  const colors = {
+    // ...
+    [PatientJourneyState.COMPLETED]: 'bg-teal-100 text-teal-700',  // ← 제거
+    // ...
+  };
+  // ...
+};
+```
+
+변경 후:
+```javascript
+export const PatientJourneyState = {
+  UNREGISTERED: 'UNREGISTERED',
+  ARRIVED: 'ARRIVED',
+  REGISTERED: 'REGISTERED',
+  WAITING: 'WAITING',
+  CALLED: 'CALLED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  // COMPLETED 제거
+  PAYMENT: 'PAYMENT',
+  FINISHED: 'FINISHED'
+};
+
+// getStateDisplay, getStateColorClass에서도 COMPLETED 제거
+```
+
+2. JourneyContainer.jsx
+
+변경 전:
+```javascript
+const getJourneyComponents = (patientState) => {
+  switch (patientState) {
+    // ...
+    case PatientJourneyState.COMPLETED:
+      return {
+        Template: FormatATemplate,
+        Content: RegisteredContent,  // 재사용
+        screenType: 'registered'
+      };
+    // ...
+  }
+};
+```
+
+변경 후:
+```javascript
+const getJourneyComponents = (patientState) => {
+  switch (patientState) {
+    // ...
+    // COMPLETED 케이스 제거
+    // IN_PROGRESS 완료 시 자동으로 WAITING 또는 PAYMENT로 전환되므로
+    // 별도 처리 불필요
+    // ...
+  }
+};
+```
+
+3. ProgressBar.jsx
+
+변경 전:
+```javascript
+const steps = [
+  { state: 'UNREGISTERED', label: '예약' },
+  { state: 'ARRIVED', label: '도착' },
+  { state: 'REGISTERED', label: '접수' },
+  { state: 'WAITING', label: '대기' },
+  { state: 'CALLED', label: '호출' },
+  { state: 'IN_PROGRESS', label: '진행' },
+  { state: 'COMPLETED', label: '완료' },  // ← 제거
+  { state: 'PAYMENT', label: '수납' },
+  { state: 'FINISHED', label: '완료' },
+];
+```
+
+변경 후:
+```javascript
+const steps = [
+  { state: 'UNREGISTERED', label: '예약' },
+  { state: 'ARRIVED', label: '도착' },
+  { state: 'REGISTERED', label: '접수' },
+  { state: 'WAITING', label: '대기' },
+  { state: 'CALLED', label: '호출' },
+  { state: 'IN_PROGRESS', label: '진행' },
+  // COMPLETED 제거
+  { state: 'PAYMENT', label: '수납' },
+  { state: 'FINISHED', label: '완료' },
+];
+```
+
+4. TestDataManager.jsx
+
+변경 전:
+```javascript
+const stateFlow = [
+  PatientJourneyState.UNREGISTERED,
+  PatientJourneyState.ARRIVED,
+  PatientJourneyState.REGISTERED,
+  PatientJourneyState.WAITING,
+  PatientJourneyState.CALLED,
+  PatientJourneyState.IN_PROGRESS,
+  PatientJourneyState.COMPLETED,    // ← 제거
+  PatientJourneyState.PAYMENT,
+  PatientJourneyState.FINISHED
+];
+```
+
+변경 후:
+```javascript
+const stateFlow = [
+  PatientJourneyState.UNREGISTERED,
+  PatientJourneyState.ARRIVED,
+  PatientJourneyState.REGISTERED,
+  PatientJourneyState.WAITING,
+  PatientJourneyState.CALLED,
+  PatientJourneyState.IN_PROGRESS,
+  // COMPLETED 제거
+  PatientJourneyState.PAYMENT,
+  PatientJourneyState.FINISHED
+];
+```
+
+================================================================================
+7. 데이터베이스 영향 분석
+================================================================================
+
+[영향받는 테이블]
+
+1. patient_states
+   - 필드: current_state VARCHAR(20)
+   - 영향: COMPLETED 값 보유 레코드 변환 필요
+
+2. state_transitions
+   - 필드: from_state, to_state VARCHAR(20)
+   - 영향: COMPLETED 참조 레코드 변환 필요 (히스토리 보존)
+
+3. emr_sync_status
+   - 필드: mapped_state VARCHAR(20)
+   - 영향: COMPLETED 매핑 레코드 변환 필요
+
+4. queues
+   - 필드: state VARCHAR(20)
+   - 영향: ❌ 없음 (QueueDetailState.COMPLETED는 유지)
+
+[마이그레이션 SQL]
+
+```sql
+-- 1. patient_states 테이블 업데이트
+-- COMPLETED → 다음 검사 여부에 따라 WAITING or PAYMENT 분기
+
+UPDATE patient_states ps
+SET current_state = CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM appointments a
+        WHERE a.user_id = ps.user_id
+        AND a.status = 'pending'
+        AND DATE(a.scheduled_at) = CURRENT_DATE
+    ) THEN 'WAITING'
+    ELSE 'PAYMENT'
+END
+WHERE current_state = 'COMPLETED';
+
+-- 2. state_transitions 테이블 업데이트 (히스토리 보존)
+-- from_state COMPLETED → IN_PROGRESS (역추적)
+UPDATE state_transitions
+SET from_state = 'IN_PROGRESS'
+WHERE from_state = 'COMPLETED';
+
+-- to_state COMPLETED → WAITING or PAYMENT
+-- (기존 다음 상태로 판단)
+UPDATE state_transitions st
+SET to_state = CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM state_transitions st2
+        WHERE st2.user_id = st.user_id
+        AND st2.from_state = 'COMPLETED'
+        AND st2.to_state = 'WAITING'
+        AND st2.created_at > st.created_at
+        LIMIT 1
+    ) THEN 'WAITING'
+    WHEN EXISTS (
+        SELECT 1
+        FROM state_transitions st2
+        WHERE st2.user_id = st.user_id
+        AND st2.from_state = 'COMPLETED'
+        AND st2.to_state = 'PAYMENT'
+        AND st2.created_at > st.created_at
+        LIMIT 1
+    ) THEN 'PAYMENT'
+    ELSE 'PAYMENT'  -- 기본값
+END
+WHERE to_state = 'COMPLETED';
+
+-- 3. emr_sync_status 테이블 업데이트
+UPDATE emr_sync_status
+SET mapped_state = 'PAYMENT'
+WHERE mapped_state = 'COMPLETED';
+```
+
+[데이터 무결성]
+
+체크:
+  - ✅ 외래 키 제약 없음 (VARCHAR 값만 저장)
+  - ✅ 인덱스 재생성 불필요 (필드 타입 변경 없음)
+  - ✅ 데이터 손실 없음 (변환만 수행)
+
+롤백 가능성:
+  - ⚠️ 완벽한 롤백 어려움 (COMPLETED → WAITING/PAYMENT 분기 정보 손실)
+  - ✅ 마이그레이션 전 백업 필수
+
+================================================================================
+8. 코드 수정 범위
+================================================================================
+
+[Backend 수정 파일]
+
+┌────────────────────────────────────┬──────────┬──────────────┐
+│ 파일                               │  난이도  │  예상 시간   │
+├────────────────────────────────────┼──────────┼──────────────┤
+│ common/state_definitions.py       │  낮음    │  1시간       │
+│ p_queue/models.py                  │  낮음    │  30분        │
+│ p_queue/services.py                │  중간    │  2~3시간     │
+│ integrations/models.py             │  낮음    │  30분        │
+│ p_queue/serializers.py             │  낮음    │  30분        │
+│ Django 마이그레이션 작성           │  중간    │  2~3시간     │
+│ 테스트 코드 수정                   │  낮음    │  1~2시간     │
+├────────────────────────────────────┼──────────┼──────────────┤
+│ Backend 총 예상 시간               │          │  8~12시간    │
+└────────────────────────────────────┴──────────┴──────────────┘
+
+[Frontend 수정 파일]
+
+┌────────────────────────────────────┬──────────┬──────────────┐
+│ 파일                               │  난이도  │  예상 시간   │
+├────────────────────────────────────┼──────────┼──────────────┤
+│ constants/states.js                │  낮음    │  30분        │
+│ components/JourneyContainer.jsx    │  낮음    │  30분        │
+│ components/journey/ProgressBar.jsx │  낮음    │  30분        │
+│ pages/admin/TestDataManager.jsx    │  낮음    │  30분        │
+│ store/journeyStore.js 검증         │  낮음    │  1시간       │
+├────────────────────────────────────┼──────────┼──────────────┤
+│ Frontend 총 예상 시간              │          │  3~4시간     │
+└────────────────────────────────────┴──────────┴──────────────┘
+
+[전체 예상 시간]
+
+- Backend 수정: 8~12시간
+- Frontend 수정: 3~4시간
+- 통합 테스트: 4~6시간
+- 마이그레이션 실행: 2~3시간
+- **총 예상 시간: 17~25시간** (2~3일)
+
+이전 6단계 간소화 (40~50시간) 대비 **50% 감소**
+
+================================================================================
+9. 마이그레이션 전략
+================================================================================
+
+[단계별 실행 계획]
+
+Phase 1: 준비 (0.5일)
+  ✅ 현재 DB 백업
+  ✅ COMPLETED 상태 사용 현황 조회
+  ✅ 마이그레이션 스크립트 작성 및 검증
+
+Phase 2: Backend 수정 (1일)
+  ✅ state_definitions.py 수정
+  ✅ models.py 수정
+  ✅ services.py 로직 추가
+  ✅ Django 마이그레이션 생성
+  ✅ 단위 테스트
+
+Phase 3: Frontend 수정 (0.5일)
+  ✅ constants/states.js 수정
+  ✅ JourneyContainer.jsx 수정
+  ✅ ProgressBar.jsx 수정
+  ✅ TestDataManager.jsx 수정
+
+Phase 4: 통합 테스트 (0.5일)
+  ✅ Backend-Frontend 연동 테스트
+  ✅ IN_PROGRESS → WAITING/PAYMENT 분기 테스트
+  ✅ Queue 동기화 테스트
+
+Phase 5: 마이그레이션 실행 (0.5일)
+  ✅ 개발 DB 마이그레이션
+  ✅ 데이터 검증
+  ✅ 프로덕션 배포
+
+[Django 마이그레이션 파일]
+
+파일명: 0014_remove_completed_state.py
+
+```python
+from django.db import migrations, models
+from django.utils import timezone
+
+def forward_remove_completed(apps, schema_editor):
+    """COMPLETED 상태 제거 및 변환"""
+    PatientState = apps.get_model('p_queue', 'PatientState')
+    StateTransition = apps.get_model('p_queue', 'StateTransition')
+    EmrSyncStatus = apps.get_model('integrations', 'EmrSyncStatus')
+    Appointment = apps.get_model('appointments', 'Appointment')
+
+    today = timezone.now().date()
+
+    # 1. PatientState 변환
+    completed_states = PatientState.objects.filter(current_state='COMPLETED')
+
+    for ps in completed_states:
+        # 다음 대기 중인 예약 확인
+        has_next = Appointment.objects.filter(
+            user=ps.user,
+            scheduled_at__date=today,
+            status='pending'
+        ).exists()
+
+        if has_next:
+            ps.current_state = 'WAITING'
+        else:
+            ps.current_state = 'PAYMENT'
+        ps.save()
+
+    # 2. StateTransition 변환 (히스토리 보존)
+    StateTransition.objects.filter(
+        from_state='COMPLETED'
+    ).update(from_state='IN_PROGRESS')
+
+    # to_state는 복잡하므로 간단하게 PAYMENT로 통일
+    StateTransition.objects.filter(
+        to_state='COMPLETED'
+    ).update(to_state='PAYMENT')
+
+    # 3. EmrSyncStatus 변환
+    EmrSyncStatus.objects.filter(
+        mapped_state='COMPLETED'
+    ).update(mapped_state='PAYMENT')
+
+def reverse_add_completed(apps, schema_editor):
+    """롤백: 불완전"""
+    # COMPLETED 복원 불가능 (정보 손실)
+    # 롤백 시 백업 복원 권장
+    pass
+
+class Migration(migrations.Migration):
+    dependencies = [
+        ('p_queue', '0013_alter_patientstate_current_state_and_more'),
+    ]
+
+    operations = [
+        # 1. 데이터 변환
+        migrations.RunPython(
+            forward_remove_completed,
+            reverse_add_completed
+        ),
+
+        # 2. PatientState.STATE_CHOICES 업데이트
+        migrations.AlterField(
+            model_name='patientstate',
+            name='current_state',
+            field=models.CharField(
+                max_length=20,
+                choices=[
+                    ('UNREGISTERED', 'UNREGISTERED'),
+                    ('ARRIVED', 'ARRIVED'),
+                    ('REGISTERED', 'REGISTERED'),
+                    ('WAITING', 'WAITING'),
+                    ('CALLED', 'CALLED'),
+                    ('IN_PROGRESS', 'IN_PROGRESS'),
+                    # COMPLETED 제거
+                    ('PAYMENT', 'PAYMENT'),
+                    ('FINISHED', 'FINISHED'),
+                ],
+                default='UNREGISTERED',
+                verbose_name='현재 상태'
+            ),
+        ),
+
+        # 3. StateTransition.STATE_CHOICES 업데이트
+        migrations.AlterField(
+            model_name='statetransition',
+            name='from_state',
+            field=models.CharField(
+                max_length=20,
+                choices=[...],  # COMPLETED 제거
+                null=True,
+                blank=True
+            ),
+        ),
+        migrations.AlterField(
+            model_name='statetransition',
+            name='to_state',
+            field=models.CharField(
+                max_length=20,
+                choices=[...],  # COMPLETED 제거
+            ),
+        ),
+    ]
+```
+
+[테스트 케이스]
+
+1. 상태 전환 테스트
+   ✅ IN_PROGRESS → WAITING (다음 검사 있음)
+   ✅ IN_PROGRESS → PAYMENT (다음 검사 없음)
+
+2. Queue 동기화 테스트
+   ✅ Queue.state='completed' → PatientState='WAITING' or 'PAYMENT'
+
+3. 마이그레이션 테스트
+   ✅ COMPLETED → WAITING 변환 (다음 검사 있음)
+   ✅ COMPLETED → PAYMENT 변환 (다음 검사 없음)
+   ✅ 히스토리 로그 무결성
+
+4. UI 테스트
+   ✅ ProgressBar 8단계 표시
+   ✅ IN_PROGRESS 완료 후 즉시 다음 화면 전환
+   ✅ COMPLETED 상태 화면 미표시
+
+================================================================================
+10. 결론
+================================================================================
+
+[최종 권장안]
+
+**9단계 → 8단계 (COMPLETED만 제거)**
+
+이유:
+  ✅ 데이터 구조 일관성 유지
+  ✅ Queue-PatientState 매핑 명확
+  ✅ 최소 수정으로 최대 효과
+  ✅ 즉시 전환 상태 제거로 로직 단순화
+  ✅ 현실적이고 구현 가능한 방안
+
+[ARRIVED/CALLED를 유지해야 하는 이유 재확인]
+
+윤기님 통찰:
+  > "환자 상태가 있고, 검사 대기열의 환자 상태가 여러가지라서
+  >  데이터적으로 그걸 받아오는 용도"
+
+핵심:
+  - PatientState: 전체 여정 상태
+  - Queue.state: 검사별 세부 상태
+  - 두 단계 구조는 **아키텍처적 필수 요소**
+  - ARRIVED/CALLED는 Queue 생성 전/후 상태 구분에 필수
+
+[예상 효과]
+
+1. 개발 측면
+   ✅ 상태 전이 규칙 단순화
+   ✅ Frontend 컴포넌트 재사용 명확화
+   ✅ 테스트 케이스 감소
+   ✅ 수정 범위 최소화 (2~3일)
+
+2. 사용자 측면
+   ✅ 즉시 전환 화면 제거로 혼란 감소
+   ✅ 검사 완료 후 자연스러운 흐름
+   ✅ ProgressBar 단순화 (9→8)
+
+3. 유지보수 측면
+   ✅ 명확한 상태 정의
+   ✅ 조건 분기 로직 집중화 (services.py)
+   ✅ 버그 발생 가능성 감소
+
+[실행 권장 사항]
+
+우선순위:
+  1. **즉시 시작**: Backend state_definitions.py 수정
+  2. **1일 내**: services.py 분기 로직 추가
+  3. **2일 내**: Frontend 전체 수정
+  4. **3일 내**: 통합 테스트 및 마이그레이션
+
+성공 지표:
+  - 상태 전환 성공률 99% 이상
+  - IN_PROGRESS → WAITING/PAYMENT 분기 정확도 100%
+  - 사용자 혼란 보고 건수 0건
+  - 개발 시간 3일 이내 완료
+
+[최종 조언]
+
+이 방안은 **팀원들의 통찰**을 바탕으로 **현실적이고 구현 가능한** 해결책입니다.
+
+특히:
+- **윤기님**: 데이터 구조 이해를 통한 핵심 파악
+- **서윤님**: 구현 디테일에 대한 정확한 질문
+- **지현님**: 복잡도 증가 우려 및 간소화 필요성 제기
+
+모두가 옳았습니다.
+
+COMPLETED만 제거하면:
+  - 데이터 구조 유지 (윤기님)
+  - 호출 모달 정상 동작 (서윤님)
+  - 복잡도 증가 없음 (지현님)
+  - 간소화 효과 달성 (모두)
+
+**모든 요구사항을 만족하는 최적의 균형점입니다.**
+
+================================================================================
+작성자: Claude Code (Anthropic)
+분석 기반: 팀 논의 + 실제 코드 구조
+버전: 2.0 (Final)
+================================================================================

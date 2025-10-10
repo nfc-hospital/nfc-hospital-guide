@@ -66,9 +66,58 @@ class PatientJourneyService:
                 f"Action '{action_type}' is not allowed in state '{current_state.value}'"
             )
         
-        # 새로운 상태
+        # 새로운 상태 결정
         new_state = transitions[action]
-        
+
+        # IN_PROGRESS 완료 시 동적 분기 처리
+        if (current_state == PatientJourneyState.IN_PROGRESS and
+            action in [PatientAction.COMPLETE_EXAM, StaffAction.COMPLETE_EXAM]):
+            # 현재 진행 중인 큐를 완료 처리
+            active_queue = Queue.objects.filter(
+                user=self.user,
+                state=QueueDetailState.IN_PROGRESS.value
+            ).first()
+
+            if active_queue:
+                active_queue.state = QueueDetailState.COMPLETED.value
+                active_queue.save()
+
+                QueueStatusLog.objects.create(
+                    queue=active_queue,
+                    previous_state=QueueDetailState.IN_PROGRESS.value,
+                    new_state=QueueDetailState.COMPLETED.value,
+                    reason=f"Exam completed by {action_type}",
+                    changed_by=self.user if isinstance(action, PatientAction) else None
+                )
+
+            # 다음 대기 중인 appointment 확인
+            today = timezone.now().date()
+            next_appointment = Appointment.objects.filter(
+                user=self.user,
+                scheduled_at__date=today,
+                status='pending'
+            ).exclude(
+                appointment_id=active_queue.appointment_id if active_queue else None
+            ).order_by('scheduled_at').first()
+
+            if next_appointment:
+                # 다음 검사가 있으면 WAITING으로
+                new_state = PatientJourneyState.WAITING
+
+                # 새로운 Queue 생성
+                Queue.objects.create(
+                    user=self.user,
+                    appointment=next_appointment,
+                    exam=next_appointment.exam,
+                    state=QueueDetailState.WAITING.value,
+                    queue_number=self._get_next_queue_number(next_appointment.exam),
+                    estimated_wait_time=self._calculate_wait_time(next_appointment.exam),
+                    priority='normal'
+                )
+            else:
+                # 다음 검사가 없으면 PAYMENT로
+                new_state = PatientJourneyState.PAYMENT
+
         # 상태 변경 수행
         old_state_value = patient_state.current_state
         patient_state.current_state = new_state.value
@@ -102,15 +151,44 @@ class PatientJourneyService:
         """Queue 상태 변경에 따른 PatientState 동기화"""
         try:
             queue_state = QueueDetailState(queue.state)
-            journey_state = QUEUE_TO_JOURNEY_MAPPING.get(queue_state)
-            
+
+            # QueueDetailState.COMPLETED 특별 처리
+            if queue_state == QueueDetailState.COMPLETED:
+                # 다음 대기 중인 appointment 확인
+                today = timezone.now().date()
+                next_appointment = Appointment.objects.filter(
+                    user=self.user,
+                    scheduled_at__date=today,
+                    status='pending'
+                ).exclude(
+                    appointment_id=queue.appointment_id
+                ).order_by('scheduled_at').first()
+
+                if next_appointment:
+                    journey_state = PatientJourneyState.WAITING
+
+                    # 새로운 Queue 생성
+                    Queue.objects.create(
+                        user=self.user,
+                        appointment=next_appointment,
+                        exam=next_appointment.exam,
+                        state=QueueDetailState.WAITING.value,
+                        queue_number=self._get_next_queue_number(next_appointment.exam),
+                        estimated_wait_time=self._calculate_wait_time(next_appointment.exam),
+                        priority='normal'
+                    )
+                else:
+                    journey_state = PatientJourneyState.PAYMENT
+            else:
+                journey_state = QUEUE_TO_JOURNEY_MAPPING.get(queue_state)
+
             if journey_state:
                 patient_state = self._get_or_create_patient_state()
                 if patient_state.current_state != journey_state.value:
                     old_state = patient_state.current_state
                     patient_state.current_state = journey_state.value
                     patient_state.save()
-                    
+
                     # 상태 전환 로그
                     StateTransition.objects.create(
                         user=self.user,
@@ -119,7 +197,7 @@ class PatientJourneyService:
                         trigger_type='queue_sync',
                         trigger_source=f"Queue state changed to {queue.state}"
                     )
-                    
+
                     # WebSocket 알림
                     self._send_state_update(journey_state.value, 'queue_sync')
         except ValueError:
@@ -274,3 +352,25 @@ class PatientJourneyService:
             'available_actions': available_actions,
             'timestamp': timezone.now().isoformat()
         }
+
+    def _get_next_queue_number(self, exam) -> int:
+        """다음 대기 번호 계산"""
+        last_queue = Queue.objects.filter(
+            exam=exam,
+            created_at__date=timezone.now().date()
+        ).order_by('-queue_number').first()
+
+        return (last_queue.queue_number + 1) if last_queue else 1
+
+    def _calculate_wait_time(self, exam) -> int:
+        """대기 시간 추정 (분 단위)"""
+        waiting_count = Queue.objects.filter(
+            exam=exam,
+            state__in=[QueueDetailState.WAITING.value, QueueDetailState.CALLED.value]
+        ).count()
+
+        # 검사 평균 소요 시간 + 버퍼 시간
+        avg_duration = getattr(exam, 'average_duration', 15)
+        buffer_time = getattr(exam, 'buffer_time', 5)
+
+        return waiting_count * (avg_duration + buffer_time)

@@ -32,8 +32,8 @@ class EmrSyncStatus(models.Model):
         ('REGISTERED', 'Registered'),
         ('WAITING', 'Waiting'),
         ('CALLED', 'Called'),
-        ('ONGOING', 'Ongoing'),
-        ('COMPLETED', 'Completed'),
+        ('IN_PROGRESS', 'In Progress'),  # ONGOING → IN_PROGRESS로 변경
+        # COMPLETED 제거 - IN_PROGRESS 완료 시 동적으로 WAITING 또는 PAYMENT로 분기
         ('PAYMENT', 'Payment'),
         ('FINISHED', 'Finished'),
     ]
