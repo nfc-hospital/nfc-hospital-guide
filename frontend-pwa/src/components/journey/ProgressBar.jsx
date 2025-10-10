@@ -151,10 +151,28 @@ export default function ProgressBar(props) {
 
     // 2. 검사 단계들 추가 - Backend의 apt.status를 그대로 사용 (Single Source of Truth)
 
-    // 현재 진행 중인 검사 찾기 (백엔드 상태 기반)
-    const inProgressIndex = appointments.findIndex(apt => apt.status === 'in_progress');
+    // ✅✅ 중복 제거: exam_id 기준으로 고유한 검사만 필터링
+    const uniqueAppointments = [];
+    const seenExamIds = new Set();
 
-    appointments.forEach((apt, index) => {
+    appointments.forEach(apt => {
+      const examId = apt.exam?.exam_id || apt.exam_id;
+      if (examId && !seenExamIds.has(examId)) {
+        seenExamIds.add(examId);
+        uniqueAppointments.push(apt);
+      }
+    });
+
+    if (import.meta.env.DEV) {
+      console.log('🔍 [ProgressBar] Original appointments:', appointments.length);
+      console.log('🔍 [ProgressBar] Unique appointments:', uniqueAppointments.length);
+      console.log('🔍 [ProgressBar] Seen exam IDs:', Array.from(seenExamIds));
+    }
+
+    // 현재 진행 중인 검사 찾기 (백엔드 상태 기반)
+    const inProgressIndex = uniqueAppointments.findIndex(apt => apt.status === 'in_progress');
+
+    uniqueAppointments.forEach((apt, index) => {
       const examName = getAppointmentName(apt);
 
       // ✅ Backend Queue 상태를 정확히 반영

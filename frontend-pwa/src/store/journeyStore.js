@@ -624,111 +624,14 @@ const useJourneyStore = create(
                 
                 console.log('🔍 최종 currentQueues (정규화 후):', currentQueues);
                 
-                // ✅ --- 환자 상태 계산 로직 (큐와 예약 데이터 기반) ---
-                // 환자 여정: UNREGISTERED -> ARRIVED -> REGISTERED -> WAITING -> CALLED -> IN_PROGRESS -> COMPLETED -> PAYMENT -> FINISHED
-                
-                // 1. 프로필 API의 기본 상태에서 시작 (userData는 위에서 정의됨)
-                // userData.state를 사용하거나, 이미 설정된 현재 store의 patientState 사용
-                const currentStoreState = get().patientState;
-                const profileState = userData?.state || currentStoreState || 'UNREGISTERED';
-                let computedState = profileState;
-                
-                console.log(`🔍 상태 계산 시작 - profileState: ${profileState}, currentStoreState: ${currentStoreState}`);
-                
-                // 2. 상태별 계산 로직
-                if (profileState === 'UNREGISTERED' || profileState === 'ARRIVED') {
-                  // 접수 전 상태는 그대로 유지 (큐와 무관)
-                  computedState = profileState;
-                  console.log(`🏥 접수 전 상태 유지: ${computedState}`);
-                  console.log(`   - 큐가 ${currentQueues.length}개 있지만 무시됨 (접수 전이므로)`);
-                  
-                } else if (profileState === 'REGISTERED' || profileState === 'WAITING' || 
-                          profileState === 'CALLED' || profileState === 'IN_PROGRESS' || 
-                          profileState === 'COMPLETED') {
-                  // 접수 후 상태에서만 큐 상태 확인
-                  
-                  // 여러 큐 중에서 현재 진행 중인 큐 찾기 (순차적 처리)
-                  // 1. in_progress가 있으면 최우선
-                  // 2. called가 있으면 그 다음
-                  // 3. waiting 중 첫 번째 큐
-                  
-                  const inProgressQueue = currentQueues.find(q => q.state === 'in_progress');
-                  const calledQueue = currentQueues.find(q => q.state === 'called');
-                  const waitingQueues = currentQueues.filter(q => q.state === 'waiting');
-                  const completedQueues = currentQueues.filter(q => q.state === 'completed');
-                  
-                  let activeQueue = null;
-                  
-                  if (inProgressQueue) {
-                    activeQueue = inProgressQueue;
-                    computedState = 'IN_PROGRESS';
-                    console.log(`🏃 진행 중인 검사: ${activeQueue.exam?.title || '검사'}`);
-                    
-                  } else if (calledQueue) {
-                    activeQueue = calledQueue;
-                    computedState = 'CALLED';
-                    console.log(`📢 호출된 검사: ${activeQueue.exam?.title || '검사'}`);
-                    
-                  } else if (waitingQueues.length > 0) {
-                    // 첫 번째 대기 중인 큐를 활성 큐로
-                    activeQueue = waitingQueues[0];
-                    computedState = 'WAITING';
-                    console.log(`⏳ 대기 중인 검사: ${activeQueue.exam?.title || '검사'} (대기 ${waitingQueues.length}개)`);
-                    
-                  } else if (completedQueues.length > 0 && appointments && appointments.length > 0) {
-                    // 완료된 큐만 있는 경우
-                    const totalAppointments = appointments.length;
-                    const completedCount = completedQueues.length;
-                    
-                    if (completedCount < totalAppointments) {
-                      // 아직 남은 검사가 있음 (다음 검사 대기)
-                      computedState = 'COMPLETED';
-                      console.log(`✅ 검사 진행 상황: ${completedCount}/${totalAppointments} 완료`);
-                    } else {
-                      // 모든 검사 완료
-                      computedState = 'PAYMENT';
-                      console.log(`💳 모든 검사 완료 (${completedCount}/${totalAppointments}) - 수납 대기`);
-                    }
-                    
-                  } else if (appointments && appointments.length > 0) {
-                    // 큐가 없지만 예약이 있는 경우 (예약 상태로 판단)
-                    const completedCount = appointments.filter(apt => 
-                      apt.status === 'completed' || apt.status === 'done'
-                    ).length;
-                    
-                    if (completedCount === 0) {
-                      // 아직 검사를 시작하지 않음
-                      computedState = 'REGISTERED';
-                      console.log(`📝 접수 완료 - 첫 검사 대기`);
-                    } else if (completedCount < appointments.length) {
-                      // 일부 검사 완료
-                      computedState = 'COMPLETED';
-                      console.log(`📋 예약 기반: ${completedCount}/${appointments.length} 완료`);
-                    } else {
-                      // 모든 검사 완료 -> 수납 대기
-                      computedState = 'PAYMENT';
-                      console.log(`💰 예약 기반: 모든 검사 완료 - 수납 대기`);
-                    }
-                    
-                  } else {
-                    // 큐도 없고 예약도 없으면 프로필 상태 유지
-                    computedState = profileState;
-                    console.log(`🔄 기본 상태 유지: ${computedState}`);
-                  }
-                  
-                } else if (profileState === 'PAYMENT') {
-                  // 수납 상태
-                  computedState = 'PAYMENT';
-                  console.log(`💳 수납 상태: ${computedState}`);
-                  
-                } else if (profileState === 'FINISHED') {
-                  // 완료 상태
-                  computedState = 'FINISHED';
-                  console.log(`✅ 완료 상태: ${computedState}`);
-                }
-                
-                const finalPatientState = computedState;
-                console.log(`✅ 최종 환자 상태 결정: ${finalPatientState}`);
+                // ✅ --- 환자 상태: Backend를 Single Source of Truth로 신뢰 ---
+                // Backend에서 보낸 상태를 그대로 사용 (Frontend에서 재계산하지 않음)
+
+                // 1. Backend (userData.state)에서 받은 상태를 그대로 사용
+                const profileState = userData?.state || 'UNREGISTERED';
+                const finalPatientState = normalizePatientState(profileState) || 'UNREGISTERED';
+
+                console.log(`✅ Backend 상태를 그대로 사용: ${finalPatientState}`);
                 
                 // ARRIVED 상태일 때 디버깅
                 if (finalPatientState === 'ARRIVED') {
@@ -895,10 +798,24 @@ const useJourneyStore = create(
                   }
                 }
                 if (appointments.length === 0 && currentQueues.length > 0) {
-                  finalAppointments = currentQueues.map(queue => ({
+                  // ✅✅ exam_id 기준 중복 제거
+                  const uniqueQueues = [];
+                  const seenExamIds = new Set();
+
+                  currentQueues.forEach(queue => {
+                    const examId = queue.exam?.exam_id;
+                    if (examId && !seenExamIds.has(examId)) {
+                      seenExamIds.add(examId);
+                      uniqueQueues.push(queue);
+                    }
+                  });
+
+                  console.log(`🔧 Queue 중복 제거: ${currentQueues.length}개 → ${uniqueQueues.length}개`);
+
+                  finalAppointments = uniqueQueues.map(queue => ({
                     appointment_id: queue.appointment || `QUEUE_${queue.queue_id}`,
-                    status: queue.state === 'waiting' ? 'waiting' : 
-                           queue.state === 'called' ? 'called' : 
+                    status: queue.state === 'waiting' ? 'waiting' :
+                           queue.state === 'called' ? 'called' :
                            queue.state === 'in_progress' ? 'in_progress' : queue.state,
                     scheduled_at: queue.created_at,
                     exam: queue.exam,

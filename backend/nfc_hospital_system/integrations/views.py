@@ -231,31 +231,39 @@ def test_patient_list(request):
                 # 환자의 모든 예약된 검사 조회
                 from appointments.models import Appointment
                 from p_queue.models import Queue
+                from django.db.models import Prefetch
                 appointments_data = []
                 try:
-                    # 🔧 먼저 이 환자의 중복 in_progress Queue 정리
-                    in_progress_queues = Queue.objects.filter(
-                        user=ps.user,
-                        state='in_progress'
-                    ).order_by('created_at')
-
-                    if in_progress_queues.count() > 1:
-                        # 첫 번째만 유지하고 나머지는 waiting으로 변경
-                        for queue in in_progress_queues[1:]:
-                            queue.state = 'waiting'
-                            queue.save()
-                            logger.warning(f"Auto-fixed duplicate in_progress queue: {queue.exam.title} → waiting")
+                    # ✅ N+1 쿼리 제거: prefetch_related로 Queue 미리 로드
+                    # ✅ 오늘 날짜 필터 추가 (성능 최적화)
+                    from django.utils import timezone
+                    today = timezone.now().date()
 
                     appointments = Appointment.objects.filter(
-                        user=ps.user
-                    ).select_related('exam').order_by('created_at')
+                        user=ps.user,
+                        scheduled_at__date=today
+                    ).select_related('exam').prefetch_related(
+                        Prefetch(
+                            'queues',  # ✅ related_name='queues'로 수정
+                            queryset=Queue.objects.filter(created_at__date=today)
+                        )
+                    ).order_by('created_at')
 
                     for appt in appointments:
-                        # 이 appointment의 Queue 상태 확인
-                        queue_for_appt = Queue.objects.filter(appointment_id=appt.appointment_id).first()
+                        # ✅ 이미 prefetch된 Queue 사용 (추가 DB 쿼리 없음)
+                        queue_for_appt = appt.queues.first() if hasattr(appt, 'queues') else None
 
                         # Queue 상태가 있으면 그것을 우선, 없으면 Appointment 상태 사용
                         actual_status = queue_for_appt.state if queue_for_appt else appt.status
+
+                        # Queue 정보 구조화
+                        queue_info = None
+                        if queue_for_appt:
+                            queue_info = {
+                                'queue_id': str(queue_for_appt.queue_id),
+                                'state': queue_for_appt.state,
+                                'queue_number': queue_for_appt.queue_number
+                            }
 
                         appointments_data.append({
                             'appointment_id': str(appt.appointment_id),
@@ -268,7 +276,8 @@ def test_patient_list(request):
                             },
                             'scheduled_at': appt.scheduled_at.isoformat(),
                             'status': actual_status,  # Queue 상태 우선 반환
-                            'queue_id': str(queue_for_appt.queue_id) if queue_for_appt else None
+                            'queue_id': str(queue_for_appt.queue_id) if queue_for_appt else None,
+                            'queue_info': queue_info  # ✅ Frontend에서 사용하는 queue_info 추가
                         })
                 except:
                     pass  # Appointment 없어도 계속 진행
@@ -380,31 +389,74 @@ def test_update_patient_state(request):
         queues_updated = 0
         sync_message = ""
 
-        # 환자의 모든 Queue 조회 (오늘 일정 기준)
-        user_queues = Queue.objects.filter(user__user_id=user_id).order_by('created_at')
+        # ✅ 환자의 오늘 Queue만 조회 (성능 최적화: 날짜 필터링)
+        from django.utils import timezone
+        today = timezone.now().date()
+        user_queues = Queue.objects.filter(
+            user__user_id=user_id,
+            created_at__date=today
+        ).order_by('created_at')
 
         if new_state == 'UNREGISTERED' or new_state == 'ARRIVED':
             # 검사 전 단계 - Queue에 영향 없음
             sync_message = "검사 전 단계입니다. Queue 상태 변경 없음."
 
         elif new_state == 'REGISTERED':
-            # 접수 완료 - 모든 Queue를 waiting으로 초기화 (아직 검사실에 도착하지 않음)
-            for queue in user_queues:
-                if queue.state != 'waiting':
-                    queue.state = 'waiting'
-                    queue.save()
-                    queues_updated += 1
-            sync_message = f"{queues_updated}개 Queue를 waiting으로 초기화했습니다 (접수 완료, 검사실 이동 전)."
+            # 접수 완료 - 모든 Queue를 waiting으로 초기화 (자동 시작하지 않음)
+            # ✅ 당일 예약을 pending → scheduled로 변경
+            appointments_updated = Appointment.objects.filter(
+                user=patient_state.user,
+                scheduled_at__date=today,
+                status='pending'
+            ).update(status='scheduled')
+
+            # ✅ 모든 Queue를 waiting으로 초기화 (Bulk Update)
+            queues_updated = user_queues.exclude(state='waiting').update(state='waiting')
+
+            # ✅ 첫 번째 검사를 current_exam으로 설정하되, waiting 상태 유지
+            # QuerySet 재조회 (Bulk update 반영)
+            user_queues = Queue.objects.filter(
+                user__user_id=user_id,
+                created_at__date=today
+            ).order_by('created_at')
+
+            first_queue = user_queues.filter(state='waiting').first()
+            if first_queue:
+                # ✅ waiting 상태 그대로 유지 (자동 시작하지 않음)
+                patient_state.current_exam = first_queue.exam
+                patient_state.current_state = 'WAITING'  # REGISTERED가 아닌 WAITING으로
+                patient_state.save()
+                sync_message = f"{appointments_updated}개 예약을 scheduled로 변경. 첫 검사 '{first_queue.exam.title}' 대기 중."
+            else:
+                sync_message = f"{appointments_updated}개 예약을 scheduled로 변경하고, {queues_updated}개 Queue를 waiting으로 초기화했습니다."
 
         elif new_state == 'WAITING':
-            # 대기중 - 현재 in_progress 검사 완료 후 다음 검사 대기로 이동
-            # 현재 in_progress인 Queue를 completed로 변경
-            for queue in user_queues:
-                if queue.state == 'in_progress':
-                    queue.state = 'completed'
-                    queue.save()
-                    queues_updated += 1
-            sync_message = f"{queues_updated}개 진행중 Queue를 completed로 변경하고 다음 검사 대기 중입니다."
+            # 대기중 - 현재 in_progress 검사 완료, 다음 검사는 WAITING 상태로만 설정
+            # ✅ 현재 in_progress인 Queue를 completed로 변경 (Bulk Update)
+            queues_updated = user_queues.filter(state='in_progress').update(state='completed')
+
+            # ✅ user_queues를 다시 조회 (DB 최신 상태 반영)
+            user_queues = Queue.objects.filter(
+                user__user_id=user_id,
+                created_at__date=today
+            ).order_by('created_at')
+
+            # ✅ 다음 검사 찾기 (Queue 기준)
+            next_queue = user_queues.filter(state='waiting').order_by('created_at').first()
+
+            if next_queue:
+                # 다음 검사는 WAITING 상태로만 설정 (자동 시작 하지 않음)
+                # 의료진이 호출(CALLED)하고 환자가 입장(IN_PROGRESS)해야 함
+                patient_state.current_exam = next_queue.exam
+                patient_state.current_state = 'WAITING'  # WAITING 상태 유지
+                patient_state.save()
+                sync_message = f"{queues_updated}개 검사 완료. 다음 검사: '{next_queue.exam.title}' 대기 중"
+            else:
+                # 모든 검사 완료 → PAYMENT로 자동 전환
+                patient_state.current_state = 'PAYMENT'
+                patient_state.current_exam = None
+                patient_state.save()
+                sync_message = f"{queues_updated}개 검사 완료. 모든 일정 완료 → PAYMENT 단계로 자동 전환"
 
         elif new_state == 'CALLED':
             # 호출됨 - 첫 waiting Queue를 called로 변경
@@ -422,18 +474,20 @@ def test_update_patient_state(request):
 
         elif new_state == 'IN_PROGRESS':
             # 진행중 - 완료되지 않은 Queue 중 첫 called/waiting Queue를 in_progress로
-            # 먼저 다른 모든 in_progress Queue를 completed로 변경 (이전 검사는 완료된 것으로)
-            for queue in user_queues:
-                if queue.state == 'in_progress':
-                    queue.state = 'completed'
-                    queue.save()
-                    queues_updated += 1
+            # ✅ 먼저 다른 모든 in_progress Queue를 completed로 변경 (Bulk Update)
+            queues_updated = user_queues.filter(state='in_progress').update(state='completed')
+
+            # QuerySet 재조회 (Bulk update 반영)
+            user_queues = Queue.objects.filter(
+                user__user_id=user_id,
+                created_at__date=today
+            ).order_by('created_at')
 
             # 1순위: called 상태 (완료되지 않은 것만)
-            target_queue = user_queues.filter(state='called').exclude(state='completed').first()
+            target_queue = user_queues.filter(state='called').first()
             # 2순위: waiting 상태 (완료되지 않은 것만)
             if not target_queue:
-                target_queue = user_queues.filter(state='waiting').exclude(state='completed').first()
+                target_queue = user_queues.filter(state='waiting').first()
 
             if target_queue:
                 # 선택된 Queue를 in_progress로 변경
@@ -449,12 +503,8 @@ def test_update_patient_state(request):
                 sync_message = "진행할 Queue가 없습니다 (모든 검사 완료됨)."
 
         elif new_state == 'PAYMENT' or new_state == 'FINISHED':
-            # 수납/완료 - 모든 Queue를 completed로 변경
-            for queue in user_queues:
-                if queue.state != 'completed':
-                    queue.state = 'completed'
-                    queue.save()
-                    queues_updated += 1
+            # ✅ 수납/완료 - 모든 Queue를 completed로 변경 (Bulk Update)
+            queues_updated = user_queues.exclude(state='completed').update(state='completed')
 
             # current_exam 초기화
             if patient_state.current_exam:
@@ -625,14 +675,32 @@ def test_update_queue_state(request):
         # Queue 업데이트
         queue = Queue.objects.get(queue_id=queue_id)
         old_queue_state = queue.state
+
+        # ✅ NEW: in_progress로 변경할 때, 같은 환자의 다른 in_progress 검사를 completed로
+        completed_other_count = 0
+        if new_state == 'in_progress':
+            from django.utils import timezone
+            today = timezone.now().date()
+
+            other_in_progress = Queue.objects.filter(
+                user=queue.user,
+                state='in_progress',
+                created_at__date=today
+            ).exclude(queue_id=queue_id)
+
+            completed_other_count = other_in_progress.update(state='completed')
+
+            if completed_other_count > 0:
+                logger.info(f"✅ {completed_other_count}개의 다른 in_progress 검사를 completed로 변경")
+
         queue.state = new_state
-        
+
         if new_state == 'called':
             from django.utils import timezone
             queue.called_at = timezone.now()
-        
+
         queue.save()
-        
+
         # 큐 상태에 따라 환자 상태도 자동 업데이트
         patient_state = PatientState.objects.get(user=queue.user)
         old_patient_state = patient_state.current_state

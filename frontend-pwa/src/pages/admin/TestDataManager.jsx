@@ -399,15 +399,25 @@ const TestDataManager = () => {
                           const queueState = queueForThisExam?.state || appt.status;
                           const queueNumber = queueForThisExam?.queue_number;
 
-                          // active 여부 (appt.status가 in_progress인지 확인)
-                          const isActive = appt.status === 'in_progress';
+                          // 상태 구분
+                          const isInProgress = appt.status === 'in_progress';
+                          const isCurrentExam = patient.current_exam?.exam_id === appt.exam?.exam_id;
+                          const isWaitingOrRegistered = ['REGISTERED', 'WAITING', 'CALLED'].includes(patient.current_state);
+
+                          // 배지 표시 로직
+                          // 1) IN_PROGRESS 상태 → "진행중" (파란 배지)
+                          // 2) (REGISTERED/WAITING/CALLED) + current_exam 일치 → "시작 대기" (노란 배지)
+                          const showInProgressBadge = isInProgress;
+                          const showPendingBadge = isCurrentExam && isWaitingOrRegistered && !isInProgress;
 
                           return (
                             <div
                               key={appt.appointment_id}
                               className={`p-2.5 rounded-lg border ${
-                                isActive
-                                  ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-200'
+                                showInProgressBadge
+                                  ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200'
+                                  : showPendingBadge
+                                  ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-200'
                                   : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                               }`}
                             >
@@ -415,12 +425,17 @@ const TestDataManager = () => {
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2">
-                                    <span className={`text-xs font-semibold ${isActive ? 'text-indigo-900' : 'text-gray-800'}`}>
+                                    <span className={`text-xs font-semibold ${showInProgressBadge ? 'text-blue-900' : showPendingBadge ? 'text-amber-900' : 'text-gray-800'}`}>
                                       {idx + 1}. {appt.exam?.title || '검사'}
                                     </span>
-                                    {isActive && (
-                                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-indigo-500 text-white rounded">
+                                    {showInProgressBadge && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-blue-500 text-white rounded">
                                         진행중
+                                      </span>
+                                    )}
+                                    {showPendingBadge && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-500 text-white rounded">
+                                        시작 대기
                                       </span>
                                     )}
                                   </div>
@@ -586,55 +601,6 @@ const TestDataManager = () => {
                           <option key={state} value={state}>{state}</option>
                         ))}
                       </select>
-
-                      {/* 진행할 검사 선택 드롭다운 */}
-                      {patient.appointments && patient.appointments.length > 0 && (
-                        <select
-                          value={
-                            // 현재 in_progress 상태인 검사 찾기
-                            patient.appointments.find(a => a.status === 'in_progress')?.appointment_id || ''
-                          }
-                          onChange={async (e) => {
-                            const selectedAppointmentId = e.target.value;
-                            if (!selectedAppointmentId) return;
-
-                            try {
-                              const response = await apiService.api.post('/test/set-exam-in-progress/', {
-                                user_id: patient.user_id,
-                                appointment_id: selectedAppointmentId
-                              });
-
-                              if (response.data) {
-                                const examTitle = patient.appointments.find(
-                                  a => a.appointment_id === selectedAppointmentId
-                                )?.exam?.title || '검사';
-                                alert(`${examTitle}를 진행중으로 변경했습니다.`);
-                                await fetchPatients();
-                              }
-                            } catch (error) {
-                              console.error('Failed to set exam to in_progress:', error);
-                              const errorMsg = error.response?.data?.message || '검사 상태 변경에 실패했습니다.';
-                              alert(errorMsg);
-                            }
-                          }}
-                          className="text-xs border border-purple-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white min-w-[140px]"
-                          disabled={simulating.has(patient.user_id)}
-                        >
-                          <option value="">진행할 검사 선택</option>
-                          {patient.appointments.map((appt) => {
-                            // appt.status가 Queue.state를 반영하므로 이를 사용
-                            const isCurrentlyInProgress = appt.status === 'in_progress';
-                            return (
-                              <option
-                                key={appt.appointment_id}
-                                value={appt.appointment_id}
-                              >
-                                {isCurrentlyInProgress ? '✓ ' : ''}{appt.exam?.title || '검사'}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      )}
                     </div>
                   </td>
                 </tr>

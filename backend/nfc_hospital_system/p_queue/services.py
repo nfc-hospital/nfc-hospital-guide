@@ -12,6 +12,9 @@ from common.state_definitions import (
 )
 from appointments.models import Appointment
 
+# 종료된 것으로 간주되는 Appointment 상태 (완료, 취소, 미방문)
+FINAL_APPOINTMENT_STATUSES = ['completed', 'examined', 'cancelled', 'no_show']
+
 class InvalidActionError(Exception):
     """잘못된 액션 요청"""
     pass
@@ -94,11 +97,12 @@ class PatientJourneyService:
             today = timezone.now().date()
             next_appointment = Appointment.objects.filter(
                 user=self.user,
-                scheduled_at__date=today,
-                status='pending'
+                scheduled_at__date=today
+            ).exclude(
+                status__in=FINAL_APPOINTMENT_STATUSES  # 완료/취소/미방문 제외
             ).exclude(
                 appointment_id=active_queue.appointment_id if active_queue else None
-            ).order_by('scheduled_at').first()
+            ).order_by('created_at').first()  # created_at으로 정렬하여 순서 일관성 확보
 
             if next_appointment:
                 # 다음 검사가 있으면 WAITING으로
@@ -122,17 +126,36 @@ class PatientJourneyService:
         old_state_value = patient_state.current_state
         patient_state.current_state = new_state.value
         patient_state.save()
-        
+
+        # REGISTERED 상태일 때 당일 예약을 pending → scheduled로 변경
+        if new_state == PatientJourneyState.REGISTERED:
+            today = timezone.now().date()
+            Appointment.objects.filter(
+                user=self.user,
+                scheduled_at__date=today,
+                status='pending'
+            ).update(status='scheduled')
+
         # Queue 상태 동기화 (필요한 경우)
         self._sync_queue_state(new_state, payload)
         
-        # 상태 전환 로그 생성
+        # 상태 전환 로그 생성 (상세 정보 포함)
+        # 현재 진행 중인 Queue/Exam 정보 수집
+        active_queue = Queue.objects.filter(
+            user=self.user,
+            state__in=[QueueDetailState.WAITING.value,
+                      QueueDetailState.CALLED.value,
+                      QueueDetailState.IN_PROGRESS.value]
+        ).first()
+
         StateTransition.objects.create(
             user=self.user,
             from_state=old_state_value,
             to_state=new_state.value,
             trigger_type=self._get_trigger_type(action),
-            trigger_source=action_type
+            trigger_source=f"{action_type} | queue_id:{active_queue.queue_id if active_queue else 'N/A'} | apt_id:{active_queue.appointment_id if active_queue else 'N/A'}",
+            location_at_transition=payload.get('location') if payload else None,
+            exam_id=active_queue.exam.exam_id if active_queue else None
         )
         
         # WebSocket 알림 전송
@@ -158,11 +181,12 @@ class PatientJourneyService:
                 today = timezone.now().date()
                 next_appointment = Appointment.objects.filter(
                     user=self.user,
-                    scheduled_at__date=today,
-                    status='pending'
+                    scheduled_at__date=today
+                ).exclude(
+                    status__in=FINAL_APPOINTMENT_STATUSES  # 완료/취소/미방문 제외
                 ).exclude(
                     appointment_id=queue.appointment_id
-                ).order_by('scheduled_at').first()
+                ).order_by('created_at').first()  # created_at으로 정렬하여 순서 일관성 확보
 
                 if next_appointment:
                     journey_state = PatientJourneyState.WAITING

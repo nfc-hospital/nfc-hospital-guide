@@ -19,6 +19,9 @@ import FormatBTemplate from './templates/FormatBTemplate';
 // ProgressBar import
 import ProgressBar from './journey/ProgressBar';
 
+// CalledModal import
+import CalledModal from './modals/CalledModal';
+
 // 컴포넌트 외부에 상수 선언 (무한 렌더링 방지)
 const EMPTY_NODES = [];
 const EMPTY_EDGES = [];
@@ -86,6 +89,10 @@ const JourneyContainer = ({ taggedLocation }) => {
   const patientState = useJourneyStore(state => state.patientState);
   const isLoading = useJourneyStore(state => state.isLoading);
   const todaysAppointments = useJourneyStore(state => state.todaysAppointments);
+
+  // CalledModal 상태 관리
+  const [showCalledModal, setShowCalledModal] = React.useState(false);
+  const [calledQueueData, setCalledQueueData] = React.useState(null);
 
   // FormatBTemplate에 필요한 추가 데이터 (useMemo로 메모이제이션)
   const todaySchedule = React.useMemo(() => {
@@ -207,6 +214,29 @@ const JourneyContainer = ({ taggedLocation }) => {
     }
   }, [currentState]);
 
+  // CALLED 상태 모니터링 및 CalledModal 표시
+  React.useEffect(() => {
+    if (currentState === PatientJourneyState.CALLED) {
+      // CALLED 상태의 검사 찾기
+      const calledAppointment = todaysAppointments?.find(
+        apt => apt.status === 'called' || apt.status === 'in_progress'
+      );
+
+      if (calledAppointment) {
+        setCalledQueueData(calledAppointment);
+        setShowCalledModal(true);
+
+        // 진동 피드백 (모바일 기기)
+        if (navigator.vibrate) {
+          navigator.vibrate([200, 100, 200]); // 패턴: 200ms on, 100ms off, 200ms on
+        }
+      }
+    } else {
+      // CALLED가 아닌 다른 상태로 변경되면 모달 닫기
+      setShowCalledModal(false);
+    }
+  }, [currentState, todaysAppointments]);
+
   // 🆕 실제 백엔드 데이터 사용 (테스트 데이터 제거) - 안정적인 selector 사용
   const journeySummary = React.useMemo(() => {
     if (!todaysAppointments || todaysAppointments.length === 0) {
@@ -296,6 +326,13 @@ const JourneyContainer = ({ taggedLocation }) => {
             }, 0)
           : 0 // 기본 금액을 0으로 변경
         }
+      />
+
+      {/* CalledModal 오버레이 */}
+      <CalledModal
+        isOpen={showCalledModal}
+        onClose={() => setShowCalledModal(false)}
+        queueData={calledQueueData}
       />
     </React.Suspense>
   );
