@@ -4,6 +4,9 @@ import MapNodeEditor from '../components/MapNodeEditor';
 const MapEditor = () => {
   const [mode, setMode] = useState('normal'); // 'normal' or 'demo'
   const [selectedScenario, setSelectedScenario] = useState('');
+  const [activeDemoRoute, setActiveDemoRoute] = useState(
+    localStorage.getItem('activeDemoRoute') || '시연_P3_로비_채혈실'
+  );
   
   // 시연용 시나리오별 맵 선택
   const demoScenarios = [
@@ -51,6 +54,32 @@ const MapEditor = () => {
           
           {mode === 'demo' && (
             <>
+              {/* 현재 활성 시연 경로 표시 */}
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-sm font-medium text-green-800">현재 /home에서 사용 중인 시연 경로:</span>
+                    <span className="ml-2 text-sm font-bold text-green-900">
+                      {demoScenarios.find(s => s.id === activeDemoRoute)?.name || '선택되지 않음'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (selectedScenario) {
+                        localStorage.setItem('activeDemoRoute', selectedScenario);
+                        setActiveDemoRoute(selectedScenario);
+                        alert(`'${demoScenarios.find(s => s.id === selectedScenario)?.name}' 경로가 /home 시연 버튼에 적용되었습니다.`);
+                      } else {
+                        alert('먼저 시나리오를 선택해주세요.');
+                      }
+                    }}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                  >
+                    선택한 경로를 /home에 적용
+                  </button>
+                </div>
+              </div>
+
               <h2 className="text-lg font-semibold mb-3">시연 시나리오 선택</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                 {demoScenarios.map((scenario, index) => (
@@ -60,11 +89,16 @@ const MapEditor = () => {
                     className={`p-3 rounded-lg border-2 transition-all ${
                       selectedScenario === scenario.id
                         ? 'border-blue-500 bg-blue-50'
+                        : activeDemoRoute === scenario.id
+                        ? 'border-green-500 bg-green-50'
                         : 'border-gray-300 hover:border-gray-400'
                     }`}
                   >
                     <div className="font-semibold text-sm">{scenario.name}</div>
                     <div className="text-xs text-gray-600">{scenario.floor}</div>
+                    {activeDemoRoute === scenario.id && (
+                      <div className="text-xs text-green-600 font-bold mt-1">✓ 활성</div>
+                    )}
                   </button>
                 ))}
               </div>

@@ -78,11 +78,11 @@ const MapNavigator = ({
   // Store에서 경로 데이터 가져오기 (navigationRoute 우선)
   const routeData = navigationRoute || activeRoute || {};
 
-  // 경로 데이터 우선순위: store > stage > props
-  let corridorNodes = routeData.nodes?.length > 0 ? routeData.nodes :
-    (stageNodes.length > 0 ? stageNodes : propPathNodes);
-  let corridorEdges = routeData.edges?.length > 0 ? routeData.edges :
-    (stageEdges.length > 0 ? stageEdges : propPathEdges);
+  // 경로 데이터 우선순위: props가 있으면 props 우선 (시연 모드), 없으면 store > stage
+  let corridorNodes = (propPathNodes && propPathNodes.length > 0) ? propPathNodes :
+    (routeData.nodes?.length > 0 ? routeData.nodes : stageNodes);
+  let corridorEdges = (propPathEdges && propPathEdges.length > 0) ? propPathEdges :
+    (routeData.edges?.length > 0 ? routeData.edges : stageEdges);
 
   // 폴백: 경로 데이터가 전혀 없으면 기본 샘플 경로 사용 (시연용)
   if (corridorNodes.length === 0 && !stage?.isTransition) {
@@ -101,14 +101,16 @@ const MapNavigator = ({
     }
   }
 
-  // 현재 위치 설정 - LocationStore의 위치 정보를 우선 사용
-  const currentLocation = storeNodeId && storePositionX ? {
-    x: storePositionX,
-    y: storePositionY,
-    node_id: storeNodeId,
-    name: '현재 위치'
-  } : (corridorNodes.length > 0 ? corridorNodes[0] :
-       (storeCurrentLocation || propCurrentLocation || { x: 150, y: 400, name: '현재 위치' }));
+  // 현재 위치 설정 - props가 있으면 props의 첫 노드를 사용 (시연 모드)
+  const currentLocation = (propPathNodes && propPathNodes.length > 0) ?
+    propPathNodes[0] :  // 시연 모드일 때는 경로의 첫 노드를 현재 위치로
+    (storeNodeId && storePositionX ? {
+      x: storePositionX,
+      y: storePositionY,
+      node_id: storeNodeId,
+      name: '현재 위치'
+    } : (corridorNodes.length > 0 ? corridorNodes[0] :
+         (storeCurrentLocation || propCurrentLocation || { x: 150, y: 400, name: '현재 위치' })));
   
   // 디버깅용 로그
   console.log('🗺️ MapNavigator 렌더링:', {
