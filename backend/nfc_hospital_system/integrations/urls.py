@@ -29,4 +29,8 @@ urlpatterns = [
     path('maps/', views.test_get_maps, name='test-maps'),
     path('facility-route/<str:facility_name>/', views.test_get_facility_route, name='test-facility-route'),
     path('save-facility-route/', views.test_save_facility_route, name='test-save-facility-route'),
+
+    # Queue 삭제 API
+    path('queues/delete-patient/', views.test_delete_patient_queues, name='test-delete-patient-queues'),
+    path('queues/delete-all/', views.test_delete_all_queues, name='test-delete-all-queues'),
 ]

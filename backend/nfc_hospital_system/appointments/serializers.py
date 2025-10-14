@@ -278,16 +278,16 @@ class TodayScheduleAppointmentSerializer(serializers.Serializer):
     scheduled_at = serializers.DateTimeField()
     status = serializers.CharField()
     queue_info = serializers.SerializerMethodField()
-    
+
     def get_queue_info(self, obj):
         """현재 대기열 정보 반환"""
         # obj가 Appointment 모델 인스턴스인지 확인
         if hasattr(obj, 'queues'):
             # 활성 대기열 찾기
             active_queue = obj.queues.filter(
-                state__in=['waiting', 'called', 'ongoing']
+                state__in=['waiting', 'called', 'ongoing', 'in_progress']
             ).first()
-            
+
             if active_queue:
                 return {
                     'queue_id': str(active_queue.queue_id),
@@ -298,7 +298,7 @@ class TodayScheduleAppointmentSerializer(serializers.Serializer):
                     'called_at': active_queue.called_at.isoformat() if active_queue.called_at else None
                 }
         return None
-    
+
     def to_representation(self, instance):
         """
         데이터를 최종적으로 보내기 전에 가공합니다.
@@ -306,14 +306,14 @@ class TodayScheduleAppointmentSerializer(serializers.Serializer):
         """
         # 기본 representation 데이터를 생성합니다.
         data = super().to_representation(instance)
-        
+
         # queue_info에 'state' 필드가 있고, 그 값이 존재한다면
         if data.get('queue_info') and data['queue_info'].get('state'):
             # appointment의 status 값을 queue의 state 값으로 덮어씁니다.
             # 이렇게 하면 프론트엔드에서 일관된 상태를 받게 됩니다.
             data['status'] = data['queue_info']['state']
             print(f"✅ [TodayScheduleSerializer] Appointment {instance.appointment_id}의 status를 queue state '{data['queue_info']['state']}'로 동기화")
-        
+
         return data
 
 
@@ -321,12 +321,41 @@ class TodayScheduleSerializer(serializers.Serializer):
     """
     GET /api/v1/schedule/today 응답용 Serializer
     API 명세서 v3 구조 준수
+
+    🛡️ 방어 로직: 한 번에 하나의 예약만 진행 중 상태 허용
     """
     state = serializers.CharField()
     appointments = TodayScheduleAppointmentSerializer(many=True)
     current_location = serializers.CharField(allow_null=True)
     next_action = serializers.CharField()
     timestamp = serializers.DateTimeField(default=timezone.now)
+
+    def to_representation(self, instance):
+        """
+        응답 데이터를 최종 가공합니다.
+        🛡️ 방어: 여러 예약이 진행 중 상태로 직렬화되는 것을 방지
+        """
+        data = super().to_representation(instance)
+
+        # 🛡️ appointments에서 진행 중 상태 필터링
+        appointments = data.get('appointments', [])
+        found_in_progress = False
+
+        for appointment in appointments:
+            status = appointment.get('status', '').lower()
+            is_active_status = status in ['waiting', 'called', 'in_progress', 'ongoing']
+
+            if is_active_status:
+                if found_in_progress:
+                    # 두 번째 이후 진행 중 상태는 pending으로 변경
+                    appointment['status'] = 'pending'
+                    print(f"⚠️ [TodayScheduleSerializer] 여러 개의 진행 중 검사 감지: Appointment {appointment.get('appointment_id')}를 pending으로 변경")
+                else:
+                    # 첫 번째 진행 중 검사만 허용
+                    found_in_progress = True
+                    print(f"✅ [TodayScheduleSerializer] 현재 진행 중: Appointment {appointment.get('appointment_id')} ({status})")
+
+        return data
 
 
 class ExamPostCareInstructionSerializer(serializers.ModelSerializer):

@@ -169,25 +169,47 @@ export default function ProgressBar(props) {
       console.log('🔍 [ProgressBar] Seen exam IDs:', Array.from(seenExamIds));
     }
 
-    // 현재 진행 중인 검사 찾기 (백엔드 상태 기반)
-    const inProgressIndex = uniqueAppointments.findIndex(apt => apt.status === 'in_progress');
+    // ✅ Backend 상태를 그대로 신뢰 - 추론 로직 완전 제거
+    // Single Source of Truth 원칙: Backend가 보낸 상태를 Frontend가 변경하지 않음
+
+    // 🔧 방어 로직: 현재 진행 중인 검사는 한 개만 허용
+    // 여러 개가 waiting/called/in_progress 상태로 내려와도 첫 번째 것만 유지
+    let foundInProgress = false;
 
     uniqueAppointments.forEach((apt, index) => {
       const examName = getAppointmentName(apt);
 
-      // ✅ Backend Queue 상태를 정확히 반영
-      let examStatus = 'pending'; // 기본값
+      // Backend에서 받은 상태를 그대로 사용 (추론 없음)
+      let examStatus = apt.status || 'pending';
 
-      if (apt.status === 'completed') {
-        examStatus = 'completed';  // 완료된 검사
-      } else if (apt.status === 'in_progress') {
-        examStatus = 'in_progress';  // 현재 진행 중 (노란 원)
-      } else if (inProgressIndex > -1 && index < inProgressIndex) {
-        // in_progress 검사보다 앞에 있는 검사들은 완료된 것으로 표시
-        examStatus = 'completed';
-      } else {
-        // 나머지는 pending (회색 원)
-        examStatus = 'pending';
+      // 🛡️ 방어: 이미 진행 중인 검사가 있으면 나머지는 pending 처리
+      const isActiveStatus = examStatus === 'waiting' || examStatus === 'called' || examStatus === 'in_progress';
+
+      // 🚨 특수 케이스: ARRIVED 상태일 때는 모든 검사 단계를 pending으로 강제
+      // ARRIVED 상태 = 환자가 병원 도착 후 접수 진행 중인 상태
+      // 이때는 접수만 in_progress이고, 모든 검사는 pending이어야 함
+      if (currentState === 'ARRIVED') {
+        if (isActiveStatus) {
+          examStatus = 'pending';
+          if (import.meta.env.DEV) {
+            console.log(`🔒 [ProgressBar] ARRIVED 상태: "${examName}"을 pending으로 강제 변경 (접수 단계만 활성화)`);
+          }
+        }
+      } else if (isActiveStatus) {
+        // ARRIVED가 아닐 때만 기존 로직 적용: 첫 번째 진행 중 검사만 허용
+        if (foundInProgress) {
+          // 두 번째 이후 진행 중 상태는 pending으로 변경
+          examStatus = 'pending';
+          if (import.meta.env.DEV) {
+            console.warn(`⚠️ [ProgressBar] 여러 개의 진행 중 검사 감지: "${examName}"을 pending으로 변경`);
+          }
+        } else {
+          // 첫 번째 진행 중 검사만 허용
+          foundInProgress = true;
+          if (import.meta.env.DEV) {
+            console.log(`✅ [ProgressBar] 현재 진행 중: "${examName}" (${examStatus})`);
+          }
+        }
       }
 
       steps.push({
@@ -246,9 +268,18 @@ export default function ProgressBar(props) {
       <div className="flex items-center flex-1">
         {/* 단계별 마커 - Template 스타일에 맞게 컴팩트하게 */}
         {journeySteps.map((step, index) => {
-          const isCompleted = step.status === 'completed' || step.status === QueueDetailState.COMPLETED;
-          const isInProgress = step.status === 'in_progress' || step.status === QueueDetailState.IN_PROGRESS;
-          // isCurrent는 오직 in_progress 상태만 노란색으로 표시
+          // Backend에서 보내는 실제 상태 값 처리
+          // Queue 상태: 'waiting', 'called', 'in_progress', 'completed'
+          // Appointment 상태: 'pending', 'scheduled', 'waiting', 'examined', 'completed'
+          const status = step.status?.toLowerCase() || '';
+
+          // completed/examined = 완료 (하얀색 체크)
+          const isCompleted = status === 'completed' || status === 'examined';
+
+          // waiting, called, in_progress = 현재 진행 중인 검사 (노란색)
+          const isInProgress = status === 'waiting' || status === 'called' || status === 'in_progress';
+
+          // isCurrent = 노란색 원으로 표시 (현재 검사)
           const isCurrent = isInProgress;
 
           // 단계별 색상 구분

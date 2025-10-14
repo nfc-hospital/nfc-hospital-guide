@@ -262,12 +262,78 @@ const TestDataManager = () => {
     if (!window.confirm('모든 환자 상태를 REGISTERED로 초기화하시겠습니까?')) {
       return;
     }
-    
+
     try {
       await apiService.api.post('/test/reset/');
       await fetchPatients();
     } catch (error) {
       console.error('Failed to reset patients:', error);
+    }
+  };
+
+  // 특정 환자의 모든 Queue 삭제
+  const deletePatientQueues = async (userId, patientName) => {
+    if (!window.confirm(`${patientName}님의 모든 Queue를 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const response = await apiService.api.delete('/test/queues/delete-patient/', {
+        data: { user_id: userId }
+      });
+
+      // 응답 구조 확인: response.data 또는 response.data.data
+      const data = response.data?.data || response.data;
+      const message = response.data?.message || data?.message;
+      const deletedCount = data?.deleted_count || 0;
+
+      alert(`✅ 삭제 완료!\n${deletedCount}개의 Queue가 삭제되었습니다.`);
+
+      await fetchPatients(); // 목록 새로고침
+    } catch (error) {
+      console.error('Failed to delete patient queues:', error);
+
+      let errorMessage = '❌ Queue 삭제에 실패했습니다.';
+      if (error.response?.data?.message) {
+        errorMessage = `❌ ${error.response.data.message}`;
+      } else if (error.message) {
+        errorMessage = `❌ 오류: ${error.message}`;
+      }
+
+      alert(errorMessage);
+    }
+  };
+
+  // 전체 Queue 초기화
+  const deleteAllQueues = async () => {
+    if (!window.confirm('⚠️ 모든 환자의 모든 Queue를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다!')) {
+      return;
+    }
+
+    try {
+      const response = await apiService.api.delete('/test/queues/delete-all/', {
+        data: { confirm: true }
+      });
+
+      // 응답 구조 확인: response.data 또는 response.data.data
+      const data = response.data?.data || response.data;
+      const message = response.data?.message || data?.message;
+      const deletedCount = data?.deleted_count || 0;
+
+      alert(`✅ 전체 Queue 삭제 완료!\n${deletedCount}개의 Queue가 삭제되었습니다.`);
+
+      await fetchPatients(); // 목록 새로고침
+    } catch (error) {
+      console.error('Failed to delete all queues:', error);
+
+      let errorMessage = '❌ 전체 Queue 삭제에 실패했습니다.';
+      if (error.response?.data?.message) {
+        errorMessage = `❌ ${error.response.data.message}`;
+      } else if (error.message) {
+        errorMessage = `❌ 오류: ${error.message}`;
+      }
+
+      alert(errorMessage);
     }
   };
 
@@ -322,6 +388,17 @@ const TestDataManager = () => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                     </svg>
                     모든 환자 초기화
+                  </span>
+                </button>
+                <button
+                  onClick={deleteAllQueues}
+                  className="bg-red-500/90 backdrop-blur-sm hover:bg-red-600 text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 hover:shadow-2xl hover:scale-105 border border-red-400"
+                >
+                  <span className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    전체 Queue 초기화
                   </span>
                 </button>
               </div>
@@ -589,7 +666,7 @@ const TestDataManager = () => {
                         </svg>
                         위치
                       </button>
-                      
+
                       {/* 환자 상태 선택 드롭다운 */}
                       <select
                         value={patient.current_state}
