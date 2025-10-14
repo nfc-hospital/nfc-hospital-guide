@@ -110,27 +110,27 @@ def get_patient_scenario(patient_name, current_state):
             ]
         },
         '진행중 테스트': {
-            'type': 'ongoing_exam',
+            'type': 'in_progress_exam',
             'description': '검사 진행 중 시나리오',
-            'next_states': ['COMPLETED', 'PAYMENT'],
+            'next_states': ['WAITING', 'PAYMENT'],
             'scenario_steps': [
-                'ONGOING → 검사 완료 → COMPLETED → PAYMENT → FINISHED'
+                'IN_PROGRESS → 검사 완료 → WAITING (다음 검사) 또는 PAYMENT (모두 완료)'
             ]
         },
         '등록완료 테스트': {
             'type': 'registered_flow',
-            'description': '접수 완료 후 대기 시나리오', 
+            'description': '접수 완료 후 대기 시나리오',
             'next_states': ['WAITING', 'CALLED'],
             'scenario_steps': [
-                'REGISTERED → 검사실 도착 → WAITING → CALLED → ONGOING → COMPLETED'
+                'REGISTERED → 검사실 도착 → WAITING → CALLED → IN_PROGRESS'
             ]
         },
         '대기중 테스트': {
             'type': 'waiting_flow',
             'description': '대기열 시나리오',
-            'next_states': ['CALLED', 'ONGOING'],
+            'next_states': ['CALLED', 'IN_PROGRESS'],
             'scenario_steps': [
-                'WAITING → 환자 호출 → CALLED → 검사실 입실 → ONGOING'
+                'WAITING → 환자 호출 → CALLED → 검사실 입실 → IN_PROGRESS'
             ]
         },
         'Cypress 테스트': {
@@ -146,9 +146,9 @@ def get_patient_scenario(patient_name, current_state):
     # 기본 시나리오 (환자 이름으로 매칭되지 않는 경우)
     default_scenario = {
         'type': 'standard_flow',
-        'description': '표준 환자 여정',
+        'description': '표준 환자 여정 (8단계)',
         'scenario_steps': [
-            'UNREGISTERED → ARRIVED → REGISTERED → WAITING → CALLED → ONGOING → COMPLETED → PAYMENT → FINISHED'
+            'UNREGISTERED → ARRIVED → REGISTERED → WAITING → CALLED → IN_PROGRESS → PAYMENT → FINISHED'
         ]
     }
     
@@ -165,31 +165,140 @@ def get_patient_scenario(patient_name, current_state):
 
 def get_simple_state_transitions(current_state):
     """현재 상태에서 바로 전/다음 상태만 반환 (단순화)"""
-    # 상태 순서 정의
+    # 상태 순서 정의 (8단계 - COMPLETED 제거, IN_PROGRESS로 통일)
     state_order = [
-        'UNREGISTERED', 'ARRIVED', 'REGISTERED', 'WAITING', 
-        'CALLED', 'ONGOING', 'COMPLETED', 'PAYMENT', 'FINISHED'
+        'UNREGISTERED', 'ARRIVED', 'REGISTERED', 'WAITING',
+        'CALLED', 'IN_PROGRESS', 'PAYMENT', 'FINISHED'
     ]
-    
+
     try:
         current_index = state_order.index(current_state)
-        
+
         # 바로 이전 상태
         prev_state = None
         if current_index > 0:
             prev_state = state_order[current_index - 1]
-        
+
         # 바로 다음 상태
         next_state = None
         if current_index < len(state_order) - 1:
             next_state = state_order[current_index + 1]
-        
+
         return {
             'previous': prev_state,
             'next': next_state
         }
     except ValueError:
         return {'previous': None, 'next': None}
+
+# ==================== Queue 관리 헬퍼 함수들 ====================
+
+def find_next_pending_appointment(user_id, today):
+    """
+    완료되지 않은 다음 예약 찾기
+
+    Args:
+        user_id: 사용자 ID
+        today: 검색할 날짜
+
+    Returns:
+        다음 예약 객체 또는 None
+    """
+    from appointments.models import Appointment
+
+    # 🔍 전체 당일 예약 조회
+    all_today_appointments = Appointment.objects.filter(
+        user__user_id=user_id,
+        scheduled_at__date=today
+    ).order_by('created_at')
+
+    # 🔍 완료되지 않은 예약만 필터링
+    # examined = 검사 완료, completed = 예약 완료, 나머지는 취소/부재
+    FINAL_STATUSES = ['completed', 'examined', 'cancelled', 'no_show']
+    pending_appointments = all_today_appointments.exclude(
+        status__in=FINAL_STATUSES
+    )
+
+    print(f"[DEBUG HELPER] 📋 전체 당일 예약 수: {all_today_appointments.count()}")
+    print(f"[DEBUG HELPER] ⏳ 대기 중인 예약 수: {pending_appointments.count()}")
+    for apt in pending_appointments:
+        print(f"[DEBUG HELPER]   → {apt.appointment_id}: {apt.exam.title} (status={apt.status})")
+
+    return pending_appointments.first()
+
+
+def ensure_queue_for_appointment(appointment, user, today):
+    """
+    Appointment에 대한 Queue가 있는지 확인하고 없으면 생성
+    중복 Queue가 있으면 정리
+
+    Args:
+        appointment: Appointment 객체
+        user: User 객체
+        today: 날짜
+
+    Returns:
+        Queue 객체
+    """
+    from p_queue.models import Queue
+    from datetime import datetime, time
+
+    # ✅ 타임존 안전한 날짜 범위 계산
+    today_start = timezone.make_aware(datetime.combine(today, time.min))
+    today_end = timezone.make_aware(datetime.combine(today, time.max))
+
+    # ⚠️ 중요: 전체 Queue 테이블에서 확인 (활성 상태만)
+    existing_queues = Queue.objects.filter(
+        appointment_id=appointment.appointment_id,
+        user__user_id=user.user_id,
+        created_at__gte=today_start,
+        created_at__lte=today_end,
+        state__in=['waiting', 'called', 'in_progress']  # 활성 상태만
+    )
+
+    existing_count = existing_queues.count()
+    print(f"[DEBUG HELPER]   → 기존 활성 Queue 개수: {existing_count}")
+
+    if existing_count > 1:
+        # 중복 Queue가 있으면 오래된 것들 삭제
+        print(f"[DEBUG HELPER]   ⚠️ 중복 Queue 발견! {existing_count}개 중 최신 것만 유지")
+        latest_queue = existing_queues.order_by('-created_at').first()
+        deleted_count = existing_queues.exclude(queue_id=latest_queue.queue_id).delete()[0]
+        print(f"[DEBUG HELPER]   → {deleted_count}개 중복 Queue 삭제")
+
+        # 최신 Queue 상태 업데이트
+        old_state = latest_queue.state
+        latest_queue.state = 'waiting'
+        latest_queue.save()
+        print(f"[DEBUG HELPER]   → {latest_queue.exam.title} 상태를 {old_state} → waiting으로 변경")
+        return latest_queue
+
+    elif existing_count == 1:
+        # Queue가 정확히 1개 있으면 재사용 (상태만 업데이트)
+        queue = existing_queues.first()
+        old_state = queue.state
+        if old_state != 'waiting':
+            queue.state = 'waiting'
+            queue.save()
+            print(f"[DEBUG HELPER]   → 기존 Queue 재사용: {queue.exam.title} ({old_state} → waiting)")
+        else:
+            print(f"[DEBUG HELPER]   → 기존 Queue 재사용: {queue.exam.title} (이미 waiting)")
+        return queue
+
+    else:
+        # Queue가 없으면 새로 생성
+        queue = Queue.objects.create(
+            appointment=appointment,
+            user=user,
+            exam=appointment.exam,
+            queue_number=Queue.get_next_queue_number(appointment.exam),
+            state='waiting',
+            priority='normal',
+            estimated_wait_time=0
+        )
+        print(f"[DEBUG HELPER]   → Queue {queue.exam.title} 새로 생성 (waiting)")
+        print(f"[DEBUG HELPER]   → 생성된 Queue ID: {queue.queue_id}, state={queue.state}")
+        return queue
 
 # 시연용 가상 EMR 테스트 API
 @api_view(['GET'])
@@ -201,7 +310,17 @@ def test_patient_list(request):
     """
     try:
         # 테스트 환자들 조회 (current_exam도 함께 로드)
-        test_patients = PatientState.objects.select_related('user', 'current_exam').all()
+        # 특정 전화번호만 필터링 (EMR환자 제외)
+        test_phone_numbers = [
+            '010-1234-5678',  # 관리자
+            '010-2222-2222',  # 관리자
+            '010-1111-1111',  # 등록완료 테스트
+            '010-3333-3333',  # 진행중 테스트
+        ]
+
+        test_patients = PatientState.objects.select_related('user', 'current_exam').filter(
+            user__phone_number__in=test_phone_numbers
+        )
         
         patient_list = []
         for ps in test_patients:
@@ -220,13 +339,41 @@ def test_patient_list(request):
                 
                 # 환자의 모든 예약된 검사 조회
                 from appointments.models import Appointment
+                from p_queue.models import Queue
+                from django.db.models import Prefetch
                 appointments_data = []
                 try:
+                    # ✅ N+1 쿼리 제거: prefetch_related로 Queue 미리 로드
+                    # ✅ 오늘 날짜 필터 추가 (성능 최적화)
+                    from django.utils import timezone
+                    today = timezone.now().date()
+
                     appointments = Appointment.objects.filter(
-                        user=ps.user
-                    ).select_related('exam').order_by('scheduled_at')
-                    
+                        user=ps.user,
+                        scheduled_at__date=today
+                    ).select_related('exam').prefetch_related(
+                        Prefetch(
+                            'queues',  # ✅ related_name='queues'로 수정
+                            queryset=Queue.objects.filter(created_at__date=today)
+                        )
+                    ).order_by('created_at')
+
                     for appt in appointments:
+                        # ✅ 이미 prefetch된 Queue 사용 (추가 DB 쿼리 없음)
+                        queue_for_appt = appt.queues.first() if hasattr(appt, 'queues') else None
+
+                        # Queue 상태가 있으면 그것을 우선, 없으면 Appointment 상태 사용
+                        actual_status = queue_for_appt.state if queue_for_appt else appt.status
+
+                        # Queue 정보 구조화
+                        queue_info = None
+                        if queue_for_appt:
+                            queue_info = {
+                                'queue_id': str(queue_for_appt.queue_id),
+                                'state': queue_for_appt.state,
+                                'queue_number': queue_for_appt.queue_number
+                            }
+
                         appointments_data.append({
                             'appointment_id': str(appt.appointment_id),
                             'exam': {
@@ -237,7 +384,9 @@ def test_patient_list(request):
                                 'building': appt.exam.building
                             },
                             'scheduled_at': appt.scheduled_at.isoformat(),
-                            'status': appt.status
+                            'status': actual_status,  # Queue 상태 우선 반환
+                            'queue_id': str(queue_for_appt.queue_id) if queue_for_appt else None,
+                            'queue_info': queue_info  # ✅ Frontend에서 사용하는 queue_info 추가
                         })
                 except:
                     pass  # Appointment 없어도 계속 진행
@@ -249,7 +398,7 @@ def test_patient_list(request):
                 try:
                     current_queue = Queue.objects.filter(
                         user=ps.user,
-                        state__in=['waiting', 'called', 'ongoing']
+                        state__in=['waiting', 'called', 'in_progress']
                     ).select_related('exam').first()
                     
                     if current_queue:
@@ -259,7 +408,8 @@ def test_patient_list(request):
                             'state': current_queue.state,
                             'priority': current_queue.priority,
                             'exam_title': current_queue.exam.title if current_queue.exam else None,
-                            'estimated_wait_time': current_queue.estimated_wait_time
+                            'estimated_wait_time': current_queue.estimated_wait_time,
+                            'appointment_id': str(current_queue.appointment_id) if current_queue.appointment_id else None
                         }
                 except:
                     pass  # Queue 없어도 계속 진행
@@ -301,49 +451,393 @@ def test_patient_list(request):
 @permission_classes([permissions.AllowAny])  # 테스트용으로 권한 완화
 def test_update_patient_state(request):
     """
-    시연용 환자 상태 변경
+    시연용 환자 상태 변경 + Queue 상태 자동 동기화
     PUT /api/v1/test/patient-state
-    
+
     Body:
     {
         "user_id": "uuid",
-        "new_state": "WAITING" // 9개 상태 중 하나
+        "new_state": "WAITING" // 8개 상태 중 하나
     }
+
+    ✨ Queue 동기화 로직:
+    - UNREGISTERED/ARRIVED: Queue 영향 없음 (검사 전)
+    - REGISTERED: 모든 Queue를 waiting으로 초기화
+    - WAITING: 모든 in_progress Queue를 waiting으로 변경
+    - CALLED: 첫 waiting Queue를 called로 변경
+    - IN_PROGRESS: 첫 called/waiting Queue를 in_progress로 (나머지는 waiting)
+    - PAYMENT: 모든 Queue를 completed로 변경
+    - FINISHED: 모든 Queue를 completed로 변경
     """
-    
+
     user_id = request.data.get('user_id')
     new_state = request.data.get('new_state')
-    
-    # 유효한 상태인지 확인
-    valid_states = ['UNREGISTERED', 'ARRIVED', 'REGISTERED', 'WAITING', 
-                   'CALLED', 'ONGOING', 'COMPLETED', 'PAYMENT', 'FINISHED']
-    
+
+    # 🔍 함수 진입 로그
+    print(f"\n[DEBUG TEST API] ==================== API 호출 시작 ====================")
+    print(f"[DEBUG TEST API] 📞 함수: test_update_patient_state")
+    print(f"[DEBUG TEST API] 👤 user_id: {user_id}")
+    print(f"[DEBUG TEST API] 🔄 요청된 상태: {new_state}")
+
+    # 유효한 상태인지 확인 (8단계 - COMPLETED 제거, IN_PROGRESS로 통일)
+    valid_states = ['UNREGISTERED', 'ARRIVED', 'REGISTERED', 'WAITING',
+                   'CALLED', 'IN_PROGRESS', 'PAYMENT', 'FINISHED']
+
     if new_state not in valid_states:
         return APIResponse.error(
             message=f"유효하지 않은 상태입니다. 가능한 값: {', '.join(valid_states)}",
             code="INVALID_STATE",
             status_code=status.HTTP_400_BAD_REQUEST
         )
-    
+
     try:
-        # PatientState 업데이트
+        from p_queue.models import Queue
+        from appointments.models import Appointment
+
+        # PatientState 조회 (아직 변경하지 않음!)
         patient_state = PatientState.objects.get(user_id=user_id)
         old_state = patient_state.current_state
-        patient_state.current_state = new_state
+
+        # ✅ Queue 동기화 후에 최종 상태를 결정 (자동 분기 로직 대응)
+        final_state = new_state  # 기본값은 요청된 상태
+
+        # 🔄 Queue 동기화 로직
+        queues_updated = 0
+        sync_message = ""
+
+        # ✅ 환자의 오늘 Queue만 조회 (성능 최적화: 날짜 필터링)
+        from django.utils import timezone
+        today = timezone.now().date()
+        user_queues = Queue.objects.filter(
+            user__user_id=user_id,
+            created_at__date=today
+        ).order_by('created_at')
+
+        # 🆕 상태 되돌림 로직 (PAYMENT/FINISHED → 이전 단계)
+        if old_state in ['PAYMENT', 'FINISHED'] and new_state in ['UNREGISTERED', 'ARRIVED', 'REGISTERED', 'WAITING', 'CALLED', 'IN_PROGRESS']:
+            print(f"[DEBUG TEST API] 🔙 {old_state}에서 {new_state}로 되돌림 - 검사 상태 복구")
+
+            # 1단계: 모든 completed Queue를 waiting으로 복구
+            completed_queues = user_queues.filter(state='completed')
+            restored_count = 0
+            for queue in completed_queues:
+                queue.state = 'waiting'
+                queue.save()
+
+                # Appointment도 함께 복구
+                if queue.appointment:
+                    queue.appointment.status = 'scheduled'
+                    queue.appointment.save()
+                    print(f"[DEBUG TEST API]   → Queue {queue.exam.title}: completed → waiting")
+                    print(f"[DEBUG TEST API]   → Appointment {queue.appointment.appointment_id}: examined → scheduled")
+
+                restored_count += 1
+
+            print(f"[DEBUG TEST API] ✅ {restored_count}개 검사를 waiting으로 복구")
+
+            # 2단계: new_state에 따라 검사 상태 조정
+            if new_state in ['UNREGISTERED', 'ARRIVED']:
+                # 검사 전 단계 - current_exam 초기화만
+                patient_state.current_exam = None
+                sync_message = f"{restored_count}개 검사를 waiting으로 복구했습니다 (검사 전 단계)."
+            elif new_state == 'REGISTERED':
+                # 접수 완료 단계 - current_exam 초기화
+                patient_state.current_exam = None
+                sync_message = f"{restored_count}개 검사를 waiting으로 복구했습니다 (접수 완료)."
+            elif new_state != 'WAITING':
+                # CALLED/IN_PROGRESS로 되돌림 - user_queues 재조회
+                user_queues = Queue.objects.filter(
+                    user__user_id=user_id,
+                    created_at__date=today
+                ).order_by('created_at')
+
+                first_queue = user_queues.filter(state='waiting').first()
+                if first_queue:
+                    if new_state == 'CALLED':
+                        first_queue.state = 'called'
+                        first_queue.called_at = timezone.now()
+                    elif new_state == 'IN_PROGRESS':
+                        first_queue.state = 'in_progress'
+
+                    first_queue.save()
+
+                    # current_exam 설정
+                    patient_state.current_exam = first_queue.exam
+
+                    print(f"[DEBUG TEST API]   → 첫 번째 검사({first_queue.exam.title})를 {new_state.lower()}로 변경")
+                    sync_message = f"{restored_count}개 검사를 복구하고, 첫 번째 검사를 {new_state}로 변경했습니다."
+                else:
+                    sync_message = f"{restored_count}개 검사를 waiting으로 복구했습니다."
+            else:
+                # WAITING으로 되돌림 - 첫 번째 검사를 current_exam으로 설정
+                first_queue = user_queues.filter(state='waiting').first()
+                if first_queue:
+                    patient_state.current_exam = first_queue.exam
+                sync_message = f"{restored_count}개 검사를 waiting으로 복구했습니다."
+
+            queues_updated = restored_count
+
+        # 🆕 IN_PROGRESS/CALLED → 이전 단계 되돌림
+        elif old_state == 'IN_PROGRESS' and new_state in ['CALLED', 'WAITING']:
+            print(f"[DEBUG TEST API] 🔙 IN_PROGRESS에서 {new_state}로 되돌림")
+
+            in_progress_queues = user_queues.filter(state='in_progress')
+            for queue in in_progress_queues:
+                if new_state == 'CALLED':
+                    queue.state = 'called'
+                else:
+                    queue.state = 'waiting'
+                queue.save()
+
+                # Appointment도 함께 복구
+                if queue.appointment:
+                    queue.appointment.status = 'scheduled' if new_state == 'WAITING' else 'waiting'
+                    queue.appointment.save()
+
+                print(f"[DEBUG TEST API]   → Queue {queue.exam.title}: in_progress → {queue.state}")
+
+            queues_updated = in_progress_queues.count()
+            sync_message = f"{queues_updated}개 검사를 {new_state.lower()}로 되돌렸습니다."
+
+        # 🆕 CALLED → WAITING 되돌림
+        elif old_state == 'CALLED' and new_state == 'WAITING':
+            print(f"[DEBUG TEST API] 🔙 CALLED에서 WAITING으로 되돌림")
+
+            called_queues = user_queues.filter(state='called')
+            for queue in called_queues:
+                queue.state = 'waiting'
+                queue.save()
+
+                if queue.appointment:
+                    queue.appointment.status = 'scheduled'
+                    queue.appointment.save()
+
+            queues_updated = called_queues.count()
+            sync_message = f"{queues_updated}개 검사를 waiting으로 되돌렸습니다."
+
+        elif new_state == 'UNREGISTERED' or new_state == 'ARRIVED':
+            # 검사 전 단계 - Queue에 영향 없음
+            print(f"[DEBUG TEST API] ⚪ {new_state} 상태 - Queue 영향 없음")
+            sync_message = "검사 전 단계입니다. Queue 상태 변경 없음."
+
+        elif new_state == 'REGISTERED':
+            # 접수 완료 - 모든 Queue를 waiting으로 초기화 (자동 시작하지 않음)
+            print(f"[DEBUG TEST API] 📝 REGISTERED 상태 전환 - 접수 완료")
+
+            # ✅ 당일 예약을 pending → scheduled로 변경
+            appointments_updated = Appointment.objects.filter(
+                user=patient_state.user,
+                scheduled_at__date=today,
+                status='pending'
+            ).update(status='scheduled')
+            print(f"[DEBUG TEST API]   → {appointments_updated}개 예약을 pending → scheduled로 변경")
+
+            # ✅ 모든 Queue를 waiting으로 초기화 (Bulk Update)
+            queues_updated = user_queues.exclude(state='waiting').update(state='waiting')
+            print(f"[DEBUG TEST API]   → {queues_updated}개 Queue를 waiting으로 초기화")
+
+            # ✅ 첫 번째 검사를 current_exam으로 설정하되, waiting 상태 유지
+            # QuerySet 재조회 (Bulk update 반영)
+            user_queues = Queue.objects.filter(
+                user__user_id=user_id,
+                created_at__date=today
+            ).order_by('created_at')
+
+            first_queue = user_queues.filter(state='waiting').first()
+            if first_queue:
+                # ✅ REGISTERED 상태 그대로 유지 (자동 WAITING 전환하지 않음)
+                patient_state.current_exam = first_queue.exam
+                patient_state.current_state = 'REGISTERED'  # REGISTERED 상태 유지
+                patient_state.save()
+                sync_message = f"{appointments_updated}개 예약을 scheduled로 변경. 첫 검사 '{first_queue.exam.title}' 접수 완료."
+            else:
+                sync_message = f"{appointments_updated}개 예약을 scheduled로 변경하고, {queues_updated}개 Queue를 waiting으로 초기화했습니다."
+
+        elif new_state == 'WAITING':
+            # WAITING 상태 전환 - 단순화된 로직
+            print(f"[DEBUG TEST API] 🔍 WAITING 상태 전환 - 다음 검사 찾기")
+
+            # ✅ 1단계: 현재 in_progress인 Queue를 completed로 변경하고, 해당 Appointment도 examined로 변경
+            in_progress_queues = user_queues.filter(state='in_progress')
+            queues_updated = 0
+            for queue in in_progress_queues:
+                queue.state = 'completed'
+                queue.save()
+                queues_updated += 1
+
+                # Appointment도 함께 examined로 변경
+                if queue.appointment:
+                    queue.appointment.status = 'examined'
+                    queue.appointment.save()
+                    print(f"[DEBUG TEST API]   → Queue & Appointment {queue.exam.title}: in_progress → completed/examined")
+
+            print(f"[DEBUG TEST API]   → {queues_updated}개 in_progress Queue를 completed로 변경")
+
+            # ✅ 2단계: 헬퍼 함수로 다음 예약 찾기
+            next_appointment = find_next_pending_appointment(user_id, today)
+
+            if next_appointment:
+                # ✅ 다음 검사가 있으면 WAITING 상태 유지
+                patient_state.current_exam = next_appointment.exam
+
+                # ✅ Appointment 상태 업데이트
+                next_appointment.status = 'waiting'
+                next_appointment.save()
+
+                # ✅ 헬퍼 함수로 Queue 확인/생성
+                next_queue = ensure_queue_for_appointment(next_appointment, patient_state.user, today)
+
+                print(f"[DEBUG TEST API] ✅ 다음 검사 발견: {next_appointment.exam.title} → WAITING 유지")
+                sync_message = f"{queues_updated}개 검사 완료. 다음 검사: '{next_appointment.exam.title}' 대기 중"
+                final_state = 'WAITING'
+            else:
+                # ✅ 다음 검사가 없으면 PAYMENT로 전환
+                patient_state.current_exam = None
+                print(f"[DEBUG TEST API] 💰 다음 검사 없음 → PAYMENT 전환")
+                sync_message = f"{queues_updated}개 검사 완료. 모든 일정 완료 → PAYMENT 단계로 자동 전환"
+                final_state = 'PAYMENT'
+
+        elif new_state == 'CALLED':
+            # 호출됨 - 첫 waiting Queue를 called로 변경
+            print(f"[DEBUG TEST API] 📢 CALLED 상태 전환 - 환자 호출")
+
+            # ✅ 타임존 안전한 날짜 범위로 당일 Queue만 조회
+            from datetime import datetime, time
+            from django.db import transaction
+
+            today_start = timezone.make_aware(datetime.combine(today, time.min))
+            today_end = timezone.make_aware(datetime.combine(today, time.max))
+
+            # 🔒 transaction.atomic()으로 감싸서 동시 호출 방지
+            with transaction.atomic():
+                user_queues = Queue.objects.filter(
+                    user__user_id=user_id,
+                    created_at__gte=today_start,
+                    created_at__lte=today_end
+                ).order_by('created_at')  # 생성 순으로 정렬 (첫번째 검사부터)
+
+                # 🔍 디버깅: 당일 Queue 상태 확인
+                print(f"[DEBUG TEST API] 🔍 CALLED 전환 전 Queue 확인 (당일만):")
+                print(f"[DEBUG TEST API] 📋 당일 Queue 수: {user_queues.count()}")
+                for q in user_queues[:5]:  # 최근 5개만 출력
+                    print(f"[DEBUG TEST API]   → Queue {q.exam.title}: state={q.state}, created_at={q.created_at}")
+
+                # ✅ 중요: 이미 called 상태인 Queue가 있는지 먼저 확인
+                existing_called = user_queues.filter(state='called').exists()
+                if existing_called:
+                    print(f"[DEBUG TEST API]   ⚠️ 이미 called 상태인 Queue가 있습니다. 중복 호출 방지.")
+                    sync_message = "이미 호출된 검사가 있습니다."
+                else:
+                    # 🔒 select_for_update()로 row-level lock 적용 (race condition 방지)
+                    first_waiting = user_queues.filter(state='waiting').select_for_update().first()
+                    if first_waiting:
+                        print(f"[DEBUG TEST API]   → 호출할 Queue 발견: {first_waiting.exam.title}")
+                        first_waiting.state = 'called'
+                        first_waiting.called_at = timezone.now()
+                        first_waiting.save()
+                        queues_updated = 1
+                        patient_state.current_exam = first_waiting.exam
+                        sync_message = f"{first_waiting.exam.title} 검사를 called로 변경했습니다."
+                    else:
+                        print(f"[DEBUG TEST API]   ⚠️ 호출할 waiting Queue가 없음")
+                        sync_message = "호출할 waiting 상태의 Queue가 없습니다."
+
+        elif new_state == 'IN_PROGRESS':
+            # 진행중 - 완료되지 않은 Queue 중 첫 called/waiting Queue를 in_progress로
+            print(f"[DEBUG TEST API] ⏩ IN_PROGRESS 상태 전환 - 검사 시작")
+
+            # ✅ 타임존 안전한 날짜 범위로 당일 Queue만 조회
+            from datetime import datetime, time
+            from django.db import transaction
+
+            today_start = timezone.make_aware(datetime.combine(today, time.min))
+            today_end = timezone.make_aware(datetime.combine(today, time.max))
+
+            # 🔒 transaction.atomic()으로 감싸서 동시 호출 방지
+            with transaction.atomic():
+                user_queues = Queue.objects.filter(
+                    user__user_id=user_id,
+                    created_at__gte=today_start,
+                    created_at__lte=today_end
+                ).order_by('created_at')  # 생성 순으로 정렬 (첫번째 검사부터)
+
+                # ✅ 먼저 다른 모든 in_progress Queue를 completed로 변경 (Bulk Update with Lock)
+                queues_updated = user_queues.filter(state='in_progress').select_for_update().update(state='completed')
+                print(f"[DEBUG TEST API]   → {queues_updated}개 기존 in_progress Queue를 completed로 변경")
+
+                # QuerySet 재조회 (Bulk update 반영)
+                user_queues = Queue.objects.filter(
+                    user__user_id=user_id,
+                    created_at__gte=today_start,
+                    created_at__lte=today_end
+                ).order_by('created_at')  # 생성 순으로 정렬 (첫번째 검사부터)
+
+                # 🔍 디버깅: 당일 Queue 상태 확인
+                print(f"[DEBUG TEST API] 🔍 IN_PROGRESS 전환 전 Queue 확인 (당일만):")
+                print(f"[DEBUG TEST API] 📋 당일 Queue 수: {user_queues.count()}")
+                for q in user_queues[:5]:
+                    print(f"[DEBUG TEST API]   → Queue {q.exam.title}: state={q.state}, created_at={q.created_at}")
+
+                # 🔒 select_for_update()로 row-level lock 적용 (race condition 방지)
+                # 1순위: called 상태 (완료되지 않은 것만)
+                target_queue = user_queues.filter(state='called').select_for_update().first()
+                # 2순위: waiting 상태 (완료되지 않은 것만)
+                if not target_queue:
+                    target_queue = user_queues.filter(state='waiting').select_for_update().first()
+
+                if target_queue:
+                    # 선택된 Queue를 in_progress로 변경
+                    print(f"[DEBUG TEST API]   → 대상 Queue 발견: {target_queue.exam.title} (상태: {target_queue.state})")
+                    target_queue.state = 'in_progress'
+                    target_queue.save()
+                    queues_updated += 1
+
+                    patient_state.current_exam = target_queue.exam
+
+                    sync_message = f"{target_queue.exam.title} 검사를 in_progress로 변경했습니다 (순차적 진행)."
+                    final_state = 'IN_PROGRESS'  # ✅ 정상 처리
+                else:
+                    # ✅ 진행할 Queue가 없으면 모든 검사 완료 → PAYMENT로 자동 전환
+                    print(f"[DEBUG TEST API]   ⚠️ 진행할 Queue 없음 (모든 검사 완료)")
+                    print(f"[DEBUG TEST API]   💰 자동으로 PAYMENT 상태로 전환")
+                    patient_state.current_exam = None
+                    sync_message = "모든 검사 완료. PAYMENT 단계로 자동 전환."
+                    final_state = 'PAYMENT'  # ✅ 자동 분기
+
+        elif new_state == 'PAYMENT' or new_state == 'FINISHED':
+            # ✅ 수납/완료 - 모든 Queue를 completed로 변경 (Bulk Update)
+            print(f"[DEBUG TEST API] 💳 {new_state} 상태 전환 - 수납/완료 단계")
+            queues_updated = user_queues.exclude(state='completed').update(state='completed')
+            print(f"[DEBUG TEST API]   → {queues_updated}개 Queue를 completed로 변경")
+
+            # current_exam 초기화
+            if patient_state.current_exam:
+                print(f"[DEBUG TEST API]   → current_exam 초기화")
+                patient_state.current_exam = None
+
+            sync_message = f"{queues_updated}개 Queue를 completed로 변경했습니다."
+
+        # ✅ 최종적으로 환자 상태 저장 (Queue 동기화 후)
+        patient_state.current_state = final_state
         patient_state.save()
-        
+
         # 상태 변경 시그널이 자동으로 WebSocket 알림 전송
-        
+
+        print(f"[DEBUG TEST API] ✅ 상태 전환 완료: {old_state} → {final_state}")
+        print(f"[DEBUG TEST API] ==================== API 호출 종료 ====================\n")
+
         return APIResponse.success(
             data={
                 'user_id': user_id,
                 'old_state': old_state,
-                'new_state': new_state,
+                'new_state': final_state,  # ✅ 실제 최종 상태 반환
+                'queues_updated': queues_updated,
+                'sync_message': sync_message,
                 'updated_at': patient_state.updated_at.isoformat()
             },
-            message=f"환자 상태를 {old_state}에서 {new_state}로 변경했습니다."
+            message=f"환자 상태를 {old_state}에서 {final_state}로 변경했습니다. {sync_message}"
         )
-        
+
     except PatientState.DoesNotExist:
         return APIResponse.error(
             message="해당 환자를 찾을 수 없습니다.",
@@ -355,49 +849,72 @@ def test_update_patient_state(request):
 @permission_classes([permissions.AllowAny])  # 테스트용으로 권한 완화
 def test_simulate_patient_flow(request):
     """
-    시연용 환자 흐름 시뮬레이션 (자동 진행)
+    시연용 환자 흐름 시뮬레이션 (자동 진행) - 8단계 시스템
     POST /api/v1/test/simulate
-    
+
     Body:
     {
         "user_id": "uuid",
         "interval_seconds": 10  // 각 단계 사이 간격 (선택)
     }
+
+    IN_PROGRESS 완료 시 동적 분기:
+    - 다음 예약이 있으면 → WAITING
+    - 모든 예약 완료 → PAYMENT
     """
-    
+
     user_id = request.data.get('user_id')
-    
+
     try:
         patient_state = PatientState.objects.get(user_id=user_id)
-        
-        # 다음 상태 매핑
-        next_state_map = {
-            'UNREGISTERED': 'ARRIVED',
-            'ARRIVED': 'REGISTERED',
-            'REGISTERED': 'WAITING',
-            'WAITING': 'CALLED',
-            'CALLED': 'ONGOING',
-            'ONGOING': 'COMPLETED',
-            'COMPLETED': 'PAYMENT',
-            'PAYMENT': 'FINISHED',
-            'FINISHED': 'FINISHED'  # 마지막 상태는 유지
-        }
-        
         current = patient_state.current_state
-        next_state = next_state_map.get(current, current)
-        
+
+        # IN_PROGRESS 완료 시 동적 분기 로직
+        if current == 'IN_PROGRESS':
+            # 다음 대기 중인 예약이 있는지 확인
+            from appointments.models import Appointment
+            next_appointment = Appointment.objects.filter(
+                user=patient_state.user,
+                status__in=['scheduled', 'pending']
+            ).order_by('scheduled_at').first()
+
+            if next_appointment:
+                # 다음 검사가 있으면 WAITING으로
+                next_state = 'WAITING'
+                message = f"환자가 IN_PROGRESS에서 WAITING으로 진행했습니다 (다음 검사: {next_appointment.exam.title})"
+            else:
+                # 모든 검사 완료 → PAYMENT로
+                next_state = 'PAYMENT'
+                message = "환자가 IN_PROGRESS에서 PAYMENT로 진행했습니다 (모든 검사 완료)"
+        else:
+            # 일반적인 상태 전이 매핑 (8단계)
+            next_state_map = {
+                'UNREGISTERED': 'ARRIVED',
+                'ARRIVED': 'REGISTERED',
+                'REGISTERED': 'WAITING',
+                'WAITING': 'CALLED',
+                'CALLED': 'IN_PROGRESS',
+                # 'IN_PROGRESS': 동적 분기 (위에서 처리)
+                'PAYMENT': 'FINISHED',
+                'FINISHED': 'FINISHED'  # 마지막 상태는 유지
+            }
+
+            next_state = next_state_map.get(current, current)
+            message = f"환자가 {current}에서 {next_state}로 진행했습니다."
+
         if current != next_state:
             patient_state.current_state = next_state
             patient_state.save()
-            
+
             return APIResponse.success(
                 data={
                     'user_id': user_id,
                     'previous_state': current,
                     'current_state': next_state,
-                    'is_final': next_state == 'FINISHED'
+                    'is_final': next_state == 'FINISHED',
+                    'branching_applied': current == 'IN_PROGRESS'
                 },
-                message=f"환자가 {current}에서 {next_state}로 진행했습니다."
+                message=message
             )
         else:
             return APIResponse.success(
@@ -408,7 +925,7 @@ def test_simulate_patient_flow(request):
                 },
                 message="이미 최종 상태(FINISHED)입니다."
             )
-            
+
     except PatientState.DoesNotExist:
         return APIResponse.error(
             message="해당 환자를 찾을 수 없습니다.",
@@ -469,31 +986,105 @@ def test_update_queue_state(request):
         # Queue 업데이트
         queue = Queue.objects.get(queue_id=queue_id)
         old_queue_state = queue.state
+
+        # ✅ NEW: in_progress로 변경할 때, 같은 환자의 다른 in_progress 검사를 completed로
+        completed_other_count = 0
+        if new_state == 'in_progress':
+            from django.utils import timezone
+            today = timezone.now().date()
+
+            other_in_progress = Queue.objects.filter(
+                user=queue.user,
+                state='in_progress',
+                created_at__date=today
+            ).exclude(queue_id=queue_id)
+
+            completed_other_count = other_in_progress.update(state='completed')
+
+            if completed_other_count > 0:
+                logger.info(f"✅ {completed_other_count}개의 다른 in_progress 검사를 completed로 변경")
+
         queue.state = new_state
-        
+
         if new_state == 'called':
             from django.utils import timezone
             queue.called_at = timezone.now()
-        
+
         queue.save()
-        
+
         # 큐 상태에 따라 환자 상태도 자동 업데이트
         patient_state = PatientState.objects.get(user=queue.user)
         old_patient_state = patient_state.current_state
-        
-        # 큐 상태 -> 환자 상태 매핑
+
+        # 큐 상태 -> 환자 상태 매핑 (8단계 시스템)
         queue_to_patient_state = {
             'waiting': 'WAITING',
-            'called': 'CALLED', 
-            'ongoing': 'ONGOING',
-            'completed': 'COMPLETED'
+            'called': 'CALLED',
+            'in_progress': 'IN_PROGRESS'
+            # 'completed': 동적 분기 (아래에서 처리)
         }
-        
-        if new_state in queue_to_patient_state:
+
+        if new_state == 'completed':
+            # Queue 'completed' 시 동적 분기 로직
+            print(f"\n[DEBUG QUEUE API] ==================== Queue completed 처리 시작 ====================")
+            print(f"[DEBUG QUEUE API] 📞 함수: test_update_queue_state")
+            print(f"[DEBUG QUEUE API] 🔄 Queue 상태: {old_queue_state} → completed")
+            print(f"[DEBUG QUEUE API] 👤 환자: {queue.user.name}")
+            print(f"[DEBUG QUEUE API] 🏥 완료된 검사: {queue.exam.title}")
+
+            from appointments.models import Appointment
+            from django.utils import timezone
+            today = timezone.now().date()
+
+            # 🆕 완료된 Queue의 Appointment를 examined로 변경 (동기화)
+            if queue.appointment:
+                queue.appointment.status = 'examined'
+                queue.appointment.save()
+                print(f"[DEBUG QUEUE API]   → Appointment {queue.appointment.appointment_id} 상태를 examined로 변경")
+
+            # 🔍 디버깅: 전체 당일 예약 조회
+            all_today_appointments = Appointment.objects.filter(
+                user=queue.user,
+                scheduled_at__date=today
+            ).order_by('created_at')
+
+            print(f"[DEBUG QUEUE API] 🔍 다음 검사 찾기...")
+            print(f"[DEBUG QUEUE API] 📋 전체 당일 예약 수: {all_today_appointments.count()}")
+
+            # 🔍 완료되지 않은 예약만 필터링
+            FINAL_STATUSES = ['completed', 'examined', 'cancelled', 'no_show']
+            pending_appointments = all_today_appointments.exclude(
+                status__in=FINAL_STATUSES
+            ).exclude(appointment_id=queue.appointment_id)
+
+            print(f"[DEBUG QUEUE API] ⏳ 대기 중인 예약 수: {pending_appointments.count()}")
+            for apt in pending_appointments:
+                print(f"[DEBUG QUEUE API]   → {apt.appointment_id}: {apt.exam.title} (status={apt.status})")
+
+            next_appointment = pending_appointments.first()
+
+            if next_appointment:
+                # 다음 검사가 있으면 WAITING으로
+                new_patient_state = 'WAITING'
+                print(f"[DEBUG QUEUE API] ✅ 다음 검사 발견: {next_appointment.exam.title} → WAITING 전환")
+            else:
+                # 모든 검사 완료 → PAYMENT로
+                new_patient_state = 'PAYMENT'
+                print(f"[DEBUG QUEUE API] 💰 다음 검사 없음 → PAYMENT 전환")
+
+            patient_state.current_state = new_patient_state
+            patient_state.current_exam = None  # 검사 완료 시 current_exam 초기화
+            patient_state.save()
+
+            print(f"[DEBUG QUEUE API] ✅ 환자 상태 전환 완료: {old_patient_state} → {new_patient_state}")
+            print(f"[DEBUG QUEUE API] ==================== Queue completed 처리 종료 ====================\n")
+        elif new_state in queue_to_patient_state:
             new_patient_state = queue_to_patient_state[new_state]
             patient_state.current_state = new_patient_state
             patient_state.current_exam = queue.exam  # 현재 검사도 업데이트
             patient_state.save()
+        else:
+            new_patient_state = old_patient_state  # 변경 없음
         
         return APIResponse.success(
             data={
@@ -557,9 +1148,9 @@ def test_add_exam_to_patient(request):
         else:
             scheduled_time = now
         
-        # appointment_id를 UUID로 생성
+        # appointment_id를 EMR_ 접두사와 함께 생성 (기존 데이터 형식과 일치)
         import uuid as uuid_module
-        appointment_id = str(uuid_module.uuid4())
+        appointment_id = f"EMR_{uuid_module.uuid4().hex[:8]}"
         
         # Appointment 생성
         appointment = Appointment.objects.create(
@@ -613,6 +1204,72 @@ def test_add_exam_to_patient(request):
         return APIResponse.error(
             message=f"검사 추가 중 오류가 발생했습니다: {str(e)}",
             code="ADD_EXAM_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['DELETE'])
+@permission_classes([permissions.AllowAny])
+def test_remove_exam_from_patient(request, appointment_id):
+    """
+    시연용 환자의 검사/진료 삭제
+    DELETE /api/v1/test/remove-exam/{appointment_id}/
+
+    Body:
+    {
+        "user_id": "uuid"  // 검증용
+    }
+    """
+    user_id = request.data.get('user_id')
+
+    try:
+        from appointments.models import Appointment
+        from p_queue.models import Queue
+
+        # Appointment 조회 및 검증
+        appointment = Appointment.objects.get(appointment_id=appointment_id)
+
+        # 사용자 검증 (선택적)
+        if user_id and str(appointment.user.user_id) != user_id:
+            return APIResponse.error(
+                message="권한이 없습니다.",
+                code="UNAUTHORIZED",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+
+        # 관련된 Queue가 있으면 함께 삭제 (중복 Queue 대응)
+        deleted_count, _ = Queue.objects.filter(appointment_id=appointment_id).delete()
+        if deleted_count > 0:
+            logger.info(f"{deleted_count} Queue(s) deleted with appointment {appointment_id}")
+        else:
+            logger.info(f"No Queue found for appointment {appointment_id}")
+
+        # 검사 정보 백업
+        exam_title = appointment.exam.title
+        patient_name = appointment.user.name
+
+        # Appointment 삭제
+        appointment.delete()
+
+        return APIResponse.success(
+            data={
+                'appointment_id': appointment_id,
+                'exam_title': exam_title,
+                'patient_name': patient_name
+            },
+            message=f"{patient_name}님의 {exam_title} 검사를 삭제했습니다."
+        )
+
+    except Appointment.DoesNotExist:
+        return APIResponse.error(
+            message="해당 예약을 찾을 수 없습니다.",
+            code="APPOINTMENT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Remove exam from patient error: {str(e)}")
+        return APIResponse.error(
+            message=f"검사 삭제 중 오류가 발생했습니다: {str(e)}",
+            code="REMOVE_EXAM_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -682,6 +1339,131 @@ def test_get_locations(request):
             code="FETCH_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def test_set_exam_in_progress(request):
+    """
+    시연용 특정 검사를 진행중으로 변경
+    POST /api/v1/test/set-exam-in-progress
+
+    Body:
+    {
+        "user_id": "uuid",
+        "appointment_id": "appointment_uuid"
+    }
+    """
+    user_id = request.data.get('user_id')
+    appointment_id = request.data.get('appointment_id')
+
+    if not user_id or not appointment_id:
+        return APIResponse.error(
+            message="user_id와 appointment_id가 필요합니다.",
+            code="MISSING_FIELDS",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        from p_queue.models import Queue
+        from appointments.models import Appointment
+
+        # Appointment 조회
+        appointment = Appointment.objects.select_related('exam', 'user').get(
+            appointment_id=appointment_id,
+            user__user_id=user_id
+        )
+
+        # ✅ 먼저 이 환자의 다른 모든 in_progress 검사들을 completed로 변경
+        # (드롭다운으로 다른 검사를 선택하면 이전 검사는 완료된 것으로 간주)
+        other_in_progress_queues = Queue.objects.filter(
+            user=appointment.user,
+            state='in_progress'
+        ).exclude(appointment_id=appointment_id)
+
+        completed_count = 0
+        for q in other_in_progress_queues:
+            q.state = 'completed'
+            q.save()
+            completed_count += 1
+
+        logger.info(f"Marked {completed_count} other queues as completed for user {user_id}")
+
+        # Queue가 있는지 확인
+        queue = Queue.objects.filter(appointment_id=appointment_id).first()
+
+        if queue:
+            # Queue가 있으면 in_progress로 변경
+            old_queue_state = queue.state
+            queue.state = 'in_progress'
+            queue.save()
+
+            # 환자 상태도 자동 업데이트
+            patient_state = PatientState.objects.get(user=appointment.user)
+            old_patient_state = patient_state.current_state
+            patient_state.current_state = 'IN_PROGRESS'
+            patient_state.current_exam = appointment.exam
+            patient_state.save()
+
+            return APIResponse.success(
+                data={
+                    'user_id': str(user_id),
+                    'appointment_id': appointment_id,
+                    'exam_title': appointment.exam.title,
+                    'old_queue_state': old_queue_state,
+                    'new_queue_state': 'in_progress',
+                    'old_patient_state': old_patient_state,
+                    'new_patient_state': 'IN_PROGRESS',
+                    'completed_other_exams': completed_count
+                },
+                message=f"{appointment.exam.title} 검사를 진행중으로 변경했습니다."
+            )
+        else:
+            # Queue가 없으면 생성하고 in_progress로 설정
+            queue = Queue.objects.create(
+                appointment=appointment,
+                user=appointment.user,
+                exam=appointment.exam,
+                queue_number=Queue.get_next_queue_number(appointment.exam),
+                state='in_progress'
+            )
+
+            # 환자 상태도 업데이트
+            patient_state, created = PatientState.objects.get_or_create(
+                user=appointment.user
+            )
+            old_patient_state = patient_state.current_state
+            patient_state.current_state = 'IN_PROGRESS'
+            patient_state.current_exam = appointment.exam
+            patient_state.save()
+
+            return APIResponse.success(
+                data={
+                    'user_id': str(user_id),
+                    'appointment_id': appointment_id,
+                    'exam_title': appointment.exam.title,
+                    'queue_created': True,
+                    'queue_id': str(queue.queue_id),
+                    'old_patient_state': old_patient_state,
+                    'new_patient_state': 'IN_PROGRESS',
+                    'completed_other_exams': completed_count
+                },
+                message=f"{appointment.exam.title} 검사를 진행중으로 변경했습니다 (Queue 생성됨)."
+            )
+
+    except Appointment.DoesNotExist:
+        return APIResponse.error(
+            message="해당 예약을 찾을 수 없습니다.",
+            code="APPOINTMENT_NOT_FOUND",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Set exam in progress error: {str(e)}")
+        return APIResponse.error(
+            message=f"검사 진행중 변경 중 오류가 발생했습니다: {str(e)}",
+            code="SET_IN_PROGRESS_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
 
 @api_view(['PUT'])
 @permission_classes([permissions.AllowAny])
@@ -951,5 +1733,92 @@ def test_save_facility_route(request):
         return APIResponse.error(
             message=f"경로 저장 중 오류가 발생했습니다: {str(e)}",
             code="SAVE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['DELETE'])
+@permission_classes([permissions.AllowAny])
+def test_delete_patient_queues(request):
+    """
+    시연용 특정 환자의 모든 Queue 삭제
+    DELETE /api/v1/test/queues/delete-patient/
+
+    Body:
+    {
+        "user_id": "uuid"
+    }
+    """
+    user_id = request.data.get('user_id')
+
+    if not user_id:
+        return APIResponse.error(
+            message="user_id가 필요합니다.",
+            code="MISSING_FIELD",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        from p_queue.models import Queue
+
+        # 특정 환자의 모든 Queue 삭제
+        deleted_count, _ = Queue.objects.filter(user__user_id=user_id).delete()
+
+        logger.info(f"Deleted {deleted_count} Queue(s) for user {user_id}")
+
+        return APIResponse.success(
+            data={
+                'user_id': user_id,
+                'deleted_count': deleted_count
+            },
+            message=f"{deleted_count}개의 Queue를 삭제했습니다."
+        )
+
+    except Exception as e:
+        logger.error(f"Delete patient queues error: {str(e)}")
+        return APIResponse.error(
+            message=f"Queue 삭제 중 오류가 발생했습니다: {str(e)}",
+            code="DELETE_ERROR",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+@api_view(['DELETE'])
+@permission_classes([permissions.AllowAny])
+def test_delete_all_queues(request):
+    """
+    시연용 전체 Queue 초기화 (모든 환자의 모든 Queue 삭제)
+    DELETE /api/v1/test/queues/delete-all/
+
+    Body: 없음 (또는 확인용 {"confirm": true})
+    """
+    # 안전장치: confirm 파라미터 확인
+    confirm = request.data.get('confirm', False)
+
+    if not confirm:
+        return APIResponse.error(
+            message="전체 Queue 삭제를 위해서는 'confirm': true가 필요합니다.",
+            code="CONFIRMATION_REQUIRED",
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        from p_queue.models import Queue
+
+        # 모든 Queue 삭제
+        deleted_count, _ = Queue.objects.all().delete()
+
+        logger.warning(f"DELETED ALL QUEUES: {deleted_count} Queue(s) deleted")
+
+        return APIResponse.success(
+            data={
+                'deleted_count': deleted_count
+            },
+            message=f"전체 {deleted_count}개의 Queue를 삭제했습니다."
+        )
+
+    except Exception as e:
+        logger.error(f"Delete all queues error: {str(e)}")
+        return APIResponse.error(
+            message=f"Queue 삭제 중 오류가 발생했습니다: {str(e)}",
+            code="DELETE_ERROR",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

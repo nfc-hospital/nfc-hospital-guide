@@ -3,10 +3,10 @@ import { QueueDetailState } from '../../constants/states';
 
 /**
  * ProgressBar - 환자의 전체 진료/검사 과정을 시각화하는 컴포넌트
- * 
+ *
  * @param {Object|Array} props - 여정 데이터 또는 appointments 배열
  * @param {Object} props.journeyData - 여정 데이터 객체 (선택적)
- * @param {string} props.journeyData.patientState - 환자의 9단계 상태
+ * @param {string} props.journeyData.patientState - 환자의 8단계 상태 (COMPLETED 제거됨)
  * @param {Array} props.journeyData.appointments - 오늘의 전체 일정 목록
  * @param {Array} props.appointments - appointments 배열 (레거시 지원)
  */
@@ -46,7 +46,7 @@ export default function ProgressBar(props) {
       } else if (currentState === 'UNREGISTERED' || currentState === 'ARRIVED') {
         return 0; // 접수 단계
       } else {
-        return 1; // 검사 단계 (REGISTERED, WAITING, CALLED, IN_PROGRESS, COMPLETED)
+        return 1; // 검사 단계 (REGISTERED, WAITING, CALLED, IN_PROGRESS)
       }
     };
 
@@ -125,16 +125,113 @@ export default function ProgressBar(props) {
     );
   }
 
-  // 현재 진행 중인 단계 찾기
-  const currentStepIndex = appointments.findIndex(apt => apt.status === QueueDetailState.IN_PROGRESS);
-  const nextStepIndex = currentStepIndex === -1 
-    ? appointments.findIndex(apt => apt.status === 'pending' || apt.status === QueueDetailState.WAITING)
-    : -1;
+  // 접수와 수납을 포함한 전체 단계 구성
+  const buildCompleteJourney = () => {
+    const steps = [];
 
-  // 완료된 마지막 단계 인덱스
-  const lastCompletedIndex = appointments.reduce((lastIndex, apt, index) => {
-    return apt.status === QueueDetailState.COMPLETED ? index : lastIndex;
-  }, -1);
+    // 1. 접수 단계 추가
+    const currentState = patientState?.current_state || patientState;
+
+    // 접수 단계 상태 결정
+    // UNREGISTERED: pending (아직 도착 안함)
+    // ARRIVED: in_progress (도착해서 접수 진행 중)
+    // REGISTERED 이상: completed (접수 완료)
+    let registrationStatus = 'pending';
+    if (currentState === 'ARRIVED') {
+      registrationStatus = 'in_progress';
+    } else if (currentState && currentState !== 'UNREGISTERED' && currentState !== 'ARRIVED') {
+      registrationStatus = 'completed';
+    }
+
+    steps.push({
+      name: '접수',
+      type: 'registration',
+      status: registrationStatus
+    });
+
+    // 2. 검사 단계들 추가 - Backend의 apt.status를 그대로 사용 (Single Source of Truth)
+
+    // ✅✅ 중복 제거: exam_id 기준으로 고유한 검사만 필터링
+    const uniqueAppointments = [];
+    const seenExamIds = new Set();
+
+    appointments.forEach(apt => {
+      const examId = apt.exam?.exam_id || apt.exam_id;
+      if (examId && !seenExamIds.has(examId)) {
+        seenExamIds.add(examId);
+        uniqueAppointments.push(apt);
+      }
+    });
+
+    if (import.meta.env.DEV) {
+      console.log('🔍 [ProgressBar] Original appointments:', appointments.length);
+      console.log('🔍 [ProgressBar] Unique appointments:', uniqueAppointments.length);
+      console.log('🔍 [ProgressBar] Seen exam IDs:', Array.from(seenExamIds));
+    }
+
+    // ✅ Backend 상태를 그대로 신뢰 - 추론 로직 완전 제거
+    // Single Source of Truth 원칙: Backend가 보낸 상태를 Frontend가 변경하지 않음
+
+    // 🔧 방어 로직: 현재 진행 중인 검사는 한 개만 허용
+    // 여러 개가 waiting/called/in_progress 상태로 내려와도 첫 번째 것만 유지
+    let foundInProgress = false;
+
+    uniqueAppointments.forEach((apt, index) => {
+      const examName = getAppointmentName(apt);
+
+      // Backend에서 받은 상태를 그대로 사용 (추론 없음)
+      let examStatus = apt.status || 'pending';
+
+      // 🛡️ 방어: 이미 진행 중인 검사가 있으면 나머지는 pending 처리
+      const isActiveStatus = examStatus === 'waiting' || examStatus === 'called' || examStatus === 'in_progress';
+
+      // 🚨 특수 케이스: ARRIVED 상태일 때는 모든 검사 단계를 pending으로 강제
+      // ARRIVED 상태 = 환자가 병원 도착 후 접수 진행 중인 상태
+      // 이때는 접수만 in_progress이고, 모든 검사는 pending이어야 함
+      if (currentState === 'ARRIVED') {
+        if (isActiveStatus) {
+          examStatus = 'pending';
+          if (import.meta.env.DEV) {
+            console.log(`🔒 [ProgressBar] ARRIVED 상태: "${examName}"을 pending으로 강제 변경 (접수 단계만 활성화)`);
+          }
+        }
+      } else if (isActiveStatus) {
+        // ARRIVED가 아닐 때만 기존 로직 적용: 첫 번째 진행 중 검사만 허용
+        if (foundInProgress) {
+          // 두 번째 이후 진행 중 상태는 pending으로 변경
+          examStatus = 'pending';
+          if (import.meta.env.DEV) {
+            console.warn(`⚠️ [ProgressBar] 여러 개의 진행 중 검사 감지: "${examName}"을 pending으로 변경`);
+          }
+        } else {
+          // 첫 번째 진행 중 검사만 허용
+          foundInProgress = true;
+          if (import.meta.env.DEV) {
+            console.log(`✅ [ProgressBar] 현재 진행 중: "${examName}" (${examStatus})`);
+          }
+        }
+      }
+
+      steps.push({
+        name: examName,
+        type: 'exam',
+        status: examStatus,
+        appointment: apt
+      });
+    });
+
+    // 3. 수납 단계 추가
+    const isPaymentStage = currentState === 'PAYMENT' || currentState === 'FINISHED';
+    const isFinished = currentState === 'FINISHED';
+
+    steps.push({
+      name: '수납',
+      type: 'payment',
+      status: isFinished ? 'completed' : (isPaymentStage ? 'in_progress' : 'pending')
+    });
+
+    return steps;
+  };
 
   // appointment에서 이름 가져오기 (여러 경로에서 찾기)
   const getAppointmentName = (appointment) => {
@@ -157,35 +254,44 @@ export default function ProgressBar(props) {
     return name;
   };
 
-  // 현재 상태에 따른 헤더 텍스트
-  const getStatusText = () => {
-    if (currentStepIndex !== -1) {
-      return `${getAppointmentName(appointments[currentStepIndex])} 진행 중`;
-    } else if (nextStepIndex !== -1) {
-      return `다음: ${getAppointmentName(appointments[nextStepIndex])}`;
-    } else if (lastCompletedIndex === appointments.length - 1) {
-      return '모든 검사가 완료되었습니다';
-    }
-    return '오늘의 검사 일정';
-  };
+  // 전체 여정 단계 구성
+  const journeySteps = buildCompleteJourney();
 
   // 진행률 계산 (완료된 단계 기준)
-  const completedCount = appointments.filter(apt => apt.status === QueueDetailState.COMPLETED).length;
-  const progressPercentage = (completedCount / appointments.length) * 100;
+  const completedCount = journeySteps.filter(step => step.status === 'completed').length;
+  const currentStepIndex = journeySteps.findIndex(step => step.status === 'in_progress');
+  const progressPercentage = (completedCount / journeySteps.length) * 100;
 
   // Template의 파란색 배경에 맞는 스타일로 수정
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="flex items-center flex-1">
         {/* 단계별 마커 - Template 스타일에 맞게 컴팩트하게 */}
-        {appointments.map((appointment, index) => {
-          const isCompleted = appointment.status === QueueDetailState.COMPLETED;
-          const isInProgress = appointment.status === QueueDetailState.IN_PROGRESS;
-          const isCurrent = index === currentStepIndex || index === nextStepIndex;
-          const isPending = appointment.status === 'pending' || appointment.status === QueueDetailState.WAITING;
+        {journeySteps.map((step, index) => {
+          // Backend에서 보내는 실제 상태 값 처리
+          // Queue 상태: 'waiting', 'called', 'in_progress', 'completed'
+          // Appointment 상태: 'pending', 'scheduled', 'waiting', 'examined', 'completed'
+          const status = step.status?.toLowerCase() || '';
+
+          // completed/examined = 완료 (하얀색 체크)
+          const isCompleted = status === 'completed' || status === 'examined';
+
+          // waiting, called, in_progress = 현재 진행 중인 검사 (노란색)
+          const isInProgress = status === 'waiting' || status === 'called' || status === 'in_progress';
+
+          // isCurrent = 노란색 원으로 표시 (현재 검사)
+          const isCurrent = isInProgress;
+
+          // 단계별 색상 구분
+          const getStepColor = () => {
+            if (step.type === 'registration' || step.type === 'payment') {
+              return isCompleted ? 'bg-white' : isCurrent ? 'bg-amber-400' : 'bg-white/15';
+            }
+            return isCompleted ? 'bg-white' : isCurrent ? 'bg-amber-400' : 'bg-white/15';
+          };
 
           return (
-            <div key={appointment.id || appointment.appointment_id || index} className="flex flex-col items-center relative" style={{ flex: '1 1 0%' }}>
+            <div key={`${step.type}-${index}`} className="flex flex-col items-center relative" style={{ flex: '1 1 0%' }}>
               {/* 연결선 */}
               {index > 0 && (
                 <div className="absolute top-3 sm:top-4 h-0.5" style={{
@@ -202,12 +308,8 @@ export default function ProgressBar(props) {
                 <div className={`
                   relative w-5 h-5 sm:w-6 sm:h-6 rounded-full
                   flex items-center justify-center transition-all duration-500
-                  ${isCompleted
-                    ? 'bg-white shadow-md'
-                    : isCurrent
-                    ? 'bg-amber-400 shadow-lg ring-2 ring-white/30 scale-110'
-                    : 'bg-white/15 backdrop-blur-sm border border-white/25'
-                  }
+                  ${getStepColor()} ${isCurrent ? 'shadow-lg ring-2 ring-white/30 scale-110' : 'shadow-md'}
+                  ${!isCompleted && !isCurrent ? 'backdrop-blur-sm border border-white/25' : ''}
                 `}>
                   {isCompleted ? (
                     <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -227,8 +329,8 @@ export default function ProgressBar(props) {
               <div className="mt-1">
                 <div className={`text-[11px] sm:text-xs font-medium transition-all duration-300 whitespace-nowrap text-center ${
                   isCurrent ? 'text-white' : isCompleted ? 'text-white/90' : 'text-white/60'
-                }`}>
-                  {getAppointmentName(appointment)}
+                } ${step.type === 'registration' || step.type === 'payment' ? 'font-bold' : ''}`}>
+                  {step.name}
                 </div>
               </div>
             </div>
@@ -241,7 +343,7 @@ export default function ProgressBar(props) {
         <div className="text-white/70 text-xs sm:text-sm">진행</div>
         <div className="text-white flex items-baseline gap-0.5">
           <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{completedCount}</span>
-          <span className="text-sm sm:text-base lg:text-xl text-white/70">/{appointments.length}</span>
+          <span className="text-sm sm:text-base lg:text-xl text-white/70">/{journeySteps.length}</span>
         </div>
       </div>
     </div>

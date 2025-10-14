@@ -6,7 +6,7 @@ export const PatientJourneyState = {
   WAITING: 'WAITING',
   CALLED: 'CALLED',
   IN_PROGRESS: 'IN_PROGRESS',  // ONGOING 대체
-  COMPLETED: 'COMPLETED',
+  // COMPLETED 제거 - IN_PROGRESS 완료 시 Backend에서 동적으로 WAITING 또는 PAYMENT로 분기
   PAYMENT: 'PAYMENT',
   FINISHED: 'FINISHED'
 };
@@ -29,11 +29,11 @@ export const canTransitionTo = (from, to) => {
     [PatientJourneyState.REGISTERED]: [PatientJourneyState.WAITING],
     [PatientJourneyState.WAITING]: [PatientJourneyState.CALLED],
     [PatientJourneyState.CALLED]: [PatientJourneyState.IN_PROGRESS],
-    [PatientJourneyState.IN_PROGRESS]: [PatientJourneyState.COMPLETED],
-    [PatientJourneyState.COMPLETED]: [PatientJourneyState.PAYMENT],
+    // IN_PROGRESS 완료 시 Backend에서 동적으로 WAITING 또는 PAYMENT로 분기
+    [PatientJourneyState.IN_PROGRESS]: [PatientJourneyState.WAITING, PatientJourneyState.PAYMENT],
     [PatientJourneyState.PAYMENT]: [PatientJourneyState.FINISHED]
   };
-  
+
   return transitions[from]?.includes(to) || false;
 };
 
@@ -47,11 +47,11 @@ export const getStateDisplay = (state) => {
     [PatientJourneyState.WAITING]: '대기중',
     [PatientJourneyState.CALLED]: '호출됨',
     [PatientJourneyState.IN_PROGRESS]: '진행중',
-    [PatientJourneyState.COMPLETED]: '완료',
+    // COMPLETED 제거
     [PatientJourneyState.PAYMENT]: '수납',
     [PatientJourneyState.FINISHED]: '종료',
-    
-    // Queue Detail States
+
+    // Queue Detail States (Queue 내부 상태는 유지)
     [QueueDetailState.WAITING]: '대기중',
     [QueueDetailState.CALLED]: '호출됨',
     [QueueDetailState.IN_PROGRESS]: '진행중',
@@ -60,7 +60,7 @@ export const getStateDisplay = (state) => {
     [QueueDetailState.NO_SHOW]: '부재',
     [QueueDetailState.CANCELLED]: '취소'
   };
-  
+
   return displays[state] || state;
 };
 
@@ -74,11 +74,11 @@ export const getStateColorClass = (state) => {
     [PatientJourneyState.WAITING]: 'bg-amber-100 text-amber-700',
     [PatientJourneyState.CALLED]: 'bg-green-100 text-green-700',
     [PatientJourneyState.IN_PROGRESS]: 'bg-purple-100 text-purple-700',
-    [PatientJourneyState.COMPLETED]: 'bg-teal-100 text-teal-700',
+    // COMPLETED 제거
     [PatientJourneyState.PAYMENT]: 'bg-orange-100 text-orange-700',
     [PatientJourneyState.FINISHED]: 'bg-gray-300 text-gray-700',
-    
-    // Queue Detail States
+
+    // Queue Detail States (Queue 내부 상태는 유지)
     [QueueDetailState.WAITING]: 'bg-amber-100 text-amber-700',
     [QueueDetailState.CALLED]: 'bg-green-100 text-green-700',
     [QueueDetailState.IN_PROGRESS]: 'bg-purple-100 text-purple-700',
@@ -87,6 +87,6 @@ export const getStateColorClass = (state) => {
     [QueueDetailState.NO_SHOW]: 'bg-gray-100 text-gray-700',
     [QueueDetailState.CANCELLED]: 'bg-red-100 text-red-700'
   };
-  
+
   return colors[state] || 'bg-gray-100 text-gray-700';
 };

@@ -1,65 +1,73 @@
 // 시연용 경로 데이터
 // MapNodeEditor에서 생성한 경로를 각 화면에서 사용할 수 있도록 매핑
 
-import { getFacilityRoute } from './facilityRoutes';
+import { getFacilityRoute } from '../api/facilityRoutes';
 
 // 각 화면(P-0 ~ P-7)에 매핑되는 시연 경로
-export const getDemoRouteForScreen = (screenId) => {
+export const getDemoRouteForScreen = async (screenId) => {
+  // localStorage에서 활성 시연 경로 가져오기
+  const activeDemoRoute = localStorage.getItem('activeDemoRoute');
+
   const routeMapping = {
     // P-0: 도착 전 (경로 없음)
     'P-0': null,
-    
+
     // P-1: 도착 → 원무과 접수
     'P-1': '시연_P1_도착_원무과',
     'ARRIVED': '시연_P1_도착_원무과',
-    
+
     // P-2: 로그인/접수 (경로 없음)
     'P-2': null,
     'REGISTERED_INITIAL': null,
-    
-    // P-3: 로비 → 채혈실
-    'P-3': '시연_P3_로비_채혈실',
-    'REGISTERED': '시연_P3_로비_채혈실',
-    
+
+    // P-3: 로비 → 채혈실 (활성 경로가 있으면 그것을 사용)
+    'P-3': activeDemoRoute || '시연_P3_로비_채혈실',
+    'REGISTERED': activeDemoRoute || '시연_P3_로비_채혈실',
+
     // P-4: 채혈실 대기
     'P-4': '시연_P4_채혈실_대기실',
     'WAITING': '시연_P4_채혈실_대기실',
-    
+
     // P-5: 호출됨 (같은 위치)
     'P-5': '시연_P4_채혈실_대기실',
     'CALLED': '시연_P4_채혈실_대기실',
-    
+
     // P-6: 검사 진행 중 (채혈 → 소변 → X-ray)
     'P-6': '시연_P6_채혈실_소변검사실',
     'P-6-URINE': '시연_P6_채혈실_소변검사실',
     'P-6-XRAY': '시연_P6_소변검사실_엑스레이',
     'ONGOING': '시연_P6_채혈실_소변검사실',
     'COMPLETED': '시연_P6_소변검사실_엑스레이',
-    
+
     // P-7: 수납
     'P-7': '시연_P7_수납창구',
     'P-7-EXIT': '시연_P7_수납_정문',
     'PAYMENT': '시연_P7_수납창구',
     'FINISHED': '시연_P7_수납_정문',
   };
-  
+
   const facilityName = routeMapping[screenId];
   if (!facilityName) return null;
-  
-  // localStorage에서 저장된 경로 가져오기
-  const route = getFacilityRoute(facilityName);
-  
-  // 경로가 없으면 기본 샘플 경로 반환
-  if (!route || route.nodes.length === 0) {
+
+  try {
+    // localStorage에서 저장된 경로 가져오기 (async)
+    const route = await getFacilityRoute(facilityName);
+
+    // 경로가 없으면 기본 샘플 경로 반환
+    if (!route || !route.nodes || route.nodes.length === 0) {
+      return getDefaultDemoRoute(screenId);
+    }
+
+    return {
+      facilityName,
+      nodes: route.nodes,
+      edges: route.edges,
+      mapId: route.map_id || getMapIdForScreen(screenId)
+    };
+  } catch (error) {
+    console.warn('경로 로드 실패, 기본 경로 반환:', error);
     return getDefaultDemoRoute(screenId);
   }
-  
-  return {
-    facilityName,
-    nodes: route.nodes,
-    edges: route.edges,
-    mapId: getMapIdForScreen(screenId)
-  };
 };
 
 // 지도 ID 매핑
@@ -138,7 +146,7 @@ const getDefaultDemoRoute = (screenId) => {
 };
 
 // 현재 검사에 따른 경로 결정
-export const getDemoRouteForExam = (examId, state) => {
+export const getDemoRouteForExam = async (examId, state) => {
   const examRouteMapping = {
     'blood_test': {
       'WAITING': 'P-4',
@@ -154,7 +162,7 @@ export const getDemoRouteForExam = (examId, state) => {
       'ONGOING': 'P-6-XRAY'
     }
   };
-  
+
   const screenId = examRouteMapping[examId]?.[state];
-  return screenId ? getDemoRouteForScreen(screenId) : null;
+  return screenId ? await getDemoRouteForScreen(screenId) : null;
 };

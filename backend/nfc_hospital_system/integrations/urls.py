@@ -18,6 +18,8 @@ urlpatterns = [
     # 시연용 검사/진료 관리 API
     path('available-exams/', views.test_get_available_exams, name='test-available-exams'),
     path('add-exam/', views.test_add_exam_to_patient, name='test-add-exam'),
+    path('remove-exam/<str:appointment_id>/', views.test_remove_exam_from_patient, name='test-remove-exam'),
+    path('set-exam-in-progress/', views.test_set_exam_in_progress, name='test-set-exam-in-progress'),
     
     # 시연용 위치 관리 API
     path('locations/', views.test_get_locations, name='test-locations'),
@@ -27,4 +29,8 @@ urlpatterns = [
     path('maps/', views.test_get_maps, name='test-maps'),
     path('facility-route/<str:facility_name>/', views.test_get_facility_route, name='test-facility-route'),
     path('save-facility-route/', views.test_save_facility_route, name='test-save-facility-route'),
+
+    # Queue 삭제 API
+    path('queues/delete-patient/', views.test_delete_patient_queues, name='test-delete-patient-queues'),
+    path('queues/delete-all/', views.test_delete_all_queues, name='test-delete-all-queues'),
 ]

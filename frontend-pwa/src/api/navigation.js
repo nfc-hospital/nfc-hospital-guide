@@ -60,7 +60,7 @@ const handleApiError = (error, operation) => {
  */
 export const getNfcTags = async () => {
   try {
-    const response = await api.get('/nfc/tags/');
+    const response = await api.get('nfc/tags/');
     
     if (response.data.success) {
       return {
@@ -92,7 +92,7 @@ export const getNfcLocation = async (tagId) => {
       throw new Error('태그 ID가 필요합니다.');
     }
     
-    const response = await api.get(`/nfc/tags/${tagId}/location/`);
+    const response = await api.get(`nfc/tags/${tagId}/location/`);
     
     if (response.data.success) {
       return {
@@ -138,7 +138,7 @@ export const calculateRoute = async (startNodeId, endNodeId, options = {}) => {
       is_accessible: options.isAccessible || false
     };
     
-    const response = await api.post('/navigation/path/', requestData);
+    const response = await api.post('navigation/path/', requestData);
     
     // client.js 인터셉터가 이미 response.data를 반환하므로 직접 접근
     if (response.success) {
@@ -189,7 +189,7 @@ export const calculateRouteByTags = async (startTagCode, endTagCode, options = {
       is_accessible: options.isAccessible || false
     };
     
-    const response = await api.post('/navigation/route-by-tags/', requestData);
+    const response = await api.post('navigation/route-by-tags/', requestData);
     
     // client.js 인터셉터가 이미 response.data를 반환하므로 직접 접근
     if (response.success) {

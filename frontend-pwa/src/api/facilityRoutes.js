@@ -2,13 +2,27 @@ import { api } from './client';
 
 // 시설별 경로 가져오기 (단순화된 버전)
 export const getFacilityRoute = async (facilityName) => {
+  // 먼저 localStorage 확인
+  const localRoutes = JSON.parse(localStorage.getItem('facilityRoutes') || '{}');
+
+  if (localRoutes[facilityName]) {
+    console.log(`✅ localStorage에서 경로 로드 (${facilityName}):`, localRoutes[facilityName]);
+    return {
+      facility_name: facilityName,
+      nodes: localRoutes[facilityName].nodes || [],
+      edges: localRoutes[facilityName].edges || [],
+      map_id: localRoutes[facilityName].mapId || 'main_1f'
+    };
+  }
+
+  // localStorage에 없으면 API 호출
   try {
     const response = await api.get('/nfc/facility-routes/by_facility/', {
       params: { facility_name: facilityName }
     });
-    
+
     console.log(`✅ API 응답 (${facilityName}):`, response.data);
-    
+
     // API가 유효한 데이터를 반환했는지 확인
     if (response.data && response.data.nodes && response.data.nodes.length > 0) {
       return {
@@ -18,10 +32,10 @@ export const getFacilityRoute = async (facilityName) => {
         map_id: response.data.map_id || 'main_1f'
       };
     }
-    
+
     // 데이터가 없으면 에러 발생 (mapStore에서 처리하도록)
     throw new Error('API returned empty or invalid data');
-    
+
   } catch (error) {
     console.warn(`❌ getFacilityRoute 실패 (${facilityName}):`, error.message);
     throw error; // 에러를 상위로 전파
@@ -83,10 +97,17 @@ export const saveRoute = async (facilityName, nodes, edges, mapId = 'main_1f') =
   localRoutes[facilityName] = {
     nodes: nodes,
     edges: edges,
+    mapId: mapId,
     lastUpdated: new Date().toISOString()
   };
   localStorage.setItem('facilityRoutes', JSON.stringify(localRoutes));
-  
+
+  console.log(`✅ localStorage에 경로 저장 완료 (${facilityName}):`, {
+    nodes: nodes.length,
+    edges: edges.length,
+    mapId: mapId
+  });
+
   return true;
 };
 

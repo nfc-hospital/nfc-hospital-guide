@@ -27,21 +27,21 @@ const TestDataManager = () => {
     [PatientJourneyState.WAITING]: 'bg-amber-100 text-amber-700',
     [PatientJourneyState.CALLED]: 'bg-green-100 text-green-700',
     [PatientJourneyState.IN_PROGRESS]: 'bg-purple-100 text-purple-700',
-    [PatientJourneyState.COMPLETED]: 'bg-teal-100 text-teal-700',
+    // COMPLETED 제거 - Backend에서 동적 분기
     [PatientJourneyState.PAYMENT]: 'bg-orange-100 text-orange-700',
     [PatientJourneyState.FINISHED]: 'bg-gray-300 text-gray-700'
   };
 
-  // 상태 흐름 순서
+  // 상태 흐름 순서 (8단계 - COMPLETED 제거됨)
   const stateFlow = [
-    PatientJourneyState.UNREGISTERED, 
-    PatientJourneyState.ARRIVED, 
-    PatientJourneyState.REGISTERED, 
-    PatientJourneyState.WAITING, 
-    PatientJourneyState.CALLED, 
-    PatientJourneyState.IN_PROGRESS, 
-    PatientJourneyState.COMPLETED, 
-    PatientJourneyState.PAYMENT, 
+    PatientJourneyState.UNREGISTERED,
+    PatientJourneyState.ARRIVED,
+    PatientJourneyState.REGISTERED,
+    PatientJourneyState.WAITING,
+    PatientJourneyState.CALLED,
+    PatientJourneyState.IN_PROGRESS,
+    // COMPLETED 제거 - Backend에서 동적으로 WAITING 또는 PAYMENT로 분기
+    PatientJourneyState.PAYMENT,
     PatientJourneyState.FINISHED
   ];
 
@@ -72,6 +72,9 @@ const TestDataManager = () => {
     fetchPatients();
     fetchAvailableExams();
     fetchAvailableLocations();
+
+    // 🚨 긴급: 모든 자동 시뮬레이션 강제 중단
+    setSimulating(new Set());
   }, []);
 
   // 사용 가능한 검사 목록 조회
@@ -107,15 +110,20 @@ const TestDataManager = () => {
     }
   };
 
-  // 환자 시뮬레이션 (자동 진행)
+  // 환자 시뮬레이션 (자동 진행) - 완전 비활성화
   const simulatePatient = async (userId) => {
+    alert('자동 진행 기능이 비활성화되었습니다. "다음 →" 버튼을 사용해주세요.');
+    return;
+
+    // 아래 코드는 실행되지 않음 (비활성화됨)
+    /*
     setSimulating(prev => new Set(prev).add(userId));
-    
+
     try {
       const response = await apiService.api.post('/test/simulate/', {
         user_id: userId
       });
-      
+
       if (!response.data.is_final) {
         // 3초 후 다음 단계로 자동 진행
         setTimeout(() => {
@@ -128,7 +136,7 @@ const TestDataManager = () => {
           return newSet;
         });
       }
-      
+
       await fetchPatients();
     } catch (error) {
       console.error('Failed to simulate patient:', error);
@@ -138,6 +146,7 @@ const TestDataManager = () => {
         return newSet;
       });
     }
+    */
   };
 
   // Queue 상태 업데이트 (환자 상태 자동 연동)
@@ -189,6 +198,44 @@ const TestDataManager = () => {
     }
   };
 
+  // 환자의 검사 삭제
+  const removeExamFromPatient = async (userId, appointmentId) => {
+    if (!confirm('이 검사를 삭제하시겠습니까?')) {
+      return;
+    }
+
+    try {
+      const response = await apiService.api.delete(`/test/remove-exam/${appointmentId}/`, {
+        data: { user_id: userId }
+      });
+
+      if (response.data && response.data.message) {
+        alert(response.data.message);
+      }
+
+      await fetchPatients(); // 목록 새로고침
+
+      // 모달이 열려있으면 데이터 업데이트
+      if (showAllExamsModal && selectedPatientForAllExams) {
+        const updatedPatient = patients.find(p => p.user_id === userId);
+        if (updatedPatient) {
+          setSelectedPatientForAllExams(updatedPatient);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to remove exam:', error);
+
+      let errorMessage = '검사 삭제에 실패했습니다.';
+      if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = `오류: ${error.message}`;
+      }
+
+      alert(errorMessage);
+    }
+  };
+
   // 환자 위치 업데이트
   const updatePatientLocation = async (userId, locationKey) => {
     try {
@@ -215,12 +262,78 @@ const TestDataManager = () => {
     if (!window.confirm('모든 환자 상태를 REGISTERED로 초기화하시겠습니까?')) {
       return;
     }
-    
+
     try {
       await apiService.api.post('/test/reset/');
       await fetchPatients();
     } catch (error) {
       console.error('Failed to reset patients:', error);
+    }
+  };
+
+  // 특정 환자의 모든 Queue 삭제
+  const deletePatientQueues = async (userId, patientName) => {
+    if (!window.confirm(`${patientName}님의 모든 Queue를 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      const response = await apiService.api.delete('/test/queues/delete-patient/', {
+        data: { user_id: userId }
+      });
+
+      // 응답 구조 확인: response.data 또는 response.data.data
+      const data = response.data?.data || response.data;
+      const message = response.data?.message || data?.message;
+      const deletedCount = data?.deleted_count || 0;
+
+      alert(`✅ 삭제 완료!\n${deletedCount}개의 Queue가 삭제되었습니다.`);
+
+      await fetchPatients(); // 목록 새로고침
+    } catch (error) {
+      console.error('Failed to delete patient queues:', error);
+
+      let errorMessage = '❌ Queue 삭제에 실패했습니다.';
+      if (error.response?.data?.message) {
+        errorMessage = `❌ ${error.response.data.message}`;
+      } else if (error.message) {
+        errorMessage = `❌ 오류: ${error.message}`;
+      }
+
+      alert(errorMessage);
+    }
+  };
+
+  // 전체 Queue 초기화
+  const deleteAllQueues = async () => {
+    if (!window.confirm('⚠️ 모든 환자의 모든 Queue를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다!')) {
+      return;
+    }
+
+    try {
+      const response = await apiService.api.delete('/test/queues/delete-all/', {
+        data: { confirm: true }
+      });
+
+      // 응답 구조 확인: response.data 또는 response.data.data
+      const data = response.data?.data || response.data;
+      const message = response.data?.message || data?.message;
+      const deletedCount = data?.deleted_count || 0;
+
+      alert(`✅ 전체 Queue 삭제 완료!\n${deletedCount}개의 Queue가 삭제되었습니다.`);
+
+      await fetchPatients(); // 목록 새로고침
+    } catch (error) {
+      console.error('Failed to delete all queues:', error);
+
+      let errorMessage = '❌ 전체 Queue 삭제에 실패했습니다.';
+      if (error.response?.data?.message) {
+        errorMessage = `❌ ${error.response.data.message}`;
+      } else if (error.message) {
+        errorMessage = `❌ 오류: ${error.message}`;
+      }
+
+      alert(errorMessage);
     }
   };
 
@@ -277,6 +390,17 @@ const TestDataManager = () => {
                     모든 환자 초기화
                   </span>
                 </button>
+                <button
+                  onClick={deleteAllQueues}
+                  className="bg-red-500/90 backdrop-blur-sm hover:bg-red-600 text-white px-8 py-4 rounded-2xl font-semibold transition-all duration-300 hover:shadow-2xl hover:scale-105 border border-red-400"
+                >
+                  <span className="flex items-center gap-2">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    전체 Queue 초기화
+                  </span>
+                </button>
               </div>
             </div>
           </div>
@@ -310,7 +434,7 @@ const TestDataManager = () => {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
               {patients.map((patient, index) => (
-                <tr key={patient.user_id} className="hover:bg-gray-50/50 transition-colors duration-150">
+                <tr key={patient.user_id} className="hover:bg-gray-50/50">
                   {/* 환자 정보 */}
                   <td className="px-6 py-5 border-r border-gray-100">
                     <div className="flex items-center space-x-3">
@@ -338,94 +462,133 @@ const TestDataManager = () => {
                     </span>
                   </td>
                   
-                  {/* 대기열 및 현재 검사 통합 */}
+                  {/* 모든 검사 표시 */}
                   <td className="px-6 py-5 border-r border-gray-100">
-                    <div className="space-y-3">
-                      {/* 현재 대기열 상태 */}
-                      {patient.current_queue ? (
-                        <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-                          <div className="flex items-center justify-between mb-2">
-                            <div>
-                              <span className="text-sm font-semibold text-indigo-900">
-                                현재 대기: {patient.current_queue.exam_title}
-                              </span>
-                              <div className="flex items-center gap-3 mt-1">
-                                <span className="text-sm font-medium text-gray-700">
-                                  대기번호 #{patient.current_queue.queue_number}
-                                </span>
-                                <span className="px-2.5 py-1 text-xs font-medium bg-white text-indigo-700 rounded-md border border-indigo-300">
-                                  {patient.current_queue.state}
-                                </span>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => {
-                                setSelectedPatientForAllExams(patient);
-                                setShowAllExamsModal(true);
-                              }}
-                              className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {patient.appointments && patient.appointments.length > 0 ? (
+                        patient.appointments.map((appt, idx) => {
+                          // 이 검사의 Queue 정보 찾기
+                          const queueForThisExam = patient.appointments.find(
+                            a => a.appointment_id === appt.appointment_id
+                          )?.queue_info || appt.queue_info;
+
+                          const queueId = queueForThisExam?.queue_id;
+                          const queueState = queueForThisExam?.state || appt.status;
+                          const queueNumber = queueForThisExam?.queue_number;
+
+                          // 상태 구분
+                          const isInProgress = appt.status === 'in_progress';
+                          const isCurrentExam = patient.current_exam?.exam_id === appt.exam?.exam_id;
+                          const isWaitingOrRegistered = ['REGISTERED', 'WAITING', 'CALLED'].includes(patient.current_state);
+
+                          // 배지 표시 로직
+                          // 1) IN_PROGRESS 상태 → "진행중" (파란 배지)
+                          // 2) (REGISTERED/WAITING/CALLED) + current_exam 일치 → "시작 대기" (노란 배지)
+                          const showInProgressBadge = isInProgress;
+                          const showPendingBadge = isCurrentExam && isWaitingOrRegistered && !isInProgress;
+
+                          return (
+                            <div
+                              key={appt.appointment_id}
+                              className={`p-2.5 rounded-lg border ${
+                                showInProgressBadge
+                                  ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200'
+                                  : showPendingBadge
+                                  ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-200'
+                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                              }`}
                             >
-                              전체 검사 ({patient.appointments?.length || 0}개)
-                            </button>
-                          </div>
-                          
-                          {patient.current_queue.queue_id && (
-                            <div className="flex gap-2 mt-2">
-                              <button
-                                onClick={() => updateQueueState(patient.current_queue.queue_id, 'waiting')}
-                                className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
-                                  patient.current_queue.state === 'waiting' 
-                                    ? 'bg-amber-500 text-white' 
-                                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
-                                }`}
-                              >
-                                대기
-                              </button>
-                              <button
-                                onClick={() => updateQueueState(patient.current_queue.queue_id, 'called')}
-                                className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
-                                  patient.current_queue.state === 'called' 
-                                    ? 'bg-green-500 text-white' 
-                                    : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
-                                }`}
-                              >
-                                호출
-                              </button>
-                              <button
-                                onClick={() => updateQueueState(patient.current_queue.queue_id, 'in_progress')}
-                                className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
-                                  patient.current_queue.state === 'in_progress' 
-                                    ? 'bg-blue-500 text-white' 
-                                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
-                                }`}
-                              >
-                                진행
-                              </button>
-                              <button
-                                onClick={() => updateQueueState(patient.current_queue.queue_id, 'completed')}
-                                className={`px-3 py-1.5 text-xs rounded-md transition-all duration-200 font-medium flex-1 ${
-                                  patient.current_queue.state === 'completed' 
-                                    ? 'bg-gray-500 text-white' 
-                                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
-                                }`}
-                              >
-                                완료
-                              </button>
+                              {/* 검사 정보 헤더 */}
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-xs font-semibold ${showInProgressBadge ? 'text-blue-900' : showPendingBadge ? 'text-amber-900' : 'text-gray-800'}`}>
+                                      {idx + 1}. {appt.exam?.title || '검사'}
+                                    </span>
+                                    {showInProgressBadge && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-blue-500 text-white rounded">
+                                        진행중
+                                      </span>
+                                    )}
+                                    {showPendingBadge && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-bold bg-amber-500 text-white rounded">
+                                        시작 대기
+                                      </span>
+                                    )}
+                                  </div>
+                                  {queueNumber && (
+                                    <div className="text-[10px] text-gray-600 mt-0.5">
+                                      대기번호 #{queueNumber}
+                                    </div>
+                                  )}
+                                </div>
+                                {/* 삭제 버튼 */}
+                                <button
+                                  onClick={() => removeExamFromPatient(patient.user_id, appt.appointment_id)}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                  title="검사 삭제"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+
+                              {/* Queue 상태 제어 버튼 */}
+                              {queueId ? (
+                                <div className="grid grid-cols-4 gap-1">
+                                  <button
+                                    onClick={() => updateQueueState(queueId, 'waiting')}
+                                    className={`px-2 py-1 text-[10px] rounded font-medium ${
+                                      queueState === 'waiting'
+                                        ? 'bg-amber-500 text-white'
+                                        : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+                                    }`}
+                                  >
+                                    대기
+                                  </button>
+                                  <button
+                                    onClick={() => updateQueueState(queueId, 'called')}
+                                    className={`px-2 py-1 text-[10px] rounded font-medium ${
+                                      queueState === 'called'
+                                        ? 'bg-green-500 text-white'
+                                        : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                                    }`}
+                                  >
+                                    호출
+                                  </button>
+                                  <button
+                                    onClick={() => updateQueueState(queueId, 'in_progress')}
+                                    className={`px-2 py-1 text-[10px] rounded font-medium ${
+                                      queueState === 'in_progress'
+                                        ? 'bg-blue-500 text-white'
+                                        : 'bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200'
+                                    }`}
+                                  >
+                                    진행
+                                  </button>
+                                  <button
+                                    onClick={() => updateQueueState(queueId, 'completed')}
+                                    className={`px-2 py-1 text-[10px] rounded font-medium ${
+                                      queueState === 'completed'
+                                        ? 'bg-gray-500 text-white'
+                                        : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                                    }`}
+                                  >
+                                    완료
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-gray-400 text-center py-1">
+                                  Queue 없음
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+                          );
+                        })
                       ) : (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-400">현재 대기열 없음</span>
-                          <button
-                            onClick={() => {
-                              setSelectedPatientForAllExams(patient);
-                              setShowAllExamsModal(true);
-                            }}
-                            className="text-xs text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                          >
-                            전체 검사 ({patient.appointments?.length || 0}개)
-                          </button>
+                        <div className="flex items-center justify-center py-4">
+                          <span className="text-xs text-gray-400">검사 없음</span>
                         </div>
                       )}
                     </div>
@@ -440,7 +603,7 @@ const TestDataManager = () => {
                           <button
                             onClick={() => updatePatientState(patient.user_id, patient.scenario.previous_state)}
                             disabled={simulating.has(patient.user_id)}
-                            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-200 whitespace-nowrap ${
+                            className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap ${
                               simulating.has(patient.user_id)
                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                 : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -449,12 +612,12 @@ const TestDataManager = () => {
                             ← 이전
                           </button>
                         )}
-                        
+
                         {patient.scenario?.next_state && (
                           <button
                             onClick={() => updatePatientState(patient.user_id, patient.scenario.next_state)}
                             disabled={simulating.has(patient.user_id)}
-                            className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-200 whitespace-nowrap ${
+                            className={`px-2.5 py-1.5 text-xs font-medium rounded-md whitespace-nowrap ${
                               simulating.has(patient.user_id)
                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                 : 'bg-indigo-500 text-white hover:bg-indigo-600'
@@ -465,48 +628,37 @@ const TestDataManager = () => {
                         )}
                       </div>
                       
-                      {/* 자동 시뮬레이션 */}
+                      {/* 자동 시뮬레이션 - 비활성화됨 */}
                       <button
                         onClick={() => simulatePatient(patient.user_id)}
-                        disabled={simulating.has(patient.user_id) || patient.current_state === 'FINISHED'}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 whitespace-nowrap ${
-                          simulating.has(patient.user_id) || patient.current_state === 'FINISHED'
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-blue-500 text-white hover:bg-blue-600'
-                        }`}
+                        disabled={true}
+                        className="px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap bg-gray-100 text-gray-400 cursor-not-allowed"
+                        title="자동진행 기능이 비활성화되었습니다"
                       >
-                        {simulating.has(patient.user_id) ? (
-                          <span className="flex items-center gap-1">
-                            <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            진행중
-                          </span>
-                        ) : '자동진행'}
+                        자동진행 (비활성)
                       </button>
-                      
+
                       {/* 검사 추가 버튼 */}
                       <button
                         onClick={() => {
                           setSelectedPatient(patient);
                           setShowAddExamModal(true);
                         }}
-                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-green-500 text-white hover:bg-green-600 transition-all duration-200 flex items-center gap-1 whitespace-nowrap"
+                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-green-500 text-white hover:bg-green-600 flex items-center gap-1 whitespace-nowrap"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
                         검사 추가
                       </button>
-                      
+
                       {/* 위치 변경 버튼 */}
                       <button
                         onClick={() => {
                           setSelectedPatientForLocation(patient);
                           setShowLocationModal(true);
                         }}
-                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-purple-500 text-white hover:bg-purple-600 transition-all duration-200 flex items-center gap-1 whitespace-nowrap"
+                        className="px-3 py-1.5 text-xs font-medium rounded-md bg-purple-500 text-white hover:bg-purple-600 flex items-center gap-1 whitespace-nowrap"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -514,12 +666,12 @@ const TestDataManager = () => {
                         </svg>
                         위치
                       </button>
-                      
-                      {/* 상태 선택 드롭다운 */}
+
+                      {/* 환자 상태 선택 드롭다운 */}
                       <select
                         value={patient.current_state}
                         onChange={(e) => updatePatientState(patient.user_id, e.target.value)}
-                        className="text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white min-w-[100px]"
+                        className="text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white min-w-[110px]"
                         disabled={simulating.has(patient.user_id)}
                       >
                         {stateFlow.map(state => (
@@ -599,17 +751,29 @@ const TestDataManager = () => {
                             <div className="col-span-2">
                               <span className="text-gray-500">예약 시간:</span>
                               <span className="ml-2 text-gray-900 font-medium">
-                                {new Date(appt.scheduled_at).toLocaleString('ko-KR', { 
+                                {new Date(appt.scheduled_at).toLocaleString('ko-KR', {
                                   year: 'numeric',
-                                  month: 'long', 
-                                  day: 'numeric', 
-                                  hour: '2-digit', 
+                                  month: 'long',
+                                  day: 'numeric',
+                                  hour: '2-digit',
                                   minute: '2-digit',
                                   weekday: 'short'
                                 })}
                               </span>
                             </div>
                           </div>
+                        </div>
+                        {/* 삭제 버튼 추가 */}
+                        <div className="ml-4">
+                          <button
+                            onClick={() => removeExamFromPatient(selectedPatientForAllExams.user_id, appt.appointment_id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="검사 삭제"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     </div>

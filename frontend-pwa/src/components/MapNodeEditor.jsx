@@ -11,7 +11,7 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectingFrom, setConnectingFrom] = useState(null);
   const [svgLoaded, setSvgLoaded] = useState(false);
-  const [selectedFacility, setSelectedFacility] = useState(facilityName);  // facilityName으로 초기화
+  const [selectedFacility, setSelectedFacility] = useState(facilityName || '');  // facilityName으로 초기화
   const [mapId, setMapId] = useState(propMapId);
   const [manualMapSelection, setManualMapSelection] = useState(false); // 수동 지도 선택 모드
 
@@ -34,6 +34,22 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
       nodeIdCounter: nodes.length > 0 ? Math.max(...nodes.map(n => parseInt(n.id.replace('node-', '') || 0)), 0) + 1 : 1,
     };
   }, [nodes, edges, isConnecting, connectingFrom]);
+
+  // facilityName prop 변경 시 selectedFacility 업데이트
+  useEffect(() => {
+    if (facilityName && facilityName !== selectedFacility) {
+      console.log('facilityName prop 변경 감지:', facilityName);
+      setSelectedFacility(facilityName);
+    }
+  }, [facilityName]);
+
+  // propMapId 변경 시 mapId 업데이트
+  useEffect(() => {
+    if (propMapId && propMapId !== mapId) {
+      console.log('mapId prop 변경 감지:', propMapId);
+      setMapId(propMapId);
+    }
+  }, [propMapId]);
 
   // 시설 선택시 지도 변경 및 데이터 초기화
   useEffect(() => {

@@ -221,23 +221,21 @@ export const scanNFCTag = async (serialNumber, ndefMessage = null) => {
       };
     }
   } catch (error) {
-    console.error('❌ NFC API 호출 실패:', error);
-    
-    // 오프라인이거나 네트워크 오류 시 로컬 처리
-    if (!navigator.onLine || error.message?.includes('Network')) {
-      return {
-        success: false,
-        offline: true,
-        error: '네트워크 연결이 없습니다. 오프라인 모드로 작동합니다.',
-        data: {
-          // 오프라인 시 기본 데이터
-          location: location || '알 수 없는 위치',
-          message: '네트워크 연결 후 자세한 정보를 확인하세요.'
-        }
-      };
-    }
-    
-    throw error;
+    console.warn('⚠️ NFC API 호출 실패, 오프라인 모드로 전환:', error.message || error);
+
+    // 모든 에러를 오프라인 모드로 처리 (더 안정적인 동작)
+    return {
+      success: false,
+      offline: true,
+      error: error.message || '서버 연결 실패',
+      data: {
+        // 오프라인 시 기본 데이터
+        location: location || '알 수 없는 위치',
+        message: '오프라인 모드로 작동 중입니다.',
+        tagData: tagData,
+        serialNumber: serialNumber
+      }
+    };
   }
 };
 

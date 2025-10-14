@@ -56,10 +56,10 @@ def set_patient_state(request):
         if not state:
             return APIResponse.error("state 파라미터가 필요합니다", code="TEST_001")
         
-        # 유효한 상태인지 확인
+        # 유효한 상태인지 확인 (8단계 - COMPLETED 제거, IN_PROGRESS로 통일)
         valid_states = [
             'UNREGISTERED', 'ARRIVED', 'REGISTERED', 'WAITING',
-            'CALLED', 'ONGOING', 'COMPLETED', 'PAYMENT', 'FINISHED'
+            'CALLED', 'IN_PROGRESS', 'PAYMENT', 'FINISHED'
         ]
         
         if state not in valid_states:
@@ -109,9 +109,9 @@ def set_queue_state(request):
         if not exam_id or not queue_state:
             return APIResponse.error("exam_id와 queue_state가 필요합니다", code="TEST_003")
         
-        # 유효한 큐 상태인지 확인
+        # 유효한 큐 상태인지 확인 (Queue 내부 상태는 completed 유지, ongoing → in_progress)
         valid_queue_states = [
-            'waiting', 'called', 'ongoing', 'completed',
+            'waiting', 'called', 'in_progress', 'completed',
             'delayed', 'no_show', 'cancelled'
         ]
         

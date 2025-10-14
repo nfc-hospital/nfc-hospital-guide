@@ -5,6 +5,7 @@ import { CheckIcon as CheckIconSolid } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
 import useMapStore from '../../store/mapStore';
+import { getDemoRouteForScreen } from '../../data/demoRoutes';
 
 const FormatBTemplate = ({
   screenType, // 'unregistered' | 'completed'
@@ -428,7 +429,7 @@ const FormatBTemplate = ({
                 <span className="text-gray-600">현재:</span>
                 <span className="font-medium text-gray-800">
                   {actualCurrentLocation?.description || actualCurrentLocation?.building && actualCurrentLocation?.floor 
-                    ? `${actualCurrentLocation.building} ${actualCurrentLocation.floor}층${actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : ''}`
+                    ? `${actualCurrentLocation.building} ${actualCurrentLocation.floor}${actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : ''}`
                     : '병원 입구'}
                 </span>
               </div>
@@ -447,13 +448,22 @@ const FormatBTemplate = ({
       {/* 지도 표시 영역 */}
       <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden relative">
         <div className="p-6">
-          <MapNavigator 
+          <MapNavigator
             mapId={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
             highlightRoom={locationInfo?.name || '원무과 접수처'}
             facilityName={locationInfo?.name || '원무과 접수처'}
             multiFloor={false}
             startFloor="main_1f"
             endFloor={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
+            pathNodes={(() => {
+              // 현재 상태에 따른 시연 경로 가져오기 (arrived 상태일 때)
+              const demoRoute = getDemoRouteForScreen(screenType === 'arrived' ? 'P-1' : patientState);
+              return demoRoute?.nodes || [];
+            })()}
+            pathEdges={(() => {
+              const demoRoute = getDemoRouteForScreen(screenType === 'arrived' ? 'P-1' : patientState);
+              return demoRoute?.edges || [];
+            })()}
           />
         </div>
       </div>

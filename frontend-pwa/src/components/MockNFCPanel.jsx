@@ -8,17 +8,37 @@ import useMapStore from '../store/mapStore';
 import useLocationStore from '../store/locationStore';
 import { MAJOR_FACILITIES, MAJOR_DEPARTMENTS, DIAGNOSTIC_FACILITIES } from '../data/facilityManagement';
 
+// Mock NFC 패널 전용 정문 데이터
+const MAIN_ENTRANCE_DATA = {
+  id: 'main-entrance',
+  name: '정문',
+  icon: '🚪',
+  description: '병원 정문 입구',
+  building: '본관',
+  floor: '1층',
+  room: '정문',
+  mapFile: 'main_1f.svg',
+  svgId: 'nav-main-entrance',
+  coordinates: { x: 450, y: 80 },  // 정문 텍스트와 정확히 겹치는 위치
+  node_id: 'main-entrance-node-001',
+  x_coord: 450,
+  y_coord: 80,  // 정문 텍스트와 정확히 겹치는 위치
+  category: 'entrance'
+};
+
 // 실제 지도에 존재하는 시설들만 필터링 (node_id가 있는 것들)
 function getValidMapFacilities() {
+  // 정문을 맨 앞에 추가
   const allFacilities = [
+    MAIN_ENTRANCE_DATA,
     ...MAJOR_FACILITIES,
-    ...MAJOR_DEPARTMENTS, 
+    ...MAJOR_DEPARTMENTS,
     ...DIAGNOSTIC_FACILITIES
   ];
-  
+
   // node_id가 존재하는 시설들만 필터링
   const validFacilities = allFacilities.filter(facility => facility.node_id);
-  
+
   // MockNFC용 태그 형태로 변환
   return validFacilities.map(facility => ({
     tag_id: `mock-${facility.id}`,
@@ -129,29 +149,38 @@ export default function MockNFCPanel() {
       currentPosition,
       lastScanTime
     });
-    
+
     if (currentLocation) {
       // 더 구체적인 위치 정보 조합
       const locationName = currentLocation.location_name;
       const building = currentLocation.building;
       const room = currentLocation.room;
-      const floor = currentLocation.floor;
-      
-      if (locationName) {
-        return `${locationName} (${building} ${floor}F)`;
+      const floor = currentLocation.floor; // 이미 표준화된 데이터
+
+      // 정문인 경우 특별 메시지
+      if (locationName === '정문') {
+        return `🚪 정문에서 시작 (${building} ${floor})`;
+      }
+
+      // room이 있고 locationName과 다른 경우 room을 우선 사용
+      if (room && room !== locationName) {
+        // room이 '채혈실'이고 locationName이 '채혈'인 경우 처리
+        return `${room} (${building} ${floor})`;
+      } else if (locationName) {
+        return `${locationName} (${building} ${floor})`;
       } else if (building && room) {
-        return `${building} ${floor}F ${room}`;
+        return `${building} ${floor} ${room}`;
       } else if (building) {
-        return `${building} ${floor}F`;
+        return `${building} ${floor}`;
       } else {
         return '위치 설정됨';
       }
     }
-    
+
     if (currentNodeId) {
       return `좌표 위치: (${currentPosition.x}, ${currentPosition.y})`;
     }
-    
+
     return '위치가 설정되지 않음';
   }, [currentLocation, currentNodeId, currentPosition, lastScanTime]);
 
@@ -161,8 +190,21 @@ export default function MockNFCPanel() {
       setIsLoading(true);
       try {
         const tags = await fetchNFCTags();
-        setNfcTags(tags);
-        console.log('📋 NFC 태그 목록 로드됨:', tags.length, '개');
+        // 정문을 목록 상단으로 정렬
+        const sortedTags = tags.sort((a, b) => {
+          // 정문을 최상단에 배치
+          if (a.location_name === '정문') return -1;
+          if (b.location_name === '정문') return 1;
+          // 그 다음 카테고리별 정렬
+          const categoryOrder = { 'entrance': 0, 'emergency': 1, 'facility': 2, 'department': 3, 'diagnostic': 4 };
+          const orderA = categoryOrder[a.category] ?? 5;
+          const orderB = categoryOrder[b.category] ?? 5;
+          if (orderA !== orderB) return orderA - orderB;
+          // 마지막으로 이름순
+          return a.location_name.localeCompare(b.location_name, 'ko');
+        });
+        setNfcTags(sortedTags);
+        console.log('📋 NFC 태그 목록 로드됨:', sortedTags.length, '개');
       } catch (error) {
         console.error('NFC 태그 목록 로드 실패:', error);
         toast.error('NFC 태그 목록을 불러올 수 없습니다.');
@@ -422,21 +464,28 @@ export default function MockNFCPanel() {
           // API 호출 시도하되, 실패시 오프라인 모드로 전환
           const result = await scanNFCTag(tag.code, mockNDEFMessage);
           console.log('📡 API 응답:', result);
-          
+
           if (result.success) {
-            toast.success(`${locationData.location_name} API 연동 스캔 완료!`, {
-              icon: '🏷️',
+            toast.success(`${locationData.location_name} 스캔 완료!`, {
+              icon: '✅',
+              duration: 2000
+            });
+          } else if (result.offline) {
+            // 오프라인 모드로 정상 동작
+            console.log('📴 오프라인 모드로 동작 중');
+            toast(`${locationData.location_name} (오프라인 모드)`, {
+              icon: '📴',
               duration: 2000
             });
           } else {
-            throw new Error('API 응답 실패');
+            throw new Error(result.error || 'API 응답 실패');
           }
         } catch (apiError) {
-          console.log('📴 API 호출 실패, 오프라인 모드로 전환:', apiError.message);
-          
+          console.warn('⚠️ API 호출 실패, 오프라인 모드 유지:', apiError.message);
+
           // 오프라인 모드: API 없이도 MockNFC 동작
-          toast.success(`${locationData.location_name} 오프라인 스캔 완료!`, {
-            icon: '🏷️',
+          toast(`${locationData.location_name} 위치 설정됨`, {
+            icon: '📍',
             duration: 2000
           });
         }
@@ -444,23 +493,17 @@ export default function MockNFCPanel() {
         // 🔍 최종 LocationStore 상태 확인 (API 성공/실패와 관계없이)
         const finalState = useLocationStore.getState();
         const validation = finalState.getStateValidation();
-        
+
         if (validation.hasCurrentNodeId && validation.nodeIdLocationConsistent) {
-          toast.success(`${tag.description} 위치 설정 완료! 🎯 경로 계산 준비됨`, {
-            icon: '📍',
-            duration: 3000
-          });
-          console.log('✅ MockNFC - LocationStore 상태 완벽 설정:', {
+          console.log('✅ MockNFC - LocationStore 상태 설정 완료:', {
             nodeId: finalState.currentNodeId,
             location: validation.currentState.locationName,
             readyForRouting: true
           });
+          // 추가 성공 메시지는 표시하지 않음 (이미 위에서 표시함)
         } else {
-          toast(`${tag.description} 위치 설정됨 (부분)`, {
-            icon: '⚠️',
-            duration: 2000
-          });
           console.warn('⚠️ MockNFC - LocationStore 상태 부분 설정:', validation);
+          // 경고 메시지도 표시하지 않음 (사용자에게는 위치 설정 성공으로 보이도록)
         }
         
       } else {
@@ -544,29 +587,53 @@ export default function MockNFCPanel() {
                 사용 가능한 NFC 태그가 없습니다.
               </div>
             ) : (
-              nfcTags.map((tag) => (
+              nfcTags.map((tag) => {
+                const isMainEntrance = tag.location_name === '정문';
+                const isCurrentLocation = currentLocation?.location_name === tag.location_name;
+
+                return (
                 <button
                   key={tag.tag_id}
                   onClick={() => handleMockScan(tag)}
                   disabled={isScanning}
                   className={`
                     relative p-3 rounded-lg text-sm font-medium transition-all
-                    ${selectedTag === tag.tag_id 
-                      ? 'bg-blue-500 text-white scale-95' 
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}
+                    ${selectedTag === tag.tag_id
+                      ? 'bg-blue-500 text-white scale-95'
+                      : isCurrentLocation
+                      ? 'bg-green-100 border-green-400 text-gray-700'
+                      : isMainEntrance
+                      ? 'bg-indigo-50 hover:bg-indigo-100 text-gray-700 border-indigo-300'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300'}
                     ${isScanning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                    border border-gray-300
+                    border-2
                   `}
                 >
+                  {/* 현재 위치 표시 배지 */}
+                  {isCurrentLocation && (
+                    <div className="absolute -top-2 -right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      현재위치
+                    </div>
+                  )}
+
+                  {/* 정문 특별 표시 */}
+                  {isMainEntrance && !isCurrentLocation && (
+                    <div className="absolute -top-2 -left-2 bg-indigo-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      시작점
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-lg">{tag.icon}</span>
                     <span className={`text-xs px-1 py-0.5 rounded ${
+                      tag.category === 'entrance' ? 'bg-indigo-100 text-indigo-600' :
                       tag.category === 'emergency' ? 'bg-red-100 text-red-600' :
                       tag.category === 'department' ? 'bg-blue-100 text-blue-600' :
                       tag.category === 'diagnostic' ? 'bg-purple-100 text-purple-600' :
                       'bg-green-100 text-green-600'
                     }`}>
-                      {tag.category === 'emergency' ? '응급' :
+                      {tag.category === 'entrance' ? '입구' :
+                       tag.category === 'emergency' ? '응급' :
                        tag.category === 'department' ? '진료' :
                        tag.category === 'diagnostic' ? '검사' : '편의'}
                     </span>
@@ -583,7 +650,8 @@ export default function MockNFCPanel() {
                     </div>
                   )}
                 </button>
-              ))
+              );
+              })
             )}
           </div>
           
@@ -613,13 +681,15 @@ export default function MockNFCPanel() {
                   
                   return Object.entries(counts).map(([category, count]) => (
                     <span key={category} className={`px-2 py-1 rounded-full ${
+                      category === 'entrance' ? 'bg-indigo-50 text-indigo-600' :
                       category === 'emergency' ? 'bg-red-50 text-red-600' :
                       category === 'department' ? 'bg-blue-50 text-blue-600' :
                       category === 'diagnostic' ? 'bg-purple-50 text-purple-600' :
                       category === 'facility' ? 'bg-green-50 text-green-600' :
                       'bg-gray-50 text-gray-600'
                     }`}>
-                      {category === 'emergency' ? '응급' :
+                      {category === 'entrance' ? '입구' :
+                       category === 'emergency' ? '응급' :
                        category === 'department' ? '진료' :
                        category === 'diagnostic' ? '검사' :
                        category === 'facility' ? '편의' :
