@@ -39,11 +39,14 @@ const FormatBTemplate = ({
   const taggedLocationInfo = useJourneyStore(state => state.currentLocation);
   const actualCurrentLocation = taggedLocationInfo || taggedLocation;
   const [activeTab, setActiveTab] = useState(
-    screenType === 'unregistered' ? 'preparation' : 
-    screenType === 'arrived' ? 'location' : 
+    screenType === 'unregistered' ? 'preparation' :
+    screenType === 'arrived' ? 'location' :
     'completion'
   );
-  const [expandedItems, setExpandedItems] = useState([]);
+  // UNREGISTERED 상태에서는 첫 번째 준비사항 아코디언을 기본으로 펼쳐놓기
+  const [expandedItems, setExpandedItems] = useState(
+    screenType === 'unregistered' ? [0] : []
+  );
   const [checkedItems, setCheckedItems] = useState({});
   const [showDemoMap, setShowDemoMap] = useState(false);
 
@@ -1153,8 +1156,15 @@ const FormatBTemplate = ({
           {activeTab === 'precautions' && renderPrecautionsTab()}
           {activeTab === 'schedule' && renderScheduleTab()}
 
-          {/* FINISHED 상태가 아닐 때만 추가로 Content 컴포넌트 표시 */}
-          {screenType !== 'finished' && (
+          {/* FINISHED: mainContent를 completion 탭에 추가로 표시 */}
+          {screenType === 'finished' && activeTab === 'completion' && mainContent && (
+            <div className="mt-6">
+              {mainContent}
+            </div>
+          )}
+
+          {/* 기타 상태: mainContent를 탭 밖에 표시 */}
+          {screenType !== 'finished' && (mainContent || children) && (
             <div className="mt-6">
               {mainContent || children}
             </div>

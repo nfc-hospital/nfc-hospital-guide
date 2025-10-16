@@ -144,6 +144,40 @@ const JourneyContainer = ({ taggedLocation }) => {
 
 
   const getNextScheduleText = (appointments, currentState) => {
+    // UNREGISTERED: 병원 도착 전 - 첫 예약의 날짜/시간 표시
+    if (currentState === PatientJourneyState.UNREGISTERED) {
+      if (!appointments || appointments.length === 0) return null;
+
+      const firstAppointment = appointments[0];
+      if (!firstAppointment?.scheduled_at) return null;
+
+      const appointmentDate = new Date(firstAppointment.scheduled_at);
+      const today = new Date();
+      const isToday = appointmentDate.toDateString() === today.toDateString();
+
+      if (isToday) {
+        // 오늘이면 시간만
+        const timeStr = appointmentDate.toLocaleTimeString('ko-KR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        return `오늘 ${timeStr}`;
+      } else {
+        // 다른 날이면 날짜 + 시간
+        const dateStr = appointmentDate.toLocaleDateString('ko-KR', {
+          month: 'long',
+          day: 'numeric'
+        });
+        const timeStr = appointmentDate.toLocaleTimeString('ko-KR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        });
+        return `${dateStr} ${timeStr}`;
+      }
+    }
+
     // finished 상태일 때는 실제 다음 예약 정보 사용
     if (currentState === PatientJourneyState.FINISHED) {
       if (loadingNextAppointment) {
@@ -169,9 +203,34 @@ const JourneyContainer = ({ taggedLocation }) => {
     return nextApt ? `다음: ${nextApt.exam?.title || '검사'}` : null;
   };
 
-  const getSummaryCards = (appointments, stats, duration) => {
-    if (!appointments) return null;
+  const getSummaryCards = (appointments, stats, duration, state) => {
+    if (!appointments || appointments.length === 0) return null;
 
+    // UNREGISTERED: 병원 도착 전 - 예약 정보 표시
+    if (state === PatientJourneyState.UNREGISTERED) {
+      // 첫 검사 시작 시간
+      const firstAppointment = appointments[0];
+      const appointmentTime = firstAppointment?.scheduled_at
+        ? new Date(firstAppointment.scheduled_at).toLocaleTimeString('ko-KR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          })
+        : '미정';
+
+      return [
+        {
+          label: '첫 검사 시간',
+          value: appointmentTime
+        },
+        {
+          label: '총 검사 수',
+          value: `${appointments.length}개`
+        }
+      ];
+    }
+
+    // 기타 상태: 완료된 검사 / 소요시간
     return [
       {
         label: '완료된 검사',
@@ -295,38 +354,109 @@ const JourneyContainer = ({ taggedLocation }) => {
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
   }
 
-  // 🎯 완전 단순화된 렌더링: 실제 백엔드 데이터 사용
-  return (
-    <React.Suspense fallback={<div>Loading...</div>}>
-      <Template
-        screenType={screenType}
-        patientState={currentState}
-        taggedLocation={taggedLocation}
-        // ✅ ProgressBar에 필요한 데이터 전달 (patientState 포함)
-        progressBar={<ProgressBar appointments={todaysAppointments} patientState={currentState} />}
-        // ✅ Content 컴포넌트 전달
-        mainContent={<Content />}
-        // ✅ FormatBTemplate에 필요한 핵심 props 전달 (실제 백엔드 데이터 사용)
-        status={getStatusText(currentState)}
-        nextSchedule={getNextScheduleText(todaysAppointments, currentState)}
-        summaryCards={getSummaryCards(todaysAppointments, journeySummary, journeySummary.totalDuration)}
-        todaysAppointments={todaysAppointments}
-        todaySchedule={todaySchedule}
-        completionStats={journeySummary}
-        completedAppointments={journeySummary.completedAppointments}
-        totalDuration={journeySummary.totalDuration}
-        completedCount={journeySummary.completedCount}
-        showPaymentInfo={true}
-        paymentAmount={journeySummary.completedAppointments?.length > 0
+  // 🎯 상태별 조건부 props 전달
+  const getTemplateProps = () => {
+    const baseProps = {
+      screenType,
+      patientState: currentState,
+      taggedLocation,
+      progressBar: <ProgressBar appointments={todaysAppointments} patientState={currentState} />,
+      status: getStatusText(currentState),
+      nextSchedule: getNextScheduleText(todaysAppointments, currentState),
+      summaryCards: getSummaryCards(todaysAppointments, journeySummary, journeySummary.totalDuration, currentState),
+      todaysAppointments,
+      todaySchedule,
+    };
+
+    // UNREGISTERED: 공통 서류 준비사항 데이터 정의 (JourneyContainer가 준비)
+    const commonPreparationItems = [
+      {
+        icon: '📄',
+        title: '공통 서류 준비사항',
+        description: '모든 검사에 필요한 서류입니다',
+        items: [
+          { text: '신분증 (주민등록증, 운전면허증)' },
+          { text: '건강보험증' },
+          { text: '의뢰서 (타 병원에서 온 경우)' },
+          { text: '이전 검사 결과지 (있는 경우)' }
+        ]
+      }
+    ];
+
+    // UNREGISTERED: preparationItems와 customPreparationContent 모두 전달
+    if (currentState === PatientJourneyState.UNREGISTERED) {
+      return {
+        ...baseProps,
+        preparationItems: commonPreparationItems,  // Template가 accordion으로 렌더링
+        customPreparationContent: <Content />       // 검사별 준비사항 (ExamPreparationChecklist)
+      };
+    }
+
+    // FINISHED: mainContent로 전달하되, completion 관련 props도 함께 전달
+    if (currentState === PatientJourneyState.FINISHED) {
+      // 처방전 여부 확인
+      const hasPrescription = journeySummary.completedAppointments?.some(apt =>
+        apt.exam?.department === '내과' ||
+        apt.exam?.department === '정형외과' ||
+        apt.exam?.has_prescription
+      ) || false;
+
+      return {
+        ...baseProps,
+        mainContent: (
+          <Content
+            nextAppointment={nextAppointment}
+            loadingNextAppointment={loadingNextAppointment}
+            completedAppointments={journeySummary.completedAppointments}
+            hasPrescription={hasPrescription}
+          />
+        ),
+        completionStats: journeySummary,
+        completedAppointments: journeySummary.completedAppointments,
+        totalDuration: journeySummary.totalDuration,
+        completedCount: journeySummary.completedCount,
+        showPaymentInfo: true,
+        paymentAmount: journeySummary.completedAppointments?.length > 0
           ? journeySummary.completedAppointments.reduce((total, apt) => {
-              // API에서 받은 실제 환자 본인부담금 사용
               const cost = apt.exam?.patient_cost || apt.exam?.base_price || 0;
               const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : Number(cost);
               return total + numericCost;
             }, 0)
-          : 0 // 기본 금액을 0으로 변경
-        }
-      />
+          : 0
+      };
+    }
+
+    // PAYMENT: completion 관련 props 전달
+    if (currentState === PatientJourneyState.PAYMENT) {
+      return {
+        ...baseProps,
+        mainContent: <Content />,
+        completionStats: journeySummary,
+        completedAppointments: journeySummary.completedAppointments,
+        totalDuration: journeySummary.totalDuration,
+        completedCount: journeySummary.completedCount,
+        showPaymentInfo: true,
+        paymentAmount: journeySummary.completedAppointments?.length > 0
+          ? journeySummary.completedAppointments.reduce((total, apt) => {
+              const cost = apt.exam?.patient_cost || apt.exam?.base_price || 0;
+              const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : Number(cost);
+              return total + numericCost;
+            }, 0)
+          : 0
+      };
+    }
+
+    // 기타 상태 (ARRIVED, REGISTERED, WAITING, CALLED, IN_PROGRESS): mainContent로 전달
+    return {
+      ...baseProps,
+      mainContent: <Content />
+    };
+  };
+
+  // 🎯 완전 단순화된 렌더링: 실제 백엔드 데이터 사용
+  return (
+    <React.Suspense fallback={<div>Loading...</div>}>
+      <Template {...getTemplateProps()} />
 
       {/* CalledModal 오버레이 */}
       <CalledModal

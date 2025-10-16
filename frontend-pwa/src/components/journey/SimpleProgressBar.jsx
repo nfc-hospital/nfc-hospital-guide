@@ -18,7 +18,6 @@ export default function SimpleProgressBar({ patientState, appointments, showLabe
     PatientJourneyState.WAITING,       // 4. 대기 중
     PatientJourneyState.CALLED,        // 5. 호출됨
     PatientJourneyState.IN_PROGRESS,   // 6. 진행 중
-    PatientJourneyState.COMPLETED,     // 7. 완료
     PatientJourneyState.PAYMENT,       // 8. 수납
     PatientJourneyState.FINISHED       // 9. 귀가
   ];
