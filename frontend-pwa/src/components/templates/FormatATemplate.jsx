@@ -141,16 +141,32 @@ const FormatATemplate = ({
   // useMemo로 계산값 메모이제이션
   const todaySchedule = React.useMemo(() => {
     if (!todaysAppointments) return [];
-    return todaysAppointments.map((apt, index) => ({
-      id: apt.appointment_id,
-      examName: apt.exam?.title || `검사 ${index + 1}`,
-      location: apt.exam?.room || apt.exam?.title || '위치 미정',
-      status: apt.status,
-      description: apt.exam?.description,
-      duration: apt.exam?.average_duration || 30,
-      scheduled_at: apt.scheduled_at,
-      exam: apt.exam
-    }));
+    return todaysAppointments.map((apt, index) => {
+      // 장소 정보 생성 - location 객체 우선 사용, 없으면 department 사용
+      const locationObj = apt.exam?.location;
+      let location = '위치 미정';
+
+      if (locationObj && (locationObj.building || locationObj.floor || locationObj.room)) {
+        const parts = [];
+        if (locationObj.building) parts.push(locationObj.building);
+        if (locationObj.floor) parts.push(`${locationObj.floor}층`);
+        if (locationObj.room) parts.push(locationObj.room);
+        location = parts.join(' ');
+      } else if (apt.exam?.department) {
+        location = apt.exam.department;
+      }
+
+      return {
+        id: apt.appointment_id,
+        examName: apt.exam?.title || `검사 ${index + 1}`,
+        location: location,
+        status: apt.status,
+        description: apt.exam?.description,
+        duration: apt.exam?.average_duration || 30,
+        scheduled_at: apt.scheduled_at,
+        exam: apt.exam
+      };
+    });
   }, [todaysAppointments]);
 
   const waitingInfo = React.useMemo(() => {

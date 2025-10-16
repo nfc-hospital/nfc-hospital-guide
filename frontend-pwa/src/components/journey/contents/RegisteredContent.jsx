@@ -9,20 +9,30 @@ import useJourneyStore from '../../../store/journeyStore';
 const RegisteredContent = () => {
   // 🎯 Store에서 필요한 데이터 직접 구독
   const user = useJourneyStore(state => state.user);
-  const patientState = useJourneyStore(state => state.patientState);
-  const nextExam = useJourneyStore(state => state.getNextExam());
+  const nextExam = useJourneyStore(state => state.nextExam);
   const locationInfo = useJourneyStore(state => state.locationInfo);
-  const currentExam = useJourneyStore(state => state.getCurrentTask()?.exam);
-  
-  // 개발 모드에서만 데이터 확인
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔥 RegisteredContent 직접 구독 데이터:', { 
-      user: user?.name, 
-      nextExam: nextExam?.title,
-      patientState,
-      locationInfo: locationInfo?.name
-    });
-  }
+
+  // 다음 검사실 위치 정보 (locationInfo 우선 사용)
+  const getNextExamLocation = () => {
+    if (locationInfo) {
+      const parts = [];
+      if (locationInfo.building) parts.push(locationInfo.building);
+      if (locationInfo.floor) parts.push(locationInfo.floor);
+      if (locationInfo.room) parts.push(locationInfo.room);
+      return parts.length > 0 ? parts.join(' ') : locationInfo.name || '검사실';
+    }
+
+    if (nextExam) {
+      const parts = [];
+      if (nextExam.building) parts.push(nextExam.building);
+      if (nextExam.floor) parts.push(nextExam.floor);
+      if (nextExam.room) parts.push(nextExam.room);
+      return parts.length > 0 ? parts.join(' ') : nextExam.department || '검사실';
+    }
+
+    return '검사실';
+  };
+
   return (
     <div className="space-y-4">
       {/* 등록 완료 확인 */}
@@ -39,20 +49,20 @@ const RegisteredContent = () => {
       </div>
 
       {/* 다음 검사 안내 */}
-      {(currentExam || nextExam) && (
+      {nextExam && (
         <div className="bg-blue-50 rounded-2xl p-6">
           <div className="flex items-start space-x-3">
             <MapPinIcon className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
             <div>
               <h3 className="text-lg font-medium text-blue-800">
-                다음 검사: {(currentExam || nextExam)?.title || nextExam?.examName}
+                다음 검사: {locationInfo?.name || nextExam.title}
               </h3>
               <p className="text-blue-600 mt-1">
-                {(currentExam || nextExam)?.location || locationInfo?.name || '검사실'}로 이동해주세요
+                {getNextExamLocation()}로 이동해주세요
               </p>
-              {(currentExam || nextExam)?.description && (
+              {(locationInfo?.description || nextExam.description) && (
                 <p className="text-sm text-blue-500 mt-2">
-                  {(currentExam || nextExam).description}
+                  {locationInfo?.description || nextExam.description}
                 </p>
               )}
             </div>

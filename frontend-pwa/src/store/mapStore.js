@@ -233,12 +233,51 @@ const useMapStore = create(
             return;
           }
 
-          console.log('🚀 API 호출 시작:', { 
-            from: startNodeId, 
-            to: endNodeId 
+          console.log('🚀 API 호출 시작:', {
+            from: startNodeId,
+            to: endNodeId
           });
 
-          // 5️⃣ 경로 계산 API 호출 (실제 시작점 사용)
+          // 5️⃣-A 수동 경로 먼저 확인 (map-editor에서 만든 경로)
+          try {
+            const { getFacilityRoute } = await import('../api/facilityRoutes');
+            const facilityName = destinationFacility.name || destinationFacility.title;
+            const manualRoute = await getFacilityRoute(facilityName);
+
+            if (manualRoute?.nodes?.length > 0) {
+              console.log('✅ 수동 경로 사용:', facilityName, {
+                nodeCount: manualRoute.nodes.length,
+                edgeCount: manualRoute.edges.length,
+                mapId: manualRoute.map_id
+              });
+
+              // 수동 경로를 activeRoute에 설정
+              set({
+                activeRoute: {
+                  nodes: manualRoute.nodes,
+                  edges: manualRoute.edges,
+                  total_distance: 0,
+                  estimated_time: 0,
+                  manual_route: true
+                },
+                navigationRoute: {
+                  nodes: manualRoute.nodes,
+                  edges: manualRoute.edges,
+                  map_id: manualRoute.map_id
+                },
+                routeError: null,
+                isRouteLoading: false,
+                currentMapId: manualRoute.map_id || 'main_1f'
+              });
+
+              console.log('✅ 수동 경로 설정 완료');
+              return; // 수동 경로 사용했으므로 자동 계산 스킵
+            }
+          } catch (error) {
+            console.log('🔄 수동 경로 없음, 자동 계산 진행:', error.message);
+          }
+
+          // 5️⃣-B 수동 경로 없으면 기존 자동 경로 계산 (백엔드 API)
           const { calculateRoute } = await import('../api/navigation');
           const response = await calculateRoute(startNodeId, endNodeId);
           

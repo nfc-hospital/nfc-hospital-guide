@@ -5,12 +5,57 @@ import { authAPI, appointmentAPI, queueAPI, api, nfcAPI } from '../api/client';
 import useMapStore from './mapStore';
 import useLocationStore from './locationStore';
 // 🔧 상태 정규화 함수 추가
-import { 
-  normalizeQueueData, 
-  normalizePatientState, 
+import {
+  normalizeQueueData,
+  normalizePatientState,
   validateStateConsistency,
-  loadStateDefinitions 
+  loadStateDefinitions
 } from '../api/patientJourneyService';
+// 🔧 facilityManagement 데이터 추가 (node_id 매핑용)
+import { ALL_FACILITIES } from '../data/facilityManagement';
+
+// 🆕 exam_id → facility id 매핑 테이블
+const EXAM_ID_TO_FACILITY_ID_MAP = {
+  'ct_scan': 'ct-room',
+  'mri_scan': 'mri-room',
+  'EX_X-ray실': 'xray-room',
+  'ultrasound': 'ultrasound-room',
+  'blood_collection': 'blood-collection',
+  'laboratory': 'laboratory',
+  'reception': 'administration',
+  'payment_desk': 'administration',
+  'main_entrance': 'info-desk',
+};
+
+// 🆕 exam 객체에 node_id 추가하는 헬퍼 함수
+const enrichExamWithNodeId = (exam) => {
+  if (!exam) return null;
+  if (exam.node_id) return exam; // 이미 있으면 그대로 반환
+
+  // 1. exam_id로 매핑
+  const facilityId = EXAM_ID_TO_FACILITY_ID_MAP[exam.exam_id];
+  if (facilityId) {
+    const facility = ALL_FACILITIES.find(f => f.id === facilityId);
+    if (facility?.node_id) {
+      console.log(`✅ [node_id 매핑] ${exam.exam_id} → node_id: ${facility.node_id}`);
+      return { ...exam, node_id: facility.node_id };
+    }
+  }
+
+  // 2. 좌표 기반 매칭
+  if (exam.x_coord && exam.y_coord) {
+    const facility = ALL_FACILITIES.find(f =>
+      f.coordinates?.x === exam.x_coord && f.coordinates?.y === exam.y_coord
+    );
+    if (facility?.node_id) {
+      console.log(`✅ [node_id 좌표매칭] ${exam.exam_id} → node_id: ${facility.node_id}`);
+      return { ...exam, node_id: facility.node_id };
+    }
+  }
+
+  console.warn(`⚠️ [node_id 없음] ${exam.exam_id} - node_id를 찾지 못했습니다`);
+  return exam;
+};
 
 const useJourneyStore = create(
   devtools(
@@ -52,14 +97,19 @@ const useJourneyStore = create(
         getTodaysScheduleForUI: () => {
           const appointments = get().todaysAppointments || [];
           return appointments.map((apt, index) => {
-            // 장소 정보 생성 - room이 없으면 title 사용
-            const building = apt.exam?.building || '본관';
-            const floor = apt.exam?.floor || '';
-            const room = apt.exam?.room || apt.exam?.title || '';
+            // 장소 정보 생성 - location 객체 우선 사용, 없으면 department 사용
+            const locationObj = apt.exam?.location;
+            let location = '위치 미정';
 
-            // 장소 문자열 조합 - 빈 값 제외하고 조합
-            const locationParts = [building, floor, room].filter(part => part);
-            const location = locationParts.length > 0 ? locationParts.join(' ') : '위치 미정';
+            if (locationObj && (locationObj.building || locationObj.floor || locationObj.room)) {
+              const parts = [];
+              if (locationObj.building) parts.push(locationObj.building);
+              if (locationObj.floor) parts.push(`${locationObj.floor}층`);
+              if (locationObj.room) parts.push(locationObj.room);
+              location = parts.join(' ');
+            } else if (apt.exam?.department) {
+              location = apt.exam.department;
+            }
 
             return {
               id: apt.appointment_id,
@@ -146,24 +196,24 @@ const useJourneyStore = create(
             // 현재 대기 중인 검사 찾기
             const waitingExam = schedule.find(s => s.status === 'waiting' || s.status === 'called');
             if (waitingExam) {
-              return waitingExam.exam;
+              return enrichExamWithNodeId(waitingExam.exam);
             }
             // 대기 중인 것이 없으면 첫 번째 검사
-            return todaysAppointments?.[0]?.exam;
+            return enrichExamWithNodeId(todaysAppointments?.[0]?.exam);
           }
-          
+
           // ✅ REGISTERED 상태: 첫 번째 검사를 목적지로
           if (patientState === 'REGISTERED' || (patientState === 'COMPLETED' && schedule.length === 0)) {
             // 첫 번째 검사
-            return todaysAppointments?.[0]?.exam;
-          } 
-          
+            return enrichExamWithNodeId(todaysAppointments?.[0]?.exam);
+          }
+
           // ✅ COMPLETED 상태: 다음 검사를 목적지로
           if (patientState === 'COMPLETED') {
             // 완료된 검사 다음 것 찾기
             const completedCount = schedule.filter(s => s.status === 'completed').length;
             if (completedCount < todaysAppointments.length) {
-              return todaysAppointments[completedCount]?.exam;
+              return enrichExamWithNodeId(todaysAppointments[completedCount]?.exam);
             }
             // 모든 검사가 완료되면 수납창구로
             return {
@@ -182,11 +232,11 @@ const useJourneyStore = create(
           
           // ✅ CALLED, IN_PROGRESS 상태: 현재 진행 중인 검사를 목적지로
           if (patientState === 'CALLED' || patientState === 'IN_PROGRESS') {
-            const currentExam = schedule.find(s => 
+            const currentExam = schedule.find(s =>
               s.status === 'called' || s.status === 'in_progress'
             );
             if (currentExam) {
-              return currentExam.exam;
+              return enrichExamWithNodeId(currentExam.exam);
             }
           }
           
@@ -640,17 +690,47 @@ const useJourneyStore = create(
                   console.log('   - 큐 상태와 무관하게 접수 필요');
                 }
                 
-                // appointments가 비어있으면 queue 데이터를 appointment 형태로 변환
+                // ✅ appointments가 비어있으면 queue 데이터를 appointment 형태로 먼저 변환
                 let finalAppointments = appointments;
-                
+
+                // ⚡ 코드 실행 순서 수정: queue→appointments 변환을 nextExam 계산 전에 실행
+                if (appointments.length === 0 && currentQueues.length > 0) {
+                  // exam_id 기준 중복 제거
+                  const uniqueQueues = [];
+                  const seenExamIds = new Set();
+
+                  currentQueues.forEach(queue => {
+                    const examId = queue.exam?.exam_id;
+                    if (examId && !seenExamIds.has(examId)) {
+                      seenExamIds.add(examId);
+                      uniqueQueues.push(queue);
+                    }
+                  });
+
+                  finalAppointments = uniqueQueues.map(queue => ({
+                    appointment_id: queue.appointment || `QUEUE_${queue.queue_id}`,
+                    status: queue.state === 'waiting' ? 'waiting' :
+                           queue.state === 'called' ? 'called' :
+                           queue.state === 'in_progress' ? 'in_progress' : queue.state,
+                    scheduled_at: queue.created_at,
+                    exam: queue.exam,
+                    queue_info: {
+                      queue_number: queue.queue_number,
+                      estimated_wait_time: queue.estimated_wait_time,
+                      priority: queue.priority
+                    }
+                  }));
+                  console.log(`✅ Queue에서 ${finalAppointments.length}개 appointment 생성 완료`);
+                }
+
                 // ✅ activeQueue를 먼저 정의 (nextExam 계산에서 사용하기 위해)
                 const activeQueue = currentQueues.find(
                   q => q.state === 'in_progress' || q.state === 'called' || q.state === 'waiting'
                 );
-                
+
                 // ✅ --- nextExam과 locationInfo 계산 (한 번에 처리) ---
                 let nextExam = null;
-                
+
                 // 상태별 다음 목적지 계산
                 switch(finalPatientState) {
                   case 'UNREGISTERED':
@@ -684,39 +764,40 @@ const useJourneyStore = create(
                     break;
                     
                   case 'REGISTERED':
-                    // 첫 번째 검사
-                    nextExam = finalAppointments[0]?.exam || null;
+                    // pending 또는 waiting 상태의 첫 번째 검사를 목적지로
+                    const nextPendingExam = finalAppointments.find(apt =>
+                      apt.status === 'pending' || apt.status === 'waiting' || apt.status === 'scheduled'
+                    );
+
+                    nextExam = enrichExamWithNodeId(nextPendingExam?.exam || finalAppointments[0]?.exam || null);
+                    console.log(`✅ REGISTERED → ${nextExam?.title || '없음'} (${nextExam?.room || '위치 없음'})`);
                     break;
-                    
+
                   case 'WAITING':
                   case 'CALLED':
                   case 'IN_PROGRESS':
                     // 현재 진행 중인 검사
-                    console.log(`🔍 [${finalPatientState}] activeQueue:`, activeQueue);
-                    console.log(`🔍 [${finalPatientState}] currentQueues:`, currentQueues);
-                    
                     if (activeQueue && activeQueue.exam) {
-                      nextExam = activeQueue.exam;
-                      console.log(`✅ activeQueue에서 nextExam 설정:`, nextExam?.title);
+                      nextExam = enrichExamWithNodeId(activeQueue.exam);
                     } else {
                       // 대기 중인 첫 검사
-                      const waitingAppointment = finalAppointments.find(apt => 
+                      const waitingAppointment = finalAppointments.find(apt =>
                         apt.status === 'waiting' || apt.status === 'scheduled'
                       );
-                      nextExam = waitingAppointment?.exam || finalAppointments[0]?.exam;
-                      console.log(`✅ appointment에서 nextExam 설정:`, nextExam?.title);
+                      nextExam = enrichExamWithNodeId(waitingAppointment?.exam || finalAppointments[0]?.exam);
                     }
+                    console.log(`✅ ${finalPatientState} → ${nextExam?.title || '없음'}`);
                     break;
-                    
+
                   case 'COMPLETED':
                     // 다음 검사 찾기
-                    const completedCount = finalAppointments.filter(apt => 
+                    const completedCount = finalAppointments.filter(apt =>
                       apt.status === 'completed' || apt.status === 'done'
                     ).length;
-                    
+
                     if (completedCount < finalAppointments.length) {
                       // 다음 검사
-                      nextExam = finalAppointments[completedCount]?.exam;
+                      nextExam = enrichExamWithNodeId(finalAppointments[completedCount]?.exam);
                     } else {
                       // 모든 검사 완료 -> 수납
                       nextExam = {
@@ -765,12 +846,40 @@ const useJourneyStore = create(
                     break;
                 }
                 
-                // locationInfo 생성 (nextExam 기반)
+                // locationInfo 생성 (nextExam 기반) - location 객체 우선 사용
+                let locationName = '목적지';
+                let locationRoom = '검사실';
+
+                if (nextExam) {
+                  // location 객체 우선 사용
+                  const loc = nextExam.location;
+                  if (loc && (loc.building || loc.floor || loc.room)) {
+                    const parts = [];
+                    if (loc.building) parts.push(loc.building);
+                    if (loc.floor) parts.push(`${loc.floor}층`);
+                    if (loc.room) parts.push(loc.room);
+                    locationName = parts.join(' ');
+                    locationRoom = loc.room || nextExam.department || '검사실';
+                  } else if (nextExam.building || nextExam.floor || nextExam.room) {
+                    // 개별 필드 사용
+                    const parts = [];
+                    if (nextExam.building) parts.push(nextExam.building);
+                    if (nextExam.floor) parts.push(`${nextExam.floor}층`);
+                    if (nextExam.room) parts.push(nextExam.room);
+                    locationName = parts.join(' ');
+                    locationRoom = nextExam.room || nextExam.department || '검사실';
+                  } else if (nextExam.department) {
+                    // department만 있으면 사용
+                    locationName = nextExam.department;
+                    locationRoom = nextExam.department;
+                  }
+                }
+
                 const locationInfo = nextExam ? {
-                  name: nextExam.title,
+                  name: locationName,
                   building: nextExam.building || '본관',
                   floor: nextExam.floor || '1층',
-                  room: nextExam.room || nextExam.title,
+                  room: locationRoom,
                   department: nextExam.department || '',
                   description: nextExam.description,
                   x_coord: nextExam.x_coord,
@@ -788,44 +897,14 @@ const useJourneyStore = create(
                 // activeQueue가 있으면 해당하는 appointment의 status도 업데이트
                 if (activeQueue && activeQueue.state && finalAppointments.length > 0) {
                   const appointmentToUpdate = finalAppointments.find(
-                    apt => apt.appointment_id === activeQueue.appointment || 
+                    apt => apt.appointment_id === activeQueue.appointment ||
                            apt.exam?.exam_id === activeQueue.exam?.exam_id
                   );
-                  
+
                   if (appointmentToUpdate) {
                     console.log(`🔄 [동기화] 예약 '${appointmentToUpdate.exam?.title}'의 상태를 '${activeQueue.state}'(으)로 업데이트합니다.`);
                     appointmentToUpdate.status = activeQueue.state; // 큐의 최신 상태로 동기화
                   }
-                }
-                if (appointments.length === 0 && currentQueues.length > 0) {
-                  // ✅✅ exam_id 기준 중복 제거
-                  const uniqueQueues = [];
-                  const seenExamIds = new Set();
-
-                  currentQueues.forEach(queue => {
-                    const examId = queue.exam?.exam_id;
-                    if (examId && !seenExamIds.has(examId)) {
-                      seenExamIds.add(examId);
-                      uniqueQueues.push(queue);
-                    }
-                  });
-
-                  console.log(`🔧 Queue 중복 제거: ${currentQueues.length}개 → ${uniqueQueues.length}개`);
-
-                  finalAppointments = uniqueQueues.map(queue => ({
-                    appointment_id: queue.appointment || `QUEUE_${queue.queue_id}`,
-                    status: queue.state === 'waiting' ? 'waiting' :
-                           queue.state === 'called' ? 'called' :
-                           queue.state === 'in_progress' ? 'in_progress' : queue.state,
-                    scheduled_at: queue.created_at,
-                    exam: queue.exam,
-                    queue_info: {
-                      queue_number: queue.queue_number,
-                      estimated_wait_time: queue.estimated_wait_time,
-                      priority: queue.priority
-                    }
-                  }));
-                  console.log('📋 appointments가 비어있어서 queue 데이터로 생성:', finalAppointments);
                 }
 
                 set({
