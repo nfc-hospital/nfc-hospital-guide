@@ -33,44 +33,45 @@ class PredictionService:
             input_data = []
 
             # 시뮬레이션을 위한 부서별 패턴 정의
+            # generate_emr_data.py의 실제 대기시간 패턴과 동일하게 맞춤 (정확도 향상)
             import random
             import math
 
             dept_patterns = {
                 '내과': {
-                    'base': 15,
+                    'base': 35,  # 실제 평균 대기시간 25.1분 → base 35분으로 설정
                     'peak_hours': [9, 10, 11, 14, 15],
-                    'variation': 8,
+                    'variation': 10,  # ±10분 변동
                     'trend': 1.2  # 증가 추세
                 },
                 '정형외과': {
-                    'base': 12,
+                    'base': 25,  # 실제 평균 18.5분
                     'peak_hours': [10, 11, 15, 16],
-                    'variation': 6,
+                    'variation': 8,
                     'trend': 1.1
                 },
                 '진단검사의학과': {
-                    'base': 8,
+                    'base': 15,  # 실제 평균 11.0분
                     'peak_hours': [8, 9, 13, 14],
-                    'variation': 4,
+                    'variation': 5,
                     'trend': 1.0
                 },
                 'X-ray실': {
-                    'base': 6,
+                    'base': 10,  # 실제 평균 7.3분
                     'peak_hours': [10, 11, 14, 15],
                     'variation': 3,
                     'trend': 0.95  # 감소 추세
                 },
                 'CT실': {
-                    'base': 10,
+                    'base': 30,  # 실제 평균 22.1분
                     'peak_hours': [11, 14, 15, 16],
-                    'variation': 5,
+                    'variation': 8,
                     'trend': 1.15
                 },
                 'MRI실': {
-                    'base': 18,
+                    'base': 45,  # 실제 평균 33.8분
                     'peak_hours': [9, 11, 14, 16],
-                    'variation': 10,
+                    'variation': 12,
                     'trend': 1.3  # 큰 증가 추세
                 }
             }
@@ -105,11 +106,11 @@ class PredictionService:
                 random.seed(int(time_point.timestamp()) + hash(department))
                 random_variation = random.uniform(-pattern['variation'], pattern['variation'])
 
-                # 최종 대기 인원 계산
-                waiting_count = int(base_count + random_variation)
-                waiting_count = max(0, min(waiting_count, 50))  # 0~50명 범위 제한
+                # 최종 대기 시간 계산 (분 단위)
+                waiting_time = int(base_count + random_variation)
+                waiting_time = max(5, min(waiting_time, 120))  # 5~120분 범위 제한
 
-                logger.debug(f"{department} - {time_point.strftime('%H:%M')}: {waiting_count}명")
+                logger.debug(f"{department} - {time_point.strftime('%H:%M')}: {waiting_time}분")
 
                 # 특징 벡터 생성 (정확히 11개)
                 features = []
@@ -117,7 +118,7 @@ class PredictionService:
                 # 기본 특징 3개
                 features.append(time_point.hour / 24.0)  # 시간 (0-1)
                 features.append(time_point.weekday() / 6.0)  # 요일 (0-1)
-                features.append(min(waiting_count / 20.0, 1.0))  # 대기 인원 (0-1)
+                features.append(min(waiting_time / 60.0, 1.0))  # 대기 시간을 정규화 (0-1, 60분 기준)
 
                 # 부서 특징 8개 (모델이 기대하는 원핫 인코딩)
                 # 모델은 8개 부서로 학습됨 (3 + 8 = 11 features)
@@ -179,7 +180,7 @@ class PredictionService:
             try:
                 # 현재 대기 시간 (실제 DB 값)
                 current_wait_time = Queue.objects.filter(
-                    exam__department=dept, state='WAITING'
+                    exam__department=dept, state='waiting'
                 ).aggregate(avg_wait=Avg('estimated_wait_time'))['avg_wait'] or 0
 
                 # LSTM 예측 (try-except로 모델 오류 처리)
@@ -191,10 +192,10 @@ class PredictionService:
 
                     if 'error' in future:
                         logger.warning(f"Model returned error for {dept}: {future['error']}")
-                        # 부서별 기본 대기시간 사용
+                        # 부서별 기본 대기시간 사용 (실제 데이터 기반)
                         dept_defaults = {
-                            '내과': 35, '외과': 25, 'X-ray실': 10, 'MRI실': 45,
-                            'CT실': 20, '초음파실': 15
+                            '내과': 35, '정형외과': 25, '진단검사의학과': 15,
+                            'X-ray실': 10, 'MRI실': 45, 'CT실': 30
                         }
                         predicted_wait_30min = dept_defaults.get(dept, 20)
                         congestion = min(predicted_wait_30min / 60.0, 1.0)
@@ -221,19 +222,36 @@ class PredictionService:
 
                 except Exception as model_error:
                     logger.warning(f"Model prediction failed for {dept}: {model_error}")
-                    # 모델 예측 실패 시 부서별 기본값 사용
+                    # 모델 예측 실패 시 부서별 기본값 사용 (실제 데이터 기반)
                     dept_defaults = {
-                        '내과': 35, '외과': 25, 'X-ray실': 10, 'MRI실': 45,
-                        'CT실': 20, '초음파실': 15
+                        '내과': 35, '정형외과': 25, '진단검사의학과': 15,
+                        'X-ray실': 10, 'MRI실': 45, 'CT실': 30
                     }
                     base_wait = dept_defaults.get(dept, current_wait_time if current_wait_time > 0 else 20)
                     # 시간대별 스케일링
                     predicted_wait = round(base_wait * (target_minutes / 30.0))
                     congestion = min(predicted_wait / 60.0, 1.0)
 
+                # 과거 예측 데이터 조회 (30분 전 예측)
+                past_prediction_value = None
+                try:
+                    from datetime import timedelta
+                    now = timezone.now()
+                    past_log = PredictionLog.objects.filter(
+                        department=dept,
+                        created_at__range=[now - timedelta(minutes=35), now - timedelta(minutes=25)]
+                    ).order_by('-created_at').first()
+
+                    if past_log:
+                        past_prediction_value = round(past_log.predicted_wait_time)
+                        logger.debug(f"Found past prediction for {dept}: {past_prediction_value}분 (30분 전)")
+                except Exception as log_error:
+                    logger.warning(f"Failed to fetch past prediction for {dept}: {log_error}")
+
                 predictions[dept] = {
                     'current_wait': round(current_wait_time),
                     'predicted_wait': predicted_wait,
+                    'past_prediction': past_prediction_value,  # ← 30분 전 AI 예측값 추가
                     'congestion': round(congestion, 2),
                     'trend': 'up' if predicted_wait > current_wait_time else 'down',
                     'timeframe': timeframe,

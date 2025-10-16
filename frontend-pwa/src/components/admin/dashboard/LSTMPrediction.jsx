@@ -70,20 +70,29 @@ const LSTMPrediction = () => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [selectedTimeframe, fetchPredictions]);
+  }, [fetchPredictions, selectedTimeframe]);
 
   // API 데이터 처리 (data가 변경될 때만)
   useEffect(() => {
     if (!data?.data?.departments) {
+      console.error('❌ API 응답 데이터 구조 오류:', {
+        received: data,
+        expected: 'data.data.departments 객체 필요'
+      });
       return;
     }
 
     const predictions = {};
     const barChartData = [];  // 30분 전 예측 vs 현재 실제 비교용
 
+    console.log('📊 부서 데이터 처리 시작, 전체 부서:', Object.keys(data.data.departments));
+
     Object.entries(data.data.departments).forEach(([deptName, deptData]) => {
+      console.log(`🔍 ${deptName} 처리 중:`, deptData);
+
       // 학습된 6개 부서만 처리
       if (!DEPT_COLORS[deptName]) {
+        console.log(`⚠️ ${deptName}는 DEPT_COLORS에 없어서 건너뜀`);
         return;
       }
 
@@ -132,14 +141,24 @@ const LSTMPrediction = () => {
       });
 
       // 바 차트용 데이터: "30분 전 AI 예측" vs "현재 실제 대기시간" (정확도 검증)
-      const predicted30minAgo = Math.round(currentWait * (0.8 + Math.random() * 0.4));
+      // 백엔드에서 제공하는 실제 과거 예측 데이터 사용
+      const pastPrediction = deptData.past_prediction;  // 30분 전 LSTM 예측값
+      const actualCurrent = Math.round(currentWait);     // 현재 실제 대기시간
+
+      // past_prediction이 없으면 (데이터 부족 시) 임시 시뮬레이션 사용
+      const predicted30minAgo = pastPrediction !== null && pastPrediction !== undefined
+        ? pastPrediction
+        : Math.round(predictedWait * 0.85);  // 없으면 현재 예측의 85%로 근사
 
       barChartData.push({
         name: deptName,
         '30분 전 AI 예측': predicted30minAgo,
-        '현재 실제 대기시간': Math.round(currentWait),
-        accuracy: Math.round((1 - Math.abs(predicted30minAgo - currentWait) / Math.max(currentWait, 1)) * 100),
-        fill: DEPT_COLORS[deptName] || '#3b82f6'
+        '현재 실제 대기시간': actualCurrent,
+        accuracy: actualCurrent > 0
+          ? Math.round((1 - Math.abs(predicted30minAgo - actualCurrent) / actualCurrent) * 100)
+          : 100,
+        fill: DEPT_COLORS[deptName] || '#3b82f6',
+        isRealData: pastPrediction !== null && pastPrediction !== undefined  // 실제 데이터 여부 표시
       });
 
       // predictions 객체 생성
@@ -158,6 +177,13 @@ const LSTMPrediction = () => {
         isRealData: true
       };
     });
+
+    console.log('📊 바 차트 데이터 생성 완료:', barChartData);
+    console.log('📊 바 차트 데이터 개수:', barChartData.length);
+    if (barChartData.length > 0) {
+      console.log('📊 바 차트 첫 번째 항목:', barChartData[0]);
+      console.log('📊 바 차트 데이터 키:', Object.keys(barChartData[0]));
+    }
 
     setDepartmentPredictions(predictions);
     setAccuracyData(barChartData);
@@ -201,7 +227,7 @@ const LSTMPrediction = () => {
             <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
             <p className="text-gray-700">예측 데이터를 불러오는 중 오류가 발생했습니다.</p>
             <button
-              onClick={execute}
+              onClick={() => fetchPredictions(selectedTimeframe)}
               className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               다시 시도
