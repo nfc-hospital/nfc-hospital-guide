@@ -22,7 +22,7 @@ class PredictionService:
 
     @staticmethod
     def get_recent_data_for_prediction(department):
-        """최근 데이터를 가져와 모델 입력 형태로 변환"""
+        """최근 데이터를 가져와 모델 입력 형태로 변환 (실제 DB 데이터 사용)"""
         try:
             # 모델 입력 shape 확인 - 모델은 11개 특징 사용
             num_features = 11  # 모델이 기대하는 고정된 특징 수 (3 + 8 부서)
@@ -32,85 +32,61 @@ class PredictionService:
             current_time = timezone.now()
             input_data = []
 
-            # 시뮬레이션을 위한 부서별 패턴 정의
-            # generate_emr_data.py의 실제 대기시간 패턴과 동일하게 맞춤 (정확도 향상)
-            import random
-            import math
-
-            dept_patterns = {
-                '내과': {
-                    'base': 35,  # 실제 평균 대기시간 25.1분 → base 35분으로 설정
-                    'peak_hours': [9, 10, 11, 14, 15],
-                    'variation': 10,  # ±10분 변동
-                    'trend': 1.2  # 증가 추세
-                },
-                '정형외과': {
-                    'base': 25,  # 실제 평균 18.5분
-                    'peak_hours': [10, 11, 15, 16],
-                    'variation': 8,
-                    'trend': 1.1
-                },
-                '진단검사의학과': {
-                    'base': 15,  # 실제 평균 11.0분
-                    'peak_hours': [8, 9, 13, 14],
-                    'variation': 5,
-                    'trend': 1.0
-                },
-                'X-ray실': {
-                    'base': 10,  # 실제 평균 7.3분
-                    'peak_hours': [10, 11, 14, 15],
-                    'variation': 3,
-                    'trend': 0.95  # 감소 추세
-                },
-                'CT실': {
-                    'base': 30,  # 실제 평균 22.1분
-                    'peak_hours': [11, 14, 15, 16],
-                    'variation': 8,
-                    'trend': 1.15
-                },
-                'MRI실': {
-                    'base': 45,  # 실제 평균 33.8분
-                    'peak_hours': [9, 11, 14, 16],
-                    'variation': 12,
-                    'trend': 1.3  # 큰 증가 추세
-                }
+            # 부서별 기본값 (fallback용)
+            dept_defaults = {
+                '내과': 25.1,
+                '정형외과': 18.5,
+                '진단검사의학과': 11.0,
+                'X-ray실': 7.3,
+                'CT실': 22.0,
+                'MRI실': 33.6,
+                '영상의학과': 14.4
             }
+            default_wait = dept_defaults.get(department, 15.0)
+
+            logger.debug(f"[RealData] Fetching actual Queue data for {department}")
 
             for i in range(num_timesteps):
-                # 각 시간대별로 데이터 수집
+                # 각 시간대별로 실제 DB 데이터 조회
                 time_point = current_time - timedelta(minutes=i*5)
 
-                # 시뮬레이션: 부서별 패턴 적용
-                pattern = dept_patterns.get(department, {
-                    'base': 10, 'peak_hours': [10, 14], 'variation': 5, 'trend': 1.0
-                })
+                # ±2.5분 범위의 Queue 데이터 조회 (5분 간격 중심)
+                time_start = time_point - timedelta(minutes=2.5)
+                time_end = time_point + timedelta(minutes=2.5)
 
-                # 기본 대기 인원
-                base_count = pattern['base']
+                # 실제 DB에서 해당 시간대 Queue 조회
+                queues_at_time = Queue.objects.filter(
+                    exam__department=department,
+                    created_at__range=[time_start, time_end]
+                )
 
-                # 시간대별 가중치 (피크 시간)
-                hour = time_point.hour
-                if hour in pattern['peak_hours']:
-                    base_count *= 1.5
+                # 대기시간 계산
+                if queues_at_time.exists():
+                    # 실제 DB의 평균 대기시간 사용
+                    avg_wait = queues_at_time.aggregate(
+                        avg=Avg('estimated_wait_time')
+                    )['avg'] or default_wait
 
-                # 요일별 가중치 (주말은 감소)
-                weekday = time_point.weekday()
-                if weekday >= 5:  # 토요일(5), 일요일(6)
-                    base_count *= 0.7
+                    waiting_count = queues_at_time.filter(state='waiting').count()
 
-                # 시간의 흐름에 따른 사인파 패턴 추가 (자연스러운 변동)
-                time_factor = math.sin(time_point.minute / 60 * math.pi * 2)
-                base_count += time_factor * pattern['variation'] * 0.5
+                    logger.debug(f"[RealData] {time_point.strftime('%H:%M')} - {queues_at_time.count()}개 큐, 평균 {avg_wait:.1f}분")
+                else:
+                    # 데이터 없으면 인접 시간대 확인 (±10분)
+                    nearby_queues = Queue.objects.filter(
+                        exam__department=department,
+                        created_at__range=[time_point - timedelta(minutes=10), time_point + timedelta(minutes=10)]
+                    )
 
-                # 랜덤 변동 추가 (현실감)
-                random.seed(int(time_point.timestamp()) + hash(department))
-                random_variation = random.uniform(-pattern['variation'], pattern['variation'])
+                    if nearby_queues.exists():
+                        avg_wait = nearby_queues.aggregate(avg=Avg('estimated_wait_time'))['avg'] or default_wait
+                        logger.debug(f"[RealData] {time_point.strftime('%H:%M')} - 인접 데이터 사용: {avg_wait:.1f}분")
+                    else:
+                        # 완전히 데이터 없으면 부서 평균 사용
+                        avg_wait = default_wait
+                        logger.debug(f"[RealData] {time_point.strftime('%H:%M')} - 기본값 사용: {avg_wait:.1f}분")
 
-                # 최종 대기 시간 계산 (분 단위)
-                waiting_time = int(base_count + random_variation)
-                waiting_time = max(5, min(waiting_time, 120))  # 5~120분 범위 제한
-
-                logger.debug(f"{department} - {time_point.strftime('%H:%M')}: {waiting_time}분")
+                # 대기시간 정규화 (5~120분 범위)
+                waiting_time = max(5, min(avg_wait, 120))
 
                 # 특징 벡터 생성 (정확히 11개)
                 features = []
@@ -121,7 +97,6 @@ class PredictionService:
                 features.append(min(waiting_time / 60.0, 1.0))  # 대기 시간을 정규화 (0-1, 60분 기준)
 
                 # 부서 특징 8개 (모델이 기대하는 원핫 인코딩)
-                # 모델은 8개 부서로 학습됨 (3 + 8 = 11 features)
                 train_departments = PredictionService.DEPARTMENT_LIST  # 6개 부서
 
                 if department in train_departments:
@@ -148,6 +123,7 @@ class PredictionService:
             # 모델이 기대하는 shape: (1, 12, 11)
             input_array = input_array.reshape(1, num_timesteps, 11)  # 11 features로 고정
 
+            logger.info(f"[RealData] {department} LSTM input created from real DB data")
             return input_array
 
         except Exception as e:
@@ -178,10 +154,32 @@ class PredictionService:
 
         for dept in departments:
             try:
-                # 현재 대기 시간 (실제 DB 값)
-                current_wait_time = Queue.objects.filter(
-                    exam__department=dept, state='waiting'
-                ).aggregate(avg_wait=Avg('estimated_wait_time'))['avg_wait'] or 0
+                # 현재 대기 시간 (최근 24시간 데이터만 사용)
+                now = timezone.now()
+                cutoff_time = now - timedelta(hours=24)
+
+                # 최근 24시간 내 waiting 큐만 조회
+                waiting_queues = Queue.objects.filter(
+                    exam__department=dept,
+                    state='waiting',
+                    created_at__gte=cutoff_time
+                )
+
+                waiting_count = waiting_queues.count()
+
+                if waiting_count > 0:
+                    # 실제 estimated_wait_time 평균 사용
+                    avg_estimated = waiting_queues.aggregate(
+                        avg=Avg('estimated_wait_time')
+                    )['avg'] or 0
+
+                    current_wait_time = round(avg_estimated)
+
+                    logger.debug(f"[CurrentWait] {dept}: {waiting_count}명 대기 (최근 24h), 평균 {avg_estimated:.1f}분")
+                else:
+                    # 대기 인원 없으면 0
+                    current_wait_time = 0
+                    logger.debug(f"[CurrentWait] {dept}: 대기 인원 없음 (최근 24h)")
 
                 # LSTM 예측 (try-except로 모델 오류 처리)
                 try:
@@ -202,7 +200,30 @@ class PredictionService:
                     else:
                         predicted_wait_30min = future.get('predicted_wait_time', current_wait_time)
                         congestion = future.get('congestion_level', 0.5)
-                        logger.debug(f"Prediction for {dept}: {predicted_wait_30min}분, congestion: {congestion}")
+                        logger.debug(f"LSTM base prediction for {dept}: {predicted_wait_30min}분, congestion: {congestion}")
+
+                    # HybridCongestion Algorithm (30min predictions only)
+                    if target_minutes == 30:
+                        try:
+                            from .hybrid_congestion import HybridCongestionAlgorithm
+                            hybrid_result = HybridCongestionAlgorithm.apply_all_corrections(
+                                lstm_prediction=predicted_wait_30min,
+                                department=dept,
+                                current_time=timezone.now(),
+                                current_wait_time=current_wait_time  # Rule 7을 위해 현재 대기시간 전달
+                            )
+                            lstm_base = hybrid_result['lstm_base']
+                            predicted_wait_30min = hybrid_result['corrected_wait_time']
+                            hybrid_confidence = hybrid_result['confidence']
+                            hybrid_corrections = hybrid_result['corrections']
+                            applied_rules = hybrid_result['applied_rules']
+                            correction_pct = ((predicted_wait_30min - lstm_base) / lstm_base * 100) if lstm_base > 0 else 0
+                            logger.info(f"[HybridAlgorithm] {dept} | LSTM: {lstm_base:.1f}min -> Hybrid: {predicted_wait_30min:.1f}min ({correction_pct:+.1f}%) | Rules: {len(applied_rules)}/6 | Confidence: {hybrid_confidence:.2f}")
+                        except Exception as hybrid_error:
+                            logger.warning(f"[HybridAlgorithm] {dept} | ERROR: {str(hybrid_error)[:50]} | Fallback: Pure LSTM")
+                            hybrid_confidence = 0.70
+                            hybrid_corrections = {}
+                            applied_rules = []
 
                     # 시간대별 예측값 계산 (선형 보간)
                     if target_minutes == 30:
@@ -235,20 +256,19 @@ class PredictionService:
                 # 과거 예측 데이터 조회 (30분 전 예측)
                 past_prediction_value = None
                 try:
-                    from datetime import timedelta
-                    now = timezone.now()
                     past_log = PredictionLog.objects.filter(
                         department=dept,
-                        created_at__range=[now - timedelta(minutes=35), now - timedelta(minutes=25)]
-                    ).order_by('-created_at').first()
+                        timestamp__range=[now - timedelta(minutes=35), now - timedelta(minutes=25)]
+                    ).order_by('-timestamp').first()
 
                     if past_log:
                         past_prediction_value = round(past_log.predicted_wait_time)
-                        logger.debug(f"Found past prediction for {dept}: {past_prediction_value}분 (30분 전)")
+                        logger.debug(f"[PastPrediction] {dept}: {past_prediction_value}min (30min ago)")
                 except Exception as log_error:
-                    logger.warning(f"Failed to fetch past prediction for {dept}: {log_error}")
+                    logger.debug(f"[PastPrediction] {dept}: No data available")
 
-                predictions[dept] = {
+                # 하이브리드 정보 추가 (30분 예측일 때만)
+                prediction_dict = {
                     'current_wait': round(current_wait_time),
                     'predicted_wait': predicted_wait,
                     'past_prediction': past_prediction_value,  # ← 30분 전 AI 예측값 추가
@@ -257,6 +277,17 @@ class PredictionService:
                     'timeframe': timeframe,
                     'target_minutes': target_minutes
                 }
+
+                # 하이브리드 알고리즘 적용 시 추가 정보
+                if target_minutes == 30 and 'hybrid_confidence' in locals():
+                    prediction_dict['hybrid'] = {
+                        'confidence': hybrid_confidence,
+                        'corrections': hybrid_corrections,
+                        'applied_rules': applied_rules,
+                        'is_hybrid': len(applied_rules) > 0
+                    }
+
+                predictions[dept] = prediction_dict
 
                 # 예측 결과 로깅 (30분 예측만 로그)
                 if target_minutes == 30:
@@ -272,8 +303,58 @@ class PredictionService:
                 logger.error(f"Error predicting for department {dept}: {e}")
                 predictions[dept] = {'error': str(e)}
 
+        # 예측 세션 요약 통계 (30분 예측일 때만)
+        if target_minutes == 30 and predictions:
+            PredictionService._log_prediction_summary(predictions)
+
         cache.set(cache_key, predictions, 300)  # 5분 캐싱
         return predictions
+
+    @staticmethod
+    def _log_prediction_summary(predictions):
+        """예측 세션 요약 통계 출력"""
+        try:
+            total_depts = len(predictions)
+            hybrid_count = 0
+            total_confidence = 0
+            corrections = []
+
+            for dept, pred in predictions.items():
+                if 'error' not in pred and 'hybrid' in pred:
+                    hybrid_count += 1
+                    total_confidence += pred['hybrid']['confidence']
+
+                    # 보정률 계산 (LSTM base vs Hybrid corrected)
+                    if pred['hybrid'].get('is_hybrid') and pred['hybrid'].get('corrections'):
+                        # corrections dict에서 correction_factor 찾기
+                        # 또는 predicted_wait / current_wait 비율 사용
+                        current = pred.get('current_wait', 0)
+                        predicted = pred.get('predicted_wait', 0)
+
+                        if current > 0:
+                            # (예측값 - 현재값) / 현재값 * 100
+                            correction_pct = ((predicted - current) / current * 100)
+                            corrections.append(correction_pct)
+
+            avg_confidence = (total_confidence / hybrid_count) if hybrid_count > 0 else 0
+            avg_correction = (sum(corrections) / len(corrections)) if corrections else 0
+
+            logger.info("=" * 60)
+            logger.info("[PredictionService] Session Summary")
+            logger.info("=" * 60)
+            logger.info(f"Timestamp: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Total Departments: {total_depts}")
+            if total_depts > 0:
+                logger.info(f"Hybrid Algorithm Applied: {hybrid_count}/{total_depts} ({hybrid_count/total_depts*100:.0f}%)")
+            else:
+                logger.info("Hybrid Algorithm Applied: 0/0")
+            logger.info(f"Average Confidence: {avg_confidence:.2f}")
+            logger.info(f"Average Correction: {avg_correction:+.1f}%")
+            logger.info(f"Cache TTL: 300s")
+            logger.info("=" * 60)
+
+        except Exception as e:
+            logger.debug(f"Failed to generate prediction summary: {e}")
 
     @staticmethod
     def get_timeline_predictions():
