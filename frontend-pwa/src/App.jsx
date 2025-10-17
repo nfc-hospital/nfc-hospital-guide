@@ -30,6 +30,7 @@ import ChatbotTest from './pages/ChatbotTest';
 import MapTest from './pages/MapTest';
 import MapEditor from './pages/MapEditor';
 import LSTMTest from './pages/LSTMTest';
+import TestNewLayout from './pages/TestNewLayout';
 // New Chatbot System
 import ChatbotSystem from './components/chatbot-v2';
 // Mock NFC Panel for development
@@ -180,6 +181,9 @@ function AppContent() {
 
             {/* LSTM 테스트 페이지 - 로그인 없이 접근 가능 */}
             <Route path="/lstm-test" element={<LSTMTest />} />
+
+            {/* 새로운 레이아웃 테스트 페이지 */}
+            <Route path="/test-new-layout" element={<TestNewLayout />} />
 
             <Route path="*" element={<NotFound />} />
           </Route>

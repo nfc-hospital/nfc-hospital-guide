@@ -369,18 +369,6 @@ const FormatATemplate = ({
               </div>
             )}
 
-            {/* 다음 행동 안내 - 맥박 애니메이션 포함 */}
-            <div className="bg-white/20 backdrop-blur-lg rounded-xl sm:rounded-2xl p-3 sm:p-4 mb-3 sm:mb-4 border border-white/30 hover:bg-white/25 transition-all duration-300">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="relative">
-                  <div className="w-2.5 h-2.5 sm:w-3 sm:h-3 bg-amber-400 rounded-full animate-pulse" />
-                  <div className="absolute inset-0 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-amber-400 rounded-full animate-ping" />
-                </div>
-                <span className="text-amber-400 text-sm sm:text-base font-medium">다음</span>
-                <span className="text-white text-base sm:text-lg lg:text-xl font-bold flex-1">{displayNextAction}</span>
-              </div>
-            </div>
-
             {/* 대기 정보 카드 - 반투명 유리 효과 */}
             {effectiveWaitingInfo && (
               <div className="grid grid-cols-2 gap-3 sm:gap-4">
