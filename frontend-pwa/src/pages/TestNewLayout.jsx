@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import UnifiedJourneyTemplate from '../components/templates/UnifiedJourneyTemplate';
-import UnifiedHeader from '../components/common/UnifiedHeader';
 import useJourneyStore from '../store/journeyStore';
 
 /**
@@ -147,17 +146,7 @@ const TestNewLayout = () => {
     store.patientState = 'WAITING';
   }, []);
 
-  return (
-    <UnifiedJourneyTemplate
-      header={
-        <UnifiedHeader
-          userName={user?.name || "홍길동"}
-          patientState="WAITING"
-          onBackClick={() => navigate(-1)}
-        />
-      }
-    />
-  );
+  return <UnifiedJourneyTemplate />;
 };
 
 export default TestNewLayout;
