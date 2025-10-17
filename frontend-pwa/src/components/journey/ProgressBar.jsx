@@ -262,154 +262,88 @@ export default function ProgressBar(props) {
   const currentStepIndex = journeySteps.findIndex(step => step.status === 'in_progress');
   const progressPercentage = (completedCount / journeySteps.length) * 100;
 
-  // 슬라이딩 윈도우: 현재 단계 기준으로 이전-현재-다음 3개만 추출
-  const getVisibleSteps = () => {
-    if (currentStepIndex === -1) {
-      // 진행 중인 단계가 없으면 첫 3개 표시
-      return journeySteps.slice(0, 3).map((step, idx) => ({ step, originalIndex: idx }));
-    }
-
-    const result = [];
-
-    // 이전 단계
-    if (currentStepIndex > 0) {
-      result.push({
-        step: journeySteps[currentStepIndex - 1],
-        originalIndex: currentStepIndex - 1
-      });
-    }
-
-    // 현재 단계
-    result.push({
-      step: journeySteps[currentStepIndex],
-      originalIndex: currentStepIndex,
-      isCurrent: true
-    });
-
-    // 다음 단계
-    if (currentStepIndex < journeySteps.length - 1) {
-      result.push({
-        step: journeySteps[currentStepIndex + 1],
-        originalIndex: currentStepIndex + 1
-      });
-    }
-
-    return result;
-  };
-
-  const visibleSteps = getVisibleSteps();
-
-  // 세로 방식으로 변경 - 스크롤 없이 정확히 3개만
+  // Template의 파란색 배경에 맞는 스타일로 수정
   return (
-    <div className="flex items-center gap-4">
-      {/* 좌측: 진행률 카드 - 세로 진행바와 같은 높이 */}
-      <div className="flex-shrink-0">
-        <div className="bg-white/20 backdrop-blur-md rounded-2xl border border-white/30 shadow-lg px-6 py-8 min-w-[90px]">
-          <div className="flex flex-col items-center justify-center">
-            <div className="text-white/90 text-sm font-medium mb-2">진행</div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-white text-4xl sm:text-5xl font-black leading-none">{completedCount}</span>
-              <span className="text-white/70 text-2xl sm:text-3xl font-bold leading-none">/{journeySteps.length}</span>
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center flex-1">
+        {/* 단계별 마커 - Template 스타일에 맞게 컴팩트하게 */}
+        {journeySteps.map((step, index) => {
+          // Backend에서 보내는 실제 상태 값 처리
+          // Queue 상태: 'waiting', 'called', 'in_progress', 'completed'
+          // Appointment 상태: 'pending', 'scheduled', 'waiting', 'examined', 'completed'
+          const status = step.status?.toLowerCase() || '';
+
+          // completed/examined = 완료 (하얀색 체크)
+          const isCompleted = status === 'completed' || status === 'examined';
+
+          // waiting, called, in_progress = 현재 진행 중인 검사 (노란색)
+          const isInProgress = status === 'waiting' || status === 'called' || status === 'in_progress';
+
+          // isCurrent = 노란색 원으로 표시 (현재 검사)
+          const isCurrent = isInProgress;
+
+          // 단계별 색상 구분
+          const getStepColor = () => {
+            if (step.type === 'registration' || step.type === 'payment') {
+              return isCompleted ? 'bg-white' : isCurrent ? 'bg-amber-400' : 'bg-white/15';
+            }
+            return isCompleted ? 'bg-white' : isCurrent ? 'bg-amber-400' : 'bg-white/15';
+          };
+
+          return (
+            <div key={`${step.type}-${index}`} className="flex flex-col items-center relative" style={{ flex: '1 1 0%' }}>
+              {/* 연결선 */}
+              {index > 0 && (
+                <div className="absolute top-3 sm:top-4 h-0.5" style={{
+                  left: '-50%',
+                  right: '50%',
+                  background: isCompleted || isCurrent
+                    ? 'linear-gradient(to right, transparent, rgba(255,255,255,0.7) 20%, rgba(255,255,255,0.7) 80%, transparent)'
+                    : 'linear-gradient(to right, transparent, rgba(255,255,255,0.25) 20%, rgba(255,255,255,0.25) 80%, transparent)'
+                }} />
+              )}
+
+              {/* 단계 원 */}
+              <div className="relative">
+                <div className={`
+                  relative w-5 h-5 sm:w-6 sm:h-6 rounded-full
+                  flex items-center justify-center transition-all duration-500
+                  ${getStepColor()} ${isCurrent ? 'shadow-lg ring-2 ring-white/30 scale-110' : 'shadow-md'}
+                  ${!isCompleted && !isCurrent ? 'backdrop-blur-sm border border-white/25' : ''}
+                `}>
+                  {isCompleted ? (
+                    <svg className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd"
+                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                            clipRule="evenodd" />
+                    </svg>
+                  ) : isCurrent ? (
+                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                  ) : (
+                    <div className="w-1 h-1 bg-white/50 rounded-full" />
+                  )}
+                </div>
+              </div>
+
+              {/* 단계 라벨 */}
+              <div className="mt-1">
+                <div className={`text-[11px] sm:text-xs font-medium transition-all duration-300 whitespace-nowrap text-center ${
+                  isCurrent ? 'text-white' : isCompleted ? 'text-white/90' : 'text-white/60'
+                } ${step.type === 'registration' || step.type === 'payment' ? 'font-bold' : ''}`}>
+                  {step.name}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
 
-      {/* 우측: 세로 진행바 - 스크롤 없이 3개만 */}
-      <div className="flex-1">
-        <div className="flex flex-col gap-3">
-          {visibleSteps.map(({ step, originalIndex, isCurrent: isCurrentStep }, index) => {
-            const status = step.status?.toLowerCase() || '';
-            const isCompleted = status === 'completed' || status === 'examined';
-            const isInProgress = status === 'waiting' || status === 'called' || status === 'in_progress';
-
-            // 현재 단계는 큰 박스, 나머지는 작은 원
-            if (isInProgress) {
-              return (
-                <div
-                  key={`${step.type}-${originalIndex}`}
-                  className="relative"
-                >
-                  {/* 연결선 (위) */}
-                  {index > 0 && (
-                    <div className="absolute left-6 -top-3 w-0.5 h-3 bg-white/70" />
-                  )}
-
-                  {/* 현재 단계 박스 */}
-                  <div className="bg-white/20 backdrop-blur-md rounded-2xl p-5 border-2 border-amber-400 shadow-lg">
-                    <div className="flex items-start gap-4">
-                      {/* 큰 노란 원 */}
-                      <div className="flex-shrink-0">
-                        <div className="w-12 h-12 bg-amber-400 rounded-full flex items-center justify-center shadow-lg ring-4 ring-white/30 animate-pulse">
-                          <div className="w-3 h-3 bg-white rounded-full" />
-                        </div>
-                      </div>
-
-                      {/* 상세 정보 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-white text-base sm:text-lg font-bold mb-1">
-                          {step.name}
-                        </div>
-                        <div className="text-white/80 text-sm">
-                          {status === 'waiting' && '순서 대기 중'}
-                          {status === 'called' && '호출됨'}
-                          {status === 'in_progress' && '진행 중'}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 연결선 (아래) */}
-                  {index < visibleSteps.length - 1 && (
-                    <div className="absolute left-6 -bottom-3 w-0.5 h-3 bg-white/70" />
-                  )}
-                </div>
-              );
-            } else {
-              // 이전/다음 단계는 작은 원만
-              return (
-                <div key={`${step.type}-${originalIndex}`} className="relative">
-                  {/* 연결선 (위) */}
-                  {index > 0 && (
-                    <div className="absolute left-4 -top-3 w-0.5 h-3 bg-white/30" />
-                  )}
-
-                  <div className="flex items-center gap-3 pl-2">
-                    {/* 작은 원 */}
-                    <div className={`
-                      flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center
-                      transition-all duration-300
-                      ${isCompleted
-                        ? 'bg-white shadow-md'
-                        : 'bg-white/15 backdrop-blur-sm border border-white/25'}
-                    `}>
-                      {isCompleted ? (
-                        <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd"
-                                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                clipRule="evenodd" />
-                        </svg>
-                      ) : (
-                        <div className="w-2 h-2 bg-white/50 rounded-full" />
-                      )}
-                    </div>
-
-                    {/* 작은 텍스트 */}
-                    <div className={`text-sm ${
-                      isCompleted ? 'text-white/90' : 'text-white/60'
-                    }`}>
-                      {step.name}
-                    </div>
-                  </div>
-
-                  {/* 연결선 (아래) */}
-                  {index < visibleSteps.length - 1 && (
-                    <div className="absolute left-4 -bottom-3 w-0.5 h-3 bg-white/30" />
-                  )}
-                </div>
-              );
-            }
-          })}
+      {/* 진행률 숫자 표시 */}
+      <div className="flex flex-col items-end flex-shrink-0">
+        <div className="text-white/70 text-xs sm:text-sm">진행</div>
+        <div className="text-white flex items-baseline gap-0.5">
+          <span className="text-xl sm:text-2xl lg:text-3xl font-bold">{completedCount}</span>
+          <span className="text-sm sm:text-base lg:text-xl text-white/70">/{journeySteps.length}</span>
         </div>
       </div>
     </div>
