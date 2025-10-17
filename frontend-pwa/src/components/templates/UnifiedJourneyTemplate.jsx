@@ -194,11 +194,27 @@ const UnifiedJourneyTemplate = () => {
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/50">
       {/* 상단: Progress Bar (고정) */}
-      <div className="flex-shrink-0 bg-white/90 backdrop-blur-sm border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-6 py-3 text-center">
-          <div className="text-3xl font-black text-blue-600">
-            {completedCount}
-            <span className="text-gray-400 text-2xl"> / {scheduleItems.length}</span>
+      <div className="flex-shrink-0 bg-white shadow-sm">
+        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-xs text-gray-500 font-medium mb-1">오늘 일정</span>
+            <span className="text-base font-bold text-gray-800">
+              {new Date().toLocaleDateString('ko-KR', {
+                month: 'long',
+                day: 'numeric',
+                weekday: 'short'
+              })}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-xs text-gray-500 font-medium mb-1">진행 상황</div>
+              <div className="flex items-baseline gap-1">
+                <span className="text-3xl font-black text-blue-600">{completedCount}</span>
+                <span className="text-lg text-gray-400 font-bold">/</span>
+                <span className="text-2xl font-bold text-gray-600">{scheduleItems.length}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -237,22 +253,20 @@ const UnifiedJourneyTemplate = () => {
                     ...(cardStyles[index] || {}),
                     willChange: 'transform, opacity, filter',
                   }}
-                  className={`w-full max-w-6xl mx-auto px-1 group relative rounded-3xl bg-white ${
+                  className={`w-full max-w-6xl mx-auto group relative rounded-3xl bg-white overflow-hidden ${
                     isCurrent
-                      ? 'shadow-2xl shadow-blue-500/30 border-4 border-blue-600'
+                      ? 'shadow-2xl shadow-blue-500/30 border-2 border-blue-600'
                       : isCompleted
-                      ? 'shadow-lg hover:shadow-xl border-2 border-gray-300'
-                      : 'shadow-md hover:shadow-lg border-2 border-gray-300'
+                      ? 'shadow-lg hover:shadow-xl border border-gray-300'
+                      : 'shadow-md hover:shadow-lg border border-gray-300'
                   }`}
                 >
                 {/* 카드 헤더 */}
                 <button
                   onClick={() => toggleCard(index)}
                   className={`w-full p-6 flex items-center gap-5 transition-all duration-300 ${
-                    isExpanded ? 'rounded-t-3xl' : 'rounded-3xl'
-                  } ${
                     isCurrent
-                      ? 'bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 hover:from-blue-700 hover:via-blue-800 hover:to-indigo-900'
+                      ? 'bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 hover:from-blue-600 hover:via-blue-700 hover:to-blue-800'
                       : 'hover:bg-gray-50'
                   }`}
                 >
@@ -261,7 +275,7 @@ const UnifiedJourneyTemplate = () => {
                     <div
                       className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl transition-all duration-500 ${
                         isCurrent
-                          ? 'bg-amber-400 text-white shadow-lg shadow-amber-500/50 scale-110'
+                          ? 'bg-emerald-400 text-white shadow-lg shadow-emerald-500/40 scale-110'
                           : isCompleted
                           ? 'bg-gray-200 text-gray-600 shadow-md'
                           : 'bg-gradient-to-br from-gray-100 to-gray-200 text-gray-400'
@@ -274,7 +288,7 @@ const UnifiedJourneyTemplate = () => {
                       )}
                     </div>
                     {isCurrent && (
-                      <div className="absolute inset-0 bg-amber-400 rounded-2xl animate-ping opacity-30" />
+                      <div className="absolute inset-0 bg-emerald-400 rounded-2xl animate-ping opacity-20" />
                     )}
                   </div>
 
@@ -305,7 +319,7 @@ const UnifiedJourneyTemplate = () => {
                       </span>
                     )}
                     {isCurrent && (
-                      <span className="px-4 py-2 bg-amber-400 text-white rounded-full text-sm font-bold shadow-lg">
+                      <span className="px-4 py-2 bg-emerald-500 text-white rounded-full text-sm font-bold shadow-lg">
                         진행 중
                       </span>
                     )}
@@ -319,7 +333,7 @@ const UnifiedJourneyTemplate = () => {
 
                 {/* 카드 상세 내용 */}
                 <div
-                  className={`overflow-hidden transition-all duration-500 ease-in-out rounded-b-3xl ${
+                  className={`overflow-hidden transition-all duration-500 ease-in-out ${
                     isExpanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
                   }`}
                 >
@@ -329,58 +343,62 @@ const UnifiedJourneyTemplate = () => {
                     }`}
                   >
                     <div className={`p-3 space-y-2`}>
-                      {/* 현재 진행 중일 때만 위치 안내와 대기 정보 */}
-                      {isCurrent && (
-                        <>
-                          {/* 1. 위치 안내 (가로, 3칸 그리드) */}
-                          <div className="grid grid-cols-[1fr_auto_1fr] gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-2 border border-blue-200 shadow-lg items-center">
-                            {/* 출발 */}
-                            <div className="text-right pr-1">
-                              <p className="text-gray-500 text-[10px] mb-0.5">출발</p>
-                              <p className="text-gray-900 font-bold text-xs leading-tight truncate">
-                                {(() => {
-                                  if (actualCurrentLocation?.description) {
-                                    return actualCurrentLocation.description;
-                                  }
-                                  if (actualCurrentLocation?.building && actualCurrentLocation?.floor) {
-                                    const room = actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : '';
-                                    return `${actualCurrentLocation.building} ${actualCurrentLocation.floor}${room}`;
-                                  }
-                                  return '현재 위치';
-                                })()}
-                              </p>
+                      {/* 검사 정보 */}
+                      <div className="rounded-xl p-4 bg-white border border-gray-200">
+                        <div className="space-y-3">
+                          {/* 무엇을 하나요? */}
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                              </svg>
                             </div>
-
-                            {/* 화살표 */}
-                            <div className="text-blue-600 text-xl px-1">→</div>
-
-                            {/* 도착 */}
-                            <div className="text-left pl-1">
-                              <p className="text-gray-500 text-[10px] mb-0.5">도착</p>
-                              <p className="text-blue-700 font-black text-xs leading-tight truncate">
-                                {locationInfo?.name || locationInfo?.room || schedule.location}
-                              </p>
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-base font-light text-gray-600">무엇을 하나요?</span>
+                              <span className="text-base font-semibold text-gray-900 text-right">{schedule.description || '건강 상태 확인 및 진단'}</span>
                             </div>
                           </div>
 
-                          {/* 2. 대기 정보 (회색, 2칸 그리드) */}
+                          {/* 얼마나 걸리나요? */}
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 flex items-center justify-between">
+                              <span className="text-base font-light text-gray-600">얼마나 걸리나요?</span>
+                              <span className="text-base font-semibold text-gray-900 text-right">약 <span className="text-blue-600">{schedule.duration}분</span> 정도 소요</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 현재 진행 중일 때만 위치 안내와 대기 정보 */}
+                      {isCurrent && (
+                        <>
+                          {/* 1. 대기 정보 */}
                           {waitingInfo && (
                             <div className="grid grid-cols-2 gap-2">
                               {/* 내 앞에 */}
-                              <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200 shadow-lg">
+                              <div className="bg-white rounded-2xl p-3 border-2 border-amber-300 shadow-lg">
                                 <div className="flex flex-col items-center justify-center">
                                   <p className="text-gray-600 text-xs font-medium mb-1">내 앞에</p>
-                                  <p className="text-gray-900 text-3xl font-black">{waitingInfo.peopleAhead}</p>
-                                  <p className="text-gray-600 text-sm font-bold">명</p>
+                                  <p className="flex items-baseline">
+                                    <span className="text-orange-600 text-3xl font-black">{waitingInfo.peopleAhead}</span>
+                                    <span className="text-gray-600 text-sm font-bold ml-1">명</span>
+                                  </p>
                                 </div>
                               </div>
 
                               {/* 예상 대기 */}
-                              <div className="bg-gray-50 rounded-2xl p-3 border border-gray-200 shadow-lg">
+                              <div className="bg-white rounded-2xl p-3 border-2 border-amber-300 shadow-lg">
                                 <div className="flex flex-col items-center justify-center">
                                   <p className="text-gray-600 text-xs font-medium mb-1">예상 대기</p>
-                                  <p className="text-gray-900 text-3xl font-black">{waitingInfo.estimatedTime}</p>
-                                  <p className="text-gray-600 text-sm font-bold">분</p>
+                                  <p className="flex items-baseline">
+                                    <span className="text-orange-600 text-3xl font-black">{waitingInfo.estimatedTime}</span>
+                                    <span className="text-gray-600 text-sm font-bold ml-1">분</span>
+                                  </p>
                                 </div>
                               </div>
                             </div>
@@ -388,24 +406,48 @@ const UnifiedJourneyTemplate = () => {
 
                           {/* 2. 지도 */}
                           {locationInfo && (
-                            <div className="bg-blue-50 rounded-2xl p-3 border border-blue-200 shadow-lg">
-                              {/* 간단한 토글 버튼 */}
-                              <div className="flex items-center justify-between mb-3">
-                                <h4 className="text-blue-900 font-bold text-lg flex items-center gap-2">
-                                  <MapPinIcon className="w-5 h-5" />
-                                  길 안내
-                                </h4>
-                                <button
-                                  onClick={() => setIsMapExpanded(!isMapExpanded)}
-                                  className="text-sm text-blue-600 flex items-center gap-1 font-medium hover:text-blue-800 transition-colors"
-                                >
-                                  <ChevronDownIcon
-                                    className={`w-4 h-4 transition-transform duration-300 ${
-                                      isMapExpanded ? 'rotate-180' : ''
-                                    }`}
-                                  />
-                                  {isMapExpanded ? '지도 접기' : '지도 펼치기'}
-                                </button>
+                            <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-lg">
+                              {/* 헤더: 출발→도착 + 토글 버튼 */}
+                              <div className="mb-3">
+                                <div className="flex items-center justify-between mb-2">
+                                  <h4 className="text-blue-900 font-bold text-lg flex items-center gap-2">
+                                    <MapPinIcon className="w-5 h-5" />
+                                    길 안내
+                                  </h4>
+                                  <button
+                                    onClick={() => setIsMapExpanded(!isMapExpanded)}
+                                    className="text-sm text-blue-600 flex items-center gap-1 font-medium hover:text-blue-800 transition-colors"
+                                  >
+                                    <ChevronDownIcon
+                                      className={`w-4 h-4 transition-transform duration-300 ${
+                                        isMapExpanded ? 'rotate-180' : ''
+                                      }`}
+                                    />
+                                    {isMapExpanded ? '지도 접기' : '지도 펼치기'}
+                                  </button>
+                                </div>
+
+                                {/* 출발 → 도착 */}
+                                <div className="flex items-center gap-2 text-sm">
+                                  <span className="text-gray-500">현재 위치</span>
+                                  <span className="font-medium text-gray-700">
+                                    {(() => {
+                                      if (actualCurrentLocation?.description) {
+                                        return actualCurrentLocation.description;
+                                      }
+                                      if (actualCurrentLocation?.building && actualCurrentLocation?.floor) {
+                                        const room = actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : '';
+                                        return `${actualCurrentLocation.building} ${actualCurrentLocation.floor}${room}`;
+                                      }
+                                      return '미확인';
+                                    })()}
+                                  </span>
+                                  <span className="text-blue-600 mx-1">→</span>
+                                  <span className="text-gray-500">도착지</span>
+                                  <span className="font-semibold text-blue-700">
+                                    {locationInfo?.name || locationInfo?.room || schedule.location}
+                                  </span>
+                                </div>
                               </div>
 
                               {/* 지도 - 토글 */}
@@ -433,55 +475,6 @@ const UnifiedJourneyTemplate = () => {
                           )}
                         </>
                       )}
-
-                      {/* 검사 설명 + 소요시간 통합 */}
-                      <div
-                        className={`rounded-xl p-3 ${
-                          isCurrent
-                            ? 'bg-blue-50 border border-blue-200'
-                            : isCompleted
-                            ? 'bg-gray-50 border border-gray-200'
-                            : 'bg-gray-50 border border-gray-200'
-                        }`}
-                      >
-                        <div className="grid grid-cols-2 gap-4">
-                          {/* 검사 목적 */}
-                          <div>
-                            <h5
-                              className={`text-sm font-bold mb-2 uppercase tracking-wide ${
-                                isCurrent ? 'text-blue-900' : isCompleted ? 'text-gray-700' : 'text-gray-700'
-                              }`}
-                            >
-                              검사 목적
-                            </h5>
-                            <p
-                              className={`text-base leading-relaxed ${
-                                isCurrent ? 'text-blue-700' : isCompleted ? 'text-gray-600' : 'text-gray-600'
-                              }`}
-                            >
-                              {schedule.description || '건강 상태 확인 및 진단'}
-                            </p>
-                          </div>
-
-                          {/* 소요시간 */}
-                          <div>
-                            <h5
-                              className={`text-sm font-bold mb-2 uppercase tracking-wide ${
-                                isCurrent ? 'text-gray-900' : 'text-gray-900'
-                              }`}
-                            >
-                              소요시간
-                            </h5>
-                            <p
-                              className={`text-base ${
-                                isCurrent ? 'text-gray-700' : 'text-gray-700'
-                              }`}
-                            >
-                              약 <span className="font-bold text-xl">{schedule.duration}</span>분
-                            </p>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
