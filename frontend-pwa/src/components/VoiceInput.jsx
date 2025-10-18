@@ -9,10 +9,10 @@ const VoiceInput = ({ onResult, onError, isListening, setIsListening }) => {
 
   useEffect(() => {
     // Web Speech API 지원 확인
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      onError('이 브라우저는 음성 인식을 지원하지 않습니다.');
-      return;
-    }
+    //if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    //  onError('이 브라우저는 음성 인식을 지원하지 않습니다.');
+    //  return;
+    //}
 
     // SpeechRecognition 객체 생성
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
