@@ -11,6 +11,7 @@ const UnifiedJourneyTemplate = () => {
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [isMapExpanded, setIsMapExpanded] = useState(true);
   const [isExamInfoExpanded, setIsExamInfoExpanded] = useState(false);
+  const [searchButtonPosition, setSearchButtonPosition] = useState(20); // 하단 위치 (px)
   const hasInitialized = useRef(false);
   const cardRefs = useRef([]);
   const scrollContainerRef = useRef(null);
@@ -22,6 +23,7 @@ const UnifiedJourneyTemplate = () => {
   const currentLocation = useJourneyStore(state => state.currentLocation);
   const taggedLocationInfo = useJourneyStore(state => state.taggedLocationInfo);
   const patientState = useJourneyStore(state => state.patientState);
+  const calledModalMinimized = useJourneyStore(state => state.calledModalMinimized);
 
   // 일정 데이터 변환 (접수/수납 포함)
   const scheduleItems = React.useMemo(() => {
@@ -286,6 +288,17 @@ const UnifiedJourneyTemplate = () => {
   const toggleCard = (index) => {
     setExpandedIndex(expandedIndex === index ? null : index);
   };
+
+  // CalledModal이 최소화되면 "다른 장소 찾기" 버튼을 위로 이동
+  useEffect(() => {
+    if (calledModalMinimized) {
+      // 알림바(bottom: 16px, 높이: ~60px) + 여유 공간(24px) = 100px 위로 이동
+      setSearchButtonPosition(100);
+    } else {
+      // 원래 위치로 복원
+      setSearchButtonPosition(20);
+    }
+  }, [calledModalMinimized]);
 
   // 완료된 일정 개수
   const completedCount = scheduleItems.filter(s => s.status === 'completed').length;
@@ -630,10 +643,12 @@ const UnifiedJourneyTemplate = () => {
 
       {/* 플로팅: 다른 장소 찾기 버튼 (왼쪽 하단) */}
       <button
-        className="fixed bottom-5 left-5 z-[9999] px-6 py-4 bg-white border-2 border-gray-300 rounded-full shadow-2xl hover:shadow-3xl hover:bg-gray-50 hover:border-gray-400 active:scale-95 flex items-center justify-center gap-2 font-bold text-gray-700 transition-all duration-300"
+        className="fixed left-5 z-[9999] px-6 py-4 bg-white border-2 border-gray-300 rounded-full shadow-2xl hover:shadow-3xl hover:bg-gray-50 hover:border-gray-400 active:scale-95 flex items-center justify-center gap-2 font-bold text-gray-700"
         style={{
           minWidth: '200px',
-          height: '56px'
+          height: '56px',
+          bottom: `${searchButtonPosition}px`,
+          transition: 'bottom 300ms ease-in-out'
         }}
       >
         <MagnifyingGlassIcon className="w-6 h-6 text-blue-600" />

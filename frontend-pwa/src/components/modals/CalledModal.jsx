@@ -65,10 +65,10 @@ export default function CalledModal({
 
   if (!isOpen) return null;
 
-  // 최소화된 상태 - 챗봇 아래 오른쪽 정렬로 표시 (바닥에 가까이)
+  // 최소화된 상태 - 화면 하단 전체 너비로 표시
   if (isMinimized) {
     return (
-      <div className="fixed bottom-4 right-4 z-40 max-w-xs">
+      <div className="fixed bottom-4 left-0 right-0 z-40 px-4">
         <button
           onClick={handleReopen}
           className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 text-white rounded-xl p-3 shadow-lg border border-amber-400 hover:shadow-xl transition-all duration-300 group"
