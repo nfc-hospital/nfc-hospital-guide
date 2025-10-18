@@ -15,6 +15,7 @@ import PaymentContent from './journey/contents/PaymentContent';
 // Template imports
 import FormatATemplate from './templates/FormatATemplate';
 import FormatBTemplate from './templates/FormatBTemplate';
+import UnifiedJourneyTemplate from './templates/UnifiedJourneyTemplate';
 
 // ProgressBar import
 import ProgressBar from './journey/ProgressBar';
@@ -35,46 +36,27 @@ const getJourneyComponents = (patientState) => {
         Content: UnregisteredContent,
         screenType: 'unregistered'
       };
-    
+
+    // ARRIVED ~ PAYMENT: UnifiedJourneyTemplate 사용
     case PatientJourneyState.ARRIVED:
-      return {
-        Template: FormatATemplate,
-        Content: ArrivedContent,
-        screenType: 'arrived'
-      };
-    
     case PatientJourneyState.REGISTERED:
-      return {
-        Template: FormatATemplate,
-        Content: RegisteredContent,
-        screenType: 'registered'
-      };
-    
     case PatientJourneyState.WAITING:
     case PatientJourneyState.CALLED:
     case PatientJourneyState.IN_PROGRESS:
-      return {
-        Template: FormatATemplate,
-        Content: WaitingContent,
-        screenType: 'waiting'
-      };
-
-    // COMPLETED 케이스 제거 - Backend에서 동적으로 WAITING 또는 PAYMENT로 전환됨
-
     case PatientJourneyState.PAYMENT:
       return {
-        Template: FormatATemplate,
-        Content: PaymentContent,
-        screenType: 'payment'
+        Template: UnifiedJourneyTemplate,
+        Content: null,
+        screenType: 'journey'
       };
-    
+
     case PatientJourneyState.FINISHED:
       return {
         Template: FormatBTemplate,
         Content: FinishedContent,
         screenType: 'finished'
       };
-    
+
     default:
       return {
         Template: FormatBTemplate,
@@ -368,6 +350,11 @@ const JourneyContainer = ({ taggedLocation }) => {
       todaySchedule,
     };
 
+    // ARRIVED ~ PAYMENT: UnifiedJourneyTemplate 사용 (Content 불필요)
+    if (screenType === 'journey') {
+      return baseProps;
+    }
+
     // UNREGISTERED: 공통 서류 준비사항 데이터 정의 (JourneyContainer가 준비)
     const commonPreparationItems = [
       {
@@ -426,30 +413,10 @@ const JourneyContainer = ({ taggedLocation }) => {
       };
     }
 
-    // PAYMENT: completion 관련 props 전달
-    if (currentState === PatientJourneyState.PAYMENT) {
-      return {
-        ...baseProps,
-        mainContent: <Content />,
-        completionStats: journeySummary,
-        completedAppointments: journeySummary.completedAppointments,
-        totalDuration: journeySummary.totalDuration,
-        completedCount: journeySummary.completedCount,
-        showPaymentInfo: true,
-        paymentAmount: journeySummary.completedAppointments?.length > 0
-          ? journeySummary.completedAppointments.reduce((total, apt) => {
-              const cost = apt.exam?.patient_cost || apt.exam?.base_price || 0;
-              const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : Number(cost);
-              return total + numericCost;
-            }, 0)
-          : 0
-      };
-    }
-
-    // 기타 상태 (ARRIVED, REGISTERED, WAITING, CALLED, IN_PROGRESS): mainContent로 전달
+    // 기타 상태 (기본 fallback - 사실상 여기 도달하지 않음)
     return {
       ...baseProps,
-      mainContent: <Content />
+      mainContent: Content ? <Content /> : null
     };
   };
 

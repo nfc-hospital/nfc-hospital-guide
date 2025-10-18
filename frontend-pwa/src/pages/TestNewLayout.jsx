@@ -43,7 +43,7 @@ const TestNewLayout = () => {
           exam: {
             exam_id: 'exam-001',
             title: '혈액 검사',
-            description: '기본 혈액 검사 및 건강 상태 확인',
+            description: '혈액을 채취하여 혈당, 콜레스테롤, 간 기능, 신장 기능 등을 확인하는 검사',
             department: '진단검사의학과',
             average_duration: 10,
             location: {
@@ -60,7 +60,7 @@ const TestNewLayout = () => {
           exam: {
             exam_id: 'exam-002',
             title: 'CT 촬영',
-            description: '흉부 CT 촬영 및 판독',
+            description: '흉부를 CT로 촬영하여 폐, 심장, 혈관의 상태를 정밀하게 확인하는 검사',
             department: '영상의학과',
             average_duration: 30,
             location: {
@@ -77,7 +77,7 @@ const TestNewLayout = () => {
           exam: {
             exam_id: 'exam-003',
             title: 'MRI 검사',
-            description: '뇌 MRI 촬영',
+            description: '뇌를 자기장으로 촬영하여 뇌 구조와 혈관 상태를 정밀하게 확인하는 검사',
             department: '영상의학과',
             average_duration: 45,
             location: {
@@ -94,7 +94,7 @@ const TestNewLayout = () => {
           exam: {
             exam_id: 'exam-004',
             title: 'X-ray 촬영',
-            description: '흉부 X-ray',
+            description: '흉부를 X-ray로 촬영하여 폐와 심장의 상태를 확인하는 검사',
             department: '영상의학과',
             average_duration: 15,
             location: {

@@ -10,6 +10,7 @@ import MapNavigator from '../MapNavigator';
 const UnifiedJourneyTemplate = () => {
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [isMapExpanded, setIsMapExpanded] = useState(true);
+  const [isExamInfoExpanded, setIsExamInfoExpanded] = useState(false);
   const hasInitialized = useRef(false);
   const cardRefs = useRef([]);
   const scrollContainerRef = useRef(null);
@@ -20,36 +21,94 @@ const UnifiedJourneyTemplate = () => {
   const currentQueues = useJourneyStore(state => state.currentQueues);
   const currentLocation = useJourneyStore(state => state.currentLocation);
   const taggedLocationInfo = useJourneyStore(state => state.taggedLocationInfo);
+  const patientState = useJourneyStore(state => state.patientState);
 
-  // 일정 데이터 변환
+  // 일정 데이터 변환 (접수/수납 포함)
   const scheduleItems = React.useMemo(() => {
-    if (!todaysAppointments) return [];
+    const journey = [];
 
-    return todaysAppointments.map((apt, index) => {
-      const locationObj = apt.exam?.location;
-      let location = '위치 미정';
+    // 1. 접수 단계 추가 (ARRIVED 또는 이후 상태)
+    if (patientState && ['ARRIVED', 'REGISTERED', 'WAITING', 'CALLED', 'IN_PROGRESS', 'PAYMENT', 'FINISHED'].includes(patientState)) {
+      journey.push({
+        id: 'registration',
+        examName: '접수',
+        location: '본관 1층 원무과',
+        status: patientState === 'ARRIVED' ? 'waiting' : 'completed',
+        description: '병원 접수 및 환자 등록 절차',
+        duration: 5,
+        exam: {
+          exam_id: 'reception',
+          title: '접수',
+          department: '원무과',
+          building: '본관',
+          floor: '1',
+          room: '접수창구',
+          location: {
+            building: '본관',
+            floor: '1',
+            room: '접수창구'
+          }
+        }
+      });
+    }
 
-      if (locationObj && (locationObj.building || locationObj.floor || locationObj.room)) {
-        const parts = [];
-        if (locationObj.building) parts.push(locationObj.building);
-        if (locationObj.floor) parts.push(`${locationObj.floor}층`);
-        if (locationObj.room) parts.push(locationObj.room);
-        location = parts.join(' ');
-      } else if (apt.exam?.department) {
-        location = apt.exam.department;
-      }
+    // 2. 검사/진료 일정 추가
+    if (todaysAppointments && todaysAppointments.length > 0) {
+      const examSchedules = todaysAppointments.map((apt, index) => {
+        const locationObj = apt.exam?.location;
+        let location = '위치 미정';
 
-      return {
-        id: apt.appointment_id,
-        examName: apt.exam?.title || `검사 ${index + 1}`,
-        location: location,
-        status: apt.status,
-        description: apt.exam?.description,
-        duration: apt.exam?.average_duration || 30,
-        exam: apt.exam
-      };
-    });
-  }, [todaysAppointments]);
+        if (locationObj && (locationObj.building || locationObj.floor || locationObj.room)) {
+          const parts = [];
+          if (locationObj.building) parts.push(locationObj.building);
+          if (locationObj.floor) parts.push(`${locationObj.floor}층`);
+          if (locationObj.room) parts.push(locationObj.room);
+          location = parts.join(' ');
+        } else if (apt.exam?.department) {
+          location = apt.exam.department;
+        }
+
+        return {
+          id: apt.appointment_id,
+          examName: apt.exam?.title || `검사 ${index + 1}`,
+          location: location,
+          status: apt.status,
+          description: apt.exam?.description,
+          duration: apt.exam?.average_duration || 30,
+          exam: apt.exam
+        };
+      });
+
+      journey.push(...examSchedules);
+    }
+
+    // 3. 수납 단계 추가 (PAYMENT 또는 FINISHED 상태)
+    if (patientState && ['PAYMENT', 'FINISHED'].includes(patientState)) {
+      journey.push({
+        id: 'payment',
+        examName: '수납',
+        location: '본관 1층 수납창구',
+        status: patientState === 'PAYMENT' ? 'waiting' : 'completed',
+        description: '진료비 및 검사비 수납',
+        duration: 5,
+        exam: {
+          exam_id: 'payment_desk',
+          title: '수납',
+          department: '원무과',
+          building: '본관',
+          floor: '1',
+          room: '수납창구',
+          location: {
+            building: '본관',
+            floor: '1',
+            room: '수납창구'
+          }
+        }
+      });
+    }
+
+    return journey;
+  }, [todaysAppointments, patientState]);
 
   // 실제 현재 위치 (NFC 태그 > currentLocation 우선순위)
   const actualCurrentLocation = React.useMemo(() => {
@@ -88,7 +147,7 @@ const UnifiedJourneyTemplate = () => {
       const containerHeight = container.clientHeight;
       const visualCenterPosition = containerHeight * 0.35;
 
-      container.style.paddingTop = `${visualCenterPosition}px`;
+      container.style.paddingTop = `20px`; // 상단 여백 최소화
       container.style.paddingBottom = `${containerHeight - visualCenterPosition}px`;
     };
 
@@ -102,22 +161,35 @@ const UnifiedJourneyTemplate = () => {
 
   // 초기 렌더링 시 현재 진행 중인 카드 열기 + 스크롤
   useEffect(() => {
-    if (!hasInitialized.current && currentIndex !== -1) {
+    if (!hasInitialized.current && currentIndex !== -1 && scheduleItems.length > 0) {
       setExpandedIndex(currentIndex);
       hasInitialized.current = true;
 
-      // 현재 카드로 부드럽게 스크롤
+      // 현재 카드로 즉시 스크롤 (애니메이션 없이)
       setTimeout(() => {
         const currentCard = cardRefs.current[currentIndex];
-        if (currentCard && scrollContainerRef.current) {
-          currentCard.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center',
+        const container = scrollContainerRef.current;
+
+        if (currentCard && container) {
+          const cardRect = currentCard.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+
+          // 컨테이너 높이의 35% 지점에 카드 중앙이 오도록
+          const targetScrollTop =
+            container.scrollTop +
+            cardRect.top -
+            containerRect.top -
+            (containerRect.height * 0.35) +
+            (cardRect.height / 2);
+
+          container.scrollTo({
+            top: targetScrollTop,
+            behavior: 'auto' // 즉시 스크롤
           });
         }
-      }, 100);
+      }, 200);
     }
-  }, [currentIndex]);
+  }, [currentIndex, scheduleItems.length]);
 
   // 컨테이너 기반 스크롤 스타일 계산 - 유희왕 카드 덱 방식
   const [cardStyles, setCardStyles] = useState({});
@@ -240,7 +312,7 @@ const UnifiedJourneyTemplate = () => {
               // 카드 래퍼 - border와 shadow를 위한 충분한 여백
               <div
                 key={schedule.id}
-                className="flex items-center justify-center py-5 px-2"
+                className="flex items-center justify-center py-3 px-2"
                 style={{
                   scrollSnapAlign: 'center',
                   scrollSnapStop: 'normal',
@@ -264,7 +336,7 @@ const UnifiedJourneyTemplate = () => {
                 {/* 카드 헤더 */}
                 <button
                   onClick={() => toggleCard(index)}
-                  className={`w-full p-6 flex items-center gap-5 transition-all duration-300 ${
+                  className={`w-full p-8 flex items-center gap-5 transition-all duration-300 ${
                     isCurrent
                       ? 'bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 hover:from-blue-600 hover:via-blue-700 hover:to-blue-800'
                       : 'hover:bg-gray-50'
@@ -273,7 +345,7 @@ const UnifiedJourneyTemplate = () => {
                   {/* 상태 아이콘/번호 */}
                   <div className="relative flex-shrink-0">
                     <div
-                      className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl transition-all duration-500 ${
+                      className={`w-20 h-20 rounded-2xl flex items-center justify-center font-black text-3xl transition-all duration-500 ${
                         isCurrent
                           ? 'bg-emerald-400 text-white shadow-lg shadow-emerald-500/40 scale-110'
                           : isCompleted
@@ -282,7 +354,7 @@ const UnifiedJourneyTemplate = () => {
                       }`}
                     >
                       {isCompleted ? (
-                        <CheckCircleIcon className="w-10 h-10" />
+                        <CheckCircleIcon className="w-12 h-12" />
                       ) : (
                         <span>{index + 1}</span>
                       )}
@@ -295,18 +367,18 @@ const UnifiedJourneyTemplate = () => {
                   {/* 일정 정보 */}
                   <div className="flex-1 text-left">
                     <h3
-                      className={`text-2xl font-bold mb-1 ${
+                      className={`text-3xl font-bold mb-2 ${
                         isCurrent ? 'text-white' : isCompleted ? 'text-gray-700' : 'text-gray-900'
                       }`}
                     >
                       {schedule.examName}
                     </h3>
                     <div className="flex items-center gap-3">
-                      <div className={`flex items-center gap-1.5 ${
+                      <div className={`flex items-center gap-2 ${
                         isCurrent ? 'text-white/90' : 'text-gray-500'
                       }`}>
-                        <MapPinIcon className="w-4 h-4" />
-                        <span className="text-sm font-medium">{schedule.location}</span>
+                        <MapPinIcon className="w-5 h-5" />
+                        <span className="text-base font-medium">{schedule.location}</span>
                       </div>
                     </div>
                   </div>
@@ -314,17 +386,17 @@ const UnifiedJourneyTemplate = () => {
                   {/* 상태 뱃지 & 펼침 아이콘 */}
                   <div className="flex items-center gap-3">
                     {isCompleted && (
-                      <span className="px-4 py-2 bg-gray-200 text-gray-700 rounded-full text-sm font-bold">
+                      <span className="px-5 py-2.5 bg-gray-200 text-gray-700 rounded-full text-base font-bold">
                         완료
                       </span>
                     )}
                     {isCurrent && (
-                      <span className="px-4 py-2 bg-emerald-500 text-white rounded-full text-sm font-bold shadow-lg">
+                      <span className="px-5 py-2.5 bg-emerald-500 text-white rounded-full text-base font-bold shadow-lg">
                         진행 중
                       </span>
                     )}
                     <ChevronDownIcon
-                      className={`w-7 h-7 transition-transform duration-300 ${
+                      className={`w-8 h-8 transition-transform duration-300 ${
                         isExpanded ? 'rotate-180' : ''
                       } ${isCurrent ? 'text-white' : 'text-gray-400'}`}
                     />
@@ -342,62 +414,31 @@ const UnifiedJourneyTemplate = () => {
                       isCurrent ? 'border-white/20' : 'border-gray-200'
                     }`}
                   >
-                    <div className={`p-3 space-y-2`}>
-                      {/* 검사 정보 */}
-                      <div className="rounded-xl p-4 bg-white border border-gray-200">
-                        <div className="space-y-3">
-                          {/* 무엇을 하나요? */}
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                              <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                              </svg>
-                            </div>
-                            <div className="flex-1 flex items-center justify-between">
-                              <span className="text-base font-light text-gray-600">무엇을 하나요?</span>
-                              <span className="text-base font-semibold text-gray-900 text-right">{schedule.description || '건강 상태 확인 및 진단'}</span>
-                            </div>
-                          </div>
-
-                          {/* 얼마나 걸리나요? */}
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                              <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                            </div>
-                            <div className="flex-1 flex items-center justify-between">
-                              <span className="text-base font-light text-gray-600">얼마나 걸리나요?</span>
-                              <span className="text-base font-semibold text-gray-900 text-right">약 <span className="text-blue-600">{schedule.duration}분</span> 정도 소요</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
+                    <div className={`p-5 space-y-3`}>
                       {/* 현재 진행 중일 때만 위치 안내와 대기 정보 */}
                       {isCurrent && (
                         <>
                           {/* 1. 대기 정보 */}
                           {waitingInfo && (
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-3">
                               {/* 내 앞에 */}
-                              <div className="bg-white rounded-2xl p-3 border-2 border-amber-300 shadow-lg">
+                              <div className="bg-white rounded-2xl p-5 border-2 border-amber-300 shadow-lg">
                                 <div className="flex flex-col items-center justify-center">
-                                  <p className="text-gray-600 text-xs font-medium mb-1">내 앞에</p>
+                                  <p className="text-gray-600 text-sm font-medium mb-2">내 앞에</p>
                                   <p className="flex items-baseline">
-                                    <span className="text-orange-600 text-3xl font-black">{waitingInfo.peopleAhead}</span>
-                                    <span className="text-gray-600 text-sm font-bold ml-1">명</span>
+                                    <span className="text-orange-600 text-4xl font-black">{waitingInfo.peopleAhead}</span>
+                                    <span className="text-gray-600 text-base font-bold ml-1.5">명</span>
                                   </p>
                                 </div>
                               </div>
 
                               {/* 예상 대기 */}
-                              <div className="bg-white rounded-2xl p-3 border-2 border-amber-300 shadow-lg">
+                              <div className="bg-white rounded-2xl p-5 border-2 border-amber-300 shadow-lg">
                                 <div className="flex flex-col items-center justify-center">
-                                  <p className="text-gray-600 text-xs font-medium mb-1">예상 대기</p>
+                                  <p className="text-gray-600 text-sm font-medium mb-2">예상 대기</p>
                                   <p className="flex items-baseline">
-                                    <span className="text-orange-600 text-3xl font-black">{waitingInfo.estimatedTime}</span>
-                                    <span className="text-gray-600 text-sm font-bold ml-1">분</span>
+                                    <span className="text-orange-600 text-4xl font-black">{waitingInfo.estimatedTime}</span>
+                                    <span className="text-gray-600 text-base font-bold ml-1.5">분</span>
                                   </p>
                                 </div>
                               </div>
@@ -405,7 +446,7 @@ const UnifiedJourneyTemplate = () => {
                           )}
 
                           {/* 2. 지도 */}
-                          {locationInfo && (
+                          {(locationInfo || schedule.exam) && (
                             <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-lg">
                               {/* 헤더: 출발→도착 + 토글 버튼 */}
                               <div className="mb-3">
@@ -456,15 +497,16 @@ const UnifiedJourneyTemplate = () => {
                                   isMapExpanded ? 'max-h-[450px] opacity-100' : 'max-h-0 opacity-0'
                                 }`}
                               >
+                                {/* FormatATemplate의 지도 부분 그대로 */}
                                 <div className="bg-white rounded-xl overflow-hidden shadow-lg">
-                                  <div className="p-3">
+                                  <div className="p-6">
                                     <MapNavigator
-                                      mapId={locationInfo.mapId || 'main_1f'}
-                                      highlightRoom={locationInfo.room || ''}
-                                      facilityName={schedule.examName}
+                                      mapId={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
+                                      highlightRoom={locationInfo?.name || ''}
+                                      facilityName={locationInfo?.name || ''}
                                       multiFloor={false}
                                       startFloor="main_1f"
-                                      endFloor={locationInfo.mapId || 'main_2f'}
+                                      endFloor={locationInfo?.mapFile?.replace('.svg', '') || 'main_2f'}
                                       pathNodes={[]}
                                       pathEdges={[]}
                                     />
@@ -475,6 +517,69 @@ const UnifiedJourneyTemplate = () => {
                           )}
                         </>
                       )}
+
+                      {/* 검사 정보 - 토글 가능 */}
+                      <div className="bg-white rounded-2xl p-3 border border-gray-200 shadow-lg">
+                        {/* 헤더 */}
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="text-gray-900 font-bold text-base flex items-center gap-2">
+                            <svg className="w-5 h-5 text-gray-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            검사 설명
+                          </h4>
+                          <button
+                            onClick={() => setIsExamInfoExpanded(!isExamInfoExpanded)}
+                            className="text-sm text-blue-600 flex items-center gap-1 font-medium hover:text-blue-800 transition-colors"
+                          >
+                            <ChevronDownIcon
+                              className={`w-4 h-4 transition-transform duration-300 ${
+                                isExamInfoExpanded ? 'rotate-180' : ''
+                              }`}
+                            />
+                            {isExamInfoExpanded ? '접기' : '펼치기'}
+                          </button>
+                        </div>
+
+                        {/* 토글 가능한 내용 */}
+                        <div
+                          className={`overflow-hidden transition-all duration-500 ease-in-out ${
+                            isExamInfoExpanded ? 'max-h-[300px] opacity-100' : 'max-h-0 opacity-0'
+                          }`}
+                        >
+                          <div className="space-y-3 pt-2">
+                            {/* 검사 목적 */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                  </svg>
+                                </div>
+                                <span className="text-sm font-semibold text-gray-700">검사 목적</span>
+                              </div>
+                              <p className="text-base text-gray-900 leading-relaxed ml-8">
+                                {schedule.description || '건강 상태 확인 및 진단을 위한 검사입니다.'}
+                              </p>
+                            </div>
+
+                            {/* 소요 시간 */}
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                                  <svg className="w-4 h-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </div>
+                                <span className="text-sm font-semibold text-gray-700">소요 시간</span>
+                              </div>
+                              <p className="text-base text-gray-900 ml-8">
+                                약 <span className="font-bold text-blue-600">{schedule.duration}분</span> 소요
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
