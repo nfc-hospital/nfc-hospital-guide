@@ -5,15 +5,109 @@ import { saveRoute, getFacilityRoute } from '../api/facilityRoutes';
 
 const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
   const svgContainerRef = useRef(null);
-  const [nodes, setNodes] = useState([]);
-  const [edges, setEdges] = useState([]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectingFrom, setConnectingFrom] = useState(null);
   const [svgLoaded, setSvgLoaded] = useState(false);
-  const [selectedFacility, setSelectedFacility] = useState(facilityName || '');  // facilityName으로 초기화
+  const [selectedFacility, setSelectedFacility] = useState(facilityName || '');
   const [mapId, setMapId] = useState(propMapId);
-  const [manualMapSelection, setManualMapSelection] = useState(false); // 수동 지도 선택 모드
+  const [manualMapSelection, setManualMapSelection] = useState(false);
+
+  // 🆕 출발/도착 시설 선택
+  const [startFacility, setStartFacility] = useState('');
+  const [endFacility, setEndFacility] = useState('');
+
+  // 🆕 시설 위치 설정 모드
+  const [facilityPositionMode, setFacilityPositionMode] = useState(false);
+  const [selectedFacilityForPosition, setSelectedFacilityForPosition] = useState('');
+  const [clickedFacilityX, setClickedFacilityX] = useState(null);
+  const [clickedFacilityY, setClickedFacilityY] = useState(null);
+
+  // 🔄 맵별로 독립적인 데이터 관리 (multi-floor 지원)
+  const [mapData, setMapData] = useState({
+    // 각 mapId별로 별도의 노드/엣지 저장
+    // 'main_1f': {
+    //   nodes: [],
+    //   edges: [],
+    //   startNode: null,
+    //   endNode: null,
+    //   nodeTypes: {},
+    //   nodeTransitions: {},
+    //   nodeMetadata: {}  // 🆕 추가 메타데이터 (시설 매핑 등)
+    // }
+  });
+
+  // 현재 선택된 맵의 데이터만 추출 (computed values)
+  const currentMapData = mapData[mapId] || {
+    nodes: [],
+    edges: [],
+    startNode: null,
+    endNode: null,
+    nodeTypes: {},
+    nodeTransitions: {},
+    nodeMetadata: {}  // 🆕
+  };
+
+  const nodes = currentMapData.nodes;
+  const edges = currentMapData.edges;
+  const startNode = currentMapData.startNode;
+  const endNode = currentMapData.endNode;
+  const nodeTypes = currentMapData.nodeTypes;
+  const nodeTransitions = currentMapData.nodeTransitions;
+  const nodeMetadata = currentMapData.nodeMetadata;
+
+  // 🔧 현재 맵의 데이터를 업데이트하는 헬퍼 함수들
+  const updateCurrentMap = (updates) => {
+    setMapData(prev => ({
+      ...prev,
+      [mapId]: {
+        nodes: [],
+        edges: [],
+        startNode: null,
+        endNode: null,
+        nodeTypes: {},
+        nodeTransitions: {},
+        nodeMetadata: {},
+        ...prev[mapId],  // 기존 데이터 덮어쓰기
+        ...updates       // 새 데이터 덮어쓰기
+      }
+    }));
+  };
+
+  const setNodes = (nodesOrUpdater) => {
+    const newNodes = typeof nodesOrUpdater === 'function'
+      ? nodesOrUpdater(nodes)
+      : nodesOrUpdater;
+    updateCurrentMap({ nodes: newNodes });
+  };
+
+  const setEdges = (edgesOrUpdater) => {
+    const newEdges = typeof edgesOrUpdater === 'function'
+      ? edgesOrUpdater(edges)
+      : edgesOrUpdater;
+    updateCurrentMap({ edges: newEdges });
+  };
+
+  const setStartNode = (value) => updateCurrentMap({ startNode: value });
+  const setEndNode = (value) => updateCurrentMap({ endNode: value });
+  const setNodeTypes = (typesOrUpdater) => {
+    const newTypes = typeof typesOrUpdater === 'function'
+      ? typesOrUpdater(nodeTypes)
+      : typesOrUpdater;
+    updateCurrentMap({ nodeTypes: newTypes });
+  };
+  const setNodeTransitions = (transitionsOrUpdater) => {
+    const newTransitions = typeof transitionsOrUpdater === 'function'
+      ? transitionsOrUpdater(nodeTransitions)
+      : transitionsOrUpdater;
+    updateCurrentMap({ nodeTransitions: newTransitions });
+  };
+  const setNodeMetadata = (metadataOrUpdater) => {
+    const newMetadata = typeof metadataOrUpdater === 'function'
+      ? metadataOrUpdater(nodeMetadata)
+      : metadataOrUpdater;
+    updateCurrentMap({ nodeMetadata: newMetadata });
+  };
 
   // ✅ state와 동기화될 ref를 생성
   const stateRef = useRef({
@@ -22,6 +116,10 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
     isConnecting,
     connectingFrom,
     nodeIdCounter: 1,
+    startNode,
+    endNode,
+    nodeTypes,
+    nodeTransitions,
   });
 
   // ✅ state가 변경될 때마다 ref 업데이트
@@ -32,8 +130,12 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
       isConnecting,
       connectingFrom,
       nodeIdCounter: nodes.length > 0 ? Math.max(...nodes.map(n => parseInt(n.id.replace('node-', '') || 0)), 0) + 1 : 1,
+      startNode,
+      endNode,
+      nodeTypes,
+      nodeTransitions,
     };
-  }, [nodes, edges, isConnecting, connectingFrom]);
+  }, [nodes, edges, isConnecting, connectingFrom, startNode, endNode, nodeTypes, nodeTransitions]);
 
   // facilityName prop 변경 시 selectedFacility 업데이트
   useEffect(() => {
@@ -51,51 +153,62 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
     }
   }, [propMapId]);
 
-  // 시설 선택시 지도 변경 및 데이터 초기화
+  // 시설 선택시 지도 변경 및 데이터 로드
   useEffect(() => {
     console.log('시설 변경:', selectedFacility);
-    
+
     // 먼저 모든 상태 초기화
-    setNodes([]);
-    setEdges([]);
+    setMapData({});
     setSelectedNode(null);
     setIsConnecting(false);
     setConnectingFrom(null);
-    
+
     if (selectedFacility && facilityRoutes[selectedFacility]) {
       const facility = facilityRoutes[selectedFacility];
       console.log('선택된 시설 정보:', facility);
-      
+
       // 수동 지도 선택이 아닌 경우에만 자동으로 지도 변경
       if (!manualMapSelection) {
         console.log('지도 ID 변경:', facility.mapId);
         setMapId(facility.mapId);
       }
-      
+
       // 저장된 경로가 있으면 불러오기 (비동기)
       const loadSavedRoute = async () => {
         const savedRoute = await getFacilityRoute(selectedFacility);
-        if (savedRoute && savedRoute.nodes && savedRoute.nodes.length > 0) {
-          console.log('저장된 노드 불러오기:', savedRoute.nodes.length, '개');
-          
-          // 중복 제거를 위해 ID 기준으로 유니크한 노드만 저장
+
+        // 🔄 Multi-floor 데이터 구조로 변환
+        if (savedRoute && savedRoute.maps) {
+          // 새 형식: 각 맵별로 저장된 데이터
+          console.log('✅ Multi-floor 경로 데이터 로드:', Object.keys(savedRoute.maps));
+          setMapData(savedRoute.maps);
+        } else if (savedRoute && savedRoute.nodes && savedRoute.nodes.length > 0) {
+          // 🔄 구 형식 호환: 단일 맵 데이터를 현재 맵에 할당
+          console.log('⚠️ 구 형식 데이터 감지 - 현재 맵으로 변환');
+
           const uniqueNodes = [];
           const seenIds = new Set();
-          
           savedRoute.nodes.forEach(node => {
             if (!seenIds.has(node.id)) {
               seenIds.add(node.id);
               uniqueNodes.push(node);
             }
           });
-          
-          setNodes(uniqueNodes);
-          setEdges(savedRoute.edges || []);
-          
-          // nodeIdCounter는 stateRef에서 자동 계산됨
+
+          const currentMapId = savedRoute.map_id || facility.mapId || 'main_1f';
+          setMapData({
+            [currentMapId]: {
+              nodes: uniqueNodes,
+              edges: savedRoute.edges || [],
+              startNode: savedRoute.startNode || null,
+              endNode: savedRoute.endNode || null,
+              nodeTypes: savedRoute.nodeTypes || {},
+              nodeTransitions: savedRoute.nodeTransitions || {}
+            }
+          });
         }
       };
-      
+
       loadSavedRoute();
     }
   }, [selectedFacility]);
@@ -177,102 +290,81 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
     }
   }, [mapId]);
 
-  // ✅ 모든 클릭을 처리하는 단일 핸들러
-  const handleContainerClick = useCallback((e) => {
+  // ✅ SVG 클릭 핸들러 (노드 추가 및 선택)
+  const handleSvgClick = useCallback((e) => {
+    console.log('🖱️ SVG 클릭 이벤트 발생!', e.target.tagName);
+
     const svg = svgContainerRef.current?.querySelector('svg');
-    if (!svg) return;
-
-    // ref에서 항상 최신 상태를 가져옴
-    const { nodes, isConnecting, connectingFrom, nodeIdCounter } = stateRef.current;
-
-    const pt = svg.createSVGPoint();
-    pt.x = e.clientX;
-    pt.y = e.clientY;
-    const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
-
-    // 클릭된 노드가 있는지 확인
-    let clickedNode = null;
-    for (const node of nodes) {
-      const dist = Math.sqrt(Math.pow(node.x - svgP.x, 2) + Math.pow(node.y - svgP.y, 2));
-      if (dist < 15) {
-        clickedNode = node;
-        break;
-      }
-    }
-
-    if (clickedNode) {
-      // 노드 클릭 시
-      if (isConnecting && connectingFrom) {
-        if (connectingFrom.id !== clickedNode.id) {
-          const newEdge = [connectingFrom.id, clickedNode.id];
-          const edgeExists = stateRef.current.edges.some(edge =>
-            (edge[0] === newEdge[0] && edge[1] === newEdge[1]) ||
-            (edge[0] === newEdge[1] && edge[1] === newEdge[0])
-          );
-          if (!edgeExists) {
-            setEdges(prev => [...prev, newEdge]);
-          }
-        }
-        setIsConnecting(false);
-        setConnectingFrom(null);
-      } else {
-        setSelectedNode(clickedNode);
-      }
-    } else if (!isConnecting) {
-      // 빈 공간 클릭 시 (노드 추가)
-      const newNode = {
-        id: `node-${nodeIdCounter}`,
-        x: Math.round(svgP.x),
-        y: Math.round(svgP.y),
-        name: `노드 ${nodeIdCounter}`
-      };
-      setNodes(prev => [...prev, newNode]);
-    }
-  }, []);
-
-  const handleSvgClick = (e) => {
-    console.log('🖱️ SVG 클릭 이벤트 발생!', e.target);
-    
-    if (!svgContainerRef.current) {
-      console.error('svgContainerRef.current가 없습니다');
-      return;
-    }
-    
-    const svg = svgContainerRef.current.querySelector('svg');
     if (!svg) {
       console.error('SVG 요소를 찾을 수 없습니다');
       return;
     }
-    
+
     try {
       const pt = svg.createSVGPoint();
       pt.x = e.clientX;
       pt.y = e.clientY;
-      
-      // 스크린 좌표를 SVG 좌표로 변환
       const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
+
       console.log('📍 클릭 좌표:', { x: Math.round(svgP.x), y: Math.round(svgP.y) }, '현재 맵:', mapId);
-      
-      // 기존 노드 클릭 확인
-      const clickedNode = nodes.find(node => {
+
+      // 🆕 시설 위치 설정 모드일 경우
+      if (facilityPositionMode) {
+        setClickedFacilityX(Math.round(svgP.x));
+        setClickedFacilityY(Math.round(svgP.y));
+        console.log('📍 시설 위치 설정:', { x: Math.round(svgP.x), y: Math.round(svgP.y) });
+        return; // 노드 추가 로직 스킵
+      }
+
+      // ref에서 항상 최신 상태를 가져옴
+      const { nodes, isConnecting, connectingFrom, nodeIdCounter } = stateRef.current;
+
+      // 클릭된 노드가 있는지 확인
+      let clickedNode = null;
+      for (const node of nodes) {
         const dist = Math.sqrt(Math.pow(node.x - svgP.x, 2) + Math.pow(node.y - svgP.y, 2));
-        return dist < 15;
-      });
-      
+        if (dist < 15) {
+          clickedNode = node;
+          break;
+        }
+      }
+
       if (clickedNode) {
         console.log('🔵 기존 노드 클릭:', clickedNode.id);
-        handleNodeClick(clickedNode);
+        // 노드 클릭 시
+        if (isConnecting && connectingFrom) {
+          if (connectingFrom.id !== clickedNode.id) {
+            const newEdge = [connectingFrom.id, clickedNode.id];
+            const edgeExists = stateRef.current.edges.some(edge =>
+              (edge[0] === newEdge[0] && edge[1] === newEdge[1]) ||
+              (edge[0] === newEdge[1] && edge[1] === newEdge[0])
+            );
+            if (!edgeExists) {
+              setEdges(prev => [...prev, newEdge]);
+            }
+          }
+          setIsConnecting(false);
+          setConnectingFrom(null);
+        } else {
+          setSelectedNode(clickedNode);
+        }
       } else if (!isConnecting) {
-        // 빈 공간 클릭시 노드 추가
-        console.log('➕ 새 노드 추가 시도:', { x: Math.round(svgP.x), y: Math.round(svgP.y) });
-        addNode(svgP.x, svgP.y);
+        // 빈 공간 클릭 시 (노드 추가)
+        console.log('➕ 새 노드 추가:', { x: Math.round(svgP.x), y: Math.round(svgP.y) });
+        const newNode = {
+          id: `node-${nodeIdCounter}`,
+          x: Math.round(svgP.x),
+          y: Math.round(svgP.y),
+          name: `노드 ${nodeIdCounter}`
+        };
+        setNodes(prev => [...prev, newNode]);
       } else {
         console.log('🔗 연결 모드 중 - 다른 노드를 클릭하세요');
       }
     } catch (error) {
       console.error('❌ 클릭 처리 중 오류:', error);
     }
-  };
+  }, [mapId, facilityPositionMode]);
 
   const addNode = (x, y) => {
     // stateRef에서 현재 nodeIdCounter 가져오기
@@ -323,6 +415,22 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
     setNodes(nodes.filter(n => n.id !== nodeId));
     setEdges(edges.filter(edge => edge[0] !== nodeId && edge[1] !== nodeId));
     setSelectedNode(null);
+
+    // 🆕 출발지/도착지가 삭제된 노드였다면 초기화
+    if (startNode === nodeId) setStartNode(null);
+    if (endNode === nodeId) setEndNode(null);
+
+    // 🆕 노드 타입 정보도 삭제
+    setNodeTypes(prev => {
+      const updated = { ...prev };
+      delete updated[nodeId];
+      return updated;
+    });
+    setNodeTransitions(prev => {
+      const updated = { ...prev };
+      delete updated[nodeId];
+      return updated;
+    });
   };
 
   const startConnecting = (node) => {
@@ -410,99 +518,164 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
     console.log('=== 자동 정렬 완료 ===');
   };
 
-  const exportNodes = async () => {
-    if (!selectedFacility) {
+  // 🆕 시설 위치 저장 함수
+  const saveFacilityPosition = () => {
+    if (!selectedFacilityForPosition) {
       alert('시설을 선택해주세요!');
       return;
     }
-    
-    if (nodes.length === 0) {
-      alert('노드를 추가해주세요!');
+
+    if (clickedFacilityX === null || clickedFacilityY === null) {
+      alert('지도에서 위치를 클릭해주세요!');
       return;
     }
 
-    // 경로를 올바른 순서로 정렬하기
-    const sortedEdges = [];
-    if (edges.length > 0) {
-      const adj = new Map(); // 각 노드에 연결된 다른 노드들을 저장
-      nodes.forEach(node => adj.set(node.id, []));
-      edges.forEach(([u, v]) => {
-        adj.get(u).push(v);
-        adj.get(v).push(u);
-      });
+    // localStorage에서 기존 데이터 로드
+    const routes = JSON.parse(localStorage.getItem('facilityRoutes') || '{}');
 
-      // 경로의 시작점 찾기 (연결이 하나뿐인 노드)
-      let startNode = nodes[0].id; // 기본 시작점
-      for (const [nodeId, neighbors] of adj.entries()) {
-        if (neighbors.length === 1) {
-          startNode = nodeId;
-          break;
-        }
-      }
-
-      // 시작점부터 경로 탐색하여 순서대로 정렬된 엣지 생성
-      const path = [];
-      const visited = new Set();
-      let currentNode = startNode;
-
-      while (path.length < nodes.length) {
-        path.push(currentNode);
-        visited.add(currentNode);
-        
-        const neighbors = adj.get(currentNode);
-        const nextNode = neighbors.find(neighbor => !visited.has(neighbor));
-
-        if (nextNode) {
-          sortedEdges.push([currentNode, nextNode]);
-          currentNode = nextNode;
-        } else {
-          break; // 경로의 끝
-        }
-      }
+    // 시설 좌표 업데이트
+    if (!routes[selectedFacilityForPosition]) {
+      routes[selectedFacilityForPosition] = {
+        nodes: [],
+        edges: [],
+        mapId: mapId,
+        svgElementId: facilityRoutes[selectedFacilityForPosition]?.svgElementId || ''
+      };
     }
-    
-    // 저장 및 코드 생성 시 정렬된 'sortedEdges'를 사용
-    const success = await saveRoute(selectedFacility, nodes, sortedEdges.length > 0 ? sortedEdges : edges, mapId);
-    
+
+    routes[selectedFacilityForPosition] = {
+      ...routes[selectedFacilityForPosition],
+      x_coord: clickedFacilityX,
+      y_coord: clickedFacilityY,
+      mapId: mapId,
+      lastUpdated: new Date().toISOString()
+    };
+
+    localStorage.setItem('facilityRoutes', JSON.stringify(routes));
+
+    // facilityRoutes 객체도 업데이트 (메모리 내 데이터)
+    if (facilityRoutes[selectedFacilityForPosition]) {
+      facilityRoutes[selectedFacilityForPosition].x_coord = clickedFacilityX;
+      facilityRoutes[selectedFacilityForPosition].y_coord = clickedFacilityY;
+      facilityRoutes[selectedFacilityForPosition].mapId = mapId;
+    }
+
+    alert(`✅ ${facilityRoutes[selectedFacilityForPosition]?.description || selectedFacilityForPosition} 위치 저장 완료!\n\n좌표: (${clickedFacilityX}, ${clickedFacilityY})\n지도: ${availableMaps.find(m => m.id === mapId)?.name}`);
+
+    // 모드 종료
+    setFacilityPositionMode(false);
+    setClickedFacilityX(null);
+    setClickedFacilityY(null);
+  };
+
+  const exportNodes = async () => {
+    // 🆕 출발/도착 시설 기반 저장
+    if (!startFacility || !endFacility) {
+      alert('출발 시설과 도착 시설을 선택해주세요!');
+      return;
+    }
+
+    // 최소 하나의 맵에라도 노드가 있는지 확인
+    const hasNodes = Object.values(mapData).some(data => data.nodes && data.nodes.length > 0);
+    if (!hasNodes) {
+      alert('최소 하나의 맵에 노드를 추가해주세요!');
+      return;
+    }
+
+    // 🔄 모든 맵의 데이터를 정리하고 저장
+    const processedMapData = {};
+
+    for (const [mapKey, data] of Object.entries(mapData)) {
+      if (!data.nodes || data.nodes.length === 0) continue; // 빈 맵은 제외
+
+      // 경로를 올바른 순서로 정렬하기
+      const sortedEdges = [];
+      if (data.edges && data.edges.length > 0) {
+        const adj = new Map();
+        data.nodes.forEach(node => adj.set(node.id, []));
+        data.edges.forEach(([u, v]) => {
+          adj.get(u).push(v);
+          adj.get(v).push(u);
+        });
+
+        let startNodeId = data.nodes[0].id;
+        for (const [nodeId, neighbors] of adj.entries()) {
+          if (neighbors.length === 1) {
+            startNodeId = nodeId;
+            break;
+          }
+        }
+
+        const path = [];
+        const visited = new Set();
+        let currentNode = startNodeId;
+
+        while (path.length < data.nodes.length) {
+          path.push(currentNode);
+          visited.add(currentNode);
+
+          const neighbors = adj.get(currentNode);
+          const nextNode = neighbors?.find(neighbor => !visited.has(neighbor));
+
+          if (nextNode) {
+            sortedEdges.push([currentNode, nextNode]);
+            currentNode = nextNode;
+          } else {
+            break;
+          }
+        }
+      }
+
+      processedMapData[mapKey] = {
+        nodes: data.nodes,
+        edges: sortedEdges.length > 0 ? sortedEdges : (data.edges || []),
+        startNode: data.startNode || null,
+        endNode: data.endNode || null,
+        nodeTypes: data.nodeTypes || {},
+        nodeTransitions: data.nodeTransitions || {}
+      };
+    }
+
+    // 🆕 경로명 생성 (출발-도착 쌍)
+    const routeName = `route_${startFacility}_to_${endFacility}`;
+    const routeDisplayName = `${facilityRoutes[startFacility]?.description || startFacility} → ${facilityRoutes[endFacility]?.description || endFacility}`;
+
+    // 🔄 Multi-floor 형식으로 저장
+    const routeData = {
+      routeName: routeName,
+      startFacility: startFacility,
+      endFacility: endFacility,
+      maps: processedMapData,  // 각 맵별 데이터
+      currentMap: mapId,       // 현재 편집 중인 맵
+      createdAt: new Date().toISOString()
+    };
+
+    const success = await saveRoute(routeName, null, null, mapId, routeData);
+
     if (success) {
       // MapNavigator 컴포넌트용 코드 생성
       console.clear();
-      console.log(`=== ${selectedFacility} 경로 코드 생성 완료 ===`);
-      console.log('\n// MapNavigator.jsx에 다음 코드를 추가하세요:');
-      console.log(`\n// ${selectedFacility} 경로 데이터`);
-      console.log(`const ${selectedFacility.replace(/[\s-]/g, '')}Nodes = [`);
-      nodes.forEach(node => {
-        console.log(`  { id: '${node.id}', x: ${node.x}, y: ${node.y}, name: '${node.name}' },`);
-      });
-      console.log('];');
-      console.log(`\nconst ${selectedFacility.replace(/[\s-]/g, '')}Edges = [`);
-      // 정렬된 엣지로 콘솔 출력
-      (sortedEdges.length > 0 ? sortedEdges : edges).forEach(edge => {
-        console.log(`  ['${edge[0]}', '${edge[1]}'],`);
-      });
-      console.log('];');
-      
+      console.log(`=== ${routeDisplayName} 경로 코드 생성 완료 ===`);
+      console.log('\n// Multi-floor 경로 데이터:');
+      console.log(`const ${routeName} = {`);
+      console.log(`  startFacility: "${startFacility}",`);
+      console.log(`  endFacility: "${endFacility}",`);
+      console.log(`  maps: ${JSON.stringify(processedMapData, null, 2)}`);
+      console.log('};');
+
       // 파일로도 저장
-      const exportData = {
-        facility: selectedFacility,
-        mapId: mapId,
-        nodes: nodes,
-        edges: sortedEdges.length > 0 ? sortedEdges : edges, // 정렬된 엣지로 저장
-        generatedCode: `const ${selectedFacility.replace(/[\s-]/g, '')}Nodes = ${JSON.stringify(nodes, null, 2)};\nconst ${selectedFacility.replace(/[\s-]/g, '')}Edges = ${JSON.stringify(sortedEdges.length > 0 ? sortedEdges : edges, null, 2)};`
-      };
-      
-      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataStr = JSON.stringify(routeData, null, 2);
       const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-      const exportFileDefaultName = `${selectedFacility}_route.json`;
-      
+      const exportFileDefaultName = `${routeName}.json`;
+
       const linkElement = document.createElement('a');
       linkElement.setAttribute('href', dataUri);
       linkElement.setAttribute('download', exportFileDefaultName);
       linkElement.click();
-      
-      alert(`✅ ${selectedFacility} 경로가 저장되었습니다!\n\n1. 파일 다운로드: ${exportFileDefaultName}\n2. 브라우저 저장소에 저장됨\n3. 콘솔에서 코드 확인 가능\n\n이제 PublicHome에서 이 경로를 사용할 수 있습니다.`);
+
+      alert(`✅ ${routeDisplayName} 경로가 저장되었습니다!\n\n1. 파일 다운로드: ${exportFileDefaultName}\n2. localStorage 키: ${routeName}\n3. 콘솔에서 코드 확인 가능\n\n저장된 맵 개수: ${Object.keys(processedMapData).length}개`);
     } else {
-      alert('저장 실패: 시설 정보를 찾을 수 없습니다.');
+      alert('저장 실패: 경로 정보를 확인해주세요.');
     }
   };
 
@@ -511,25 +684,135 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
       setNodes([]);
       setEdges([]);
       setSelectedNode(null);
+      setStartNode(null);
+      setEndNode(null);
+      setNodeTypes({});
+      setNodeTransitions({});
     }
   };
 
   useEffect(() => {
     if (!svgLoaded || !svgContainerRef.current) return;
-    
+
     const svg = svgContainerRef.current.querySelector('svg');
     if (!svg) return;
-    
+
     const existingGroup = svg.querySelector('#editor-nodes');
     if (existingGroup) {
       existingGroup.remove();
     }
-    
+
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('id', 'editor-nodes');
     // pointer-events를 none으로 설정하여 클릭 이벤트가 SVG로 전달되도록 함
     g.style.pointerEvents = 'none';
-    
+
+    // 🆕 출발 시설 마커 표시
+    if (startFacility && facilityRoutes[startFacility]) {
+      const facility = facilityRoutes[startFacility];
+      if (facility.mapId === mapId && facility.x_coord && facility.y_coord) {
+        const startMarker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        startMarker.setAttribute('cx', facility.x_coord);
+        startMarker.setAttribute('cy', facility.y_coord);
+        startMarker.setAttribute('r', '18');
+        startMarker.setAttribute('fill', '#22c55e');
+        startMarker.setAttribute('stroke', '#ffffff');
+        startMarker.setAttribute('stroke-width', '4');
+        startMarker.setAttribute('opacity', '0.8');
+
+        const startLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        startLabel.setAttribute('x', facility.x_coord);
+        startLabel.setAttribute('y', facility.y_coord - 28);
+        startLabel.setAttribute('text-anchor', 'middle');
+        startLabel.setAttribute('font-size', '13');
+        startLabel.setAttribute('font-weight', 'bold');
+        startLabel.setAttribute('fill', '#166534');
+        startLabel.textContent = '🟢 출발: ' + (facility.description || startFacility);
+
+        g.appendChild(startMarker);
+        g.appendChild(startLabel);
+      }
+    }
+
+    // 🆕 도착 시설 마커 표시
+    if (endFacility && facilityRoutes[endFacility]) {
+      const facility = facilityRoutes[endFacility];
+      if (facility.mapId === mapId && facility.x_coord && facility.y_coord) {
+        const endMarker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        endMarker.setAttribute('cx', facility.x_coord);
+        endMarker.setAttribute('cy', facility.y_coord);
+        endMarker.setAttribute('r', '18');
+        endMarker.setAttribute('fill', '#ef4444');
+        endMarker.setAttribute('stroke', '#ffffff');
+        endMarker.setAttribute('stroke-width', '4');
+        endMarker.setAttribute('opacity', '0.8');
+
+        const endLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        endLabel.setAttribute('x', facility.x_coord);
+        endLabel.setAttribute('y', facility.y_coord - 28);
+        endLabel.setAttribute('text-anchor', 'middle');
+        endLabel.setAttribute('font-size', '13');
+        endLabel.setAttribute('font-weight', 'bold');
+        endLabel.setAttribute('fill', '#991b1b');
+        endLabel.textContent = '🔴 도착: ' + (facility.description || endFacility);
+
+        g.appendChild(endMarker);
+        g.appendChild(endLabel);
+      }
+    }
+
+    // 🆕 시설 위치 설정 모드 마커 표시
+    if (facilityPositionMode && selectedFacilityForPosition) {
+      const facility = facilityRoutes[selectedFacilityForPosition];
+
+      // 현재 시설 위치 마커 (파란색) - 기존 좌표가 있는 경우
+      if (facility?.x_coord && facility?.y_coord && facility.mapId === mapId) {
+        const currentCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        currentCircle.setAttribute('cx', facility.x_coord);
+        currentCircle.setAttribute('cy', facility.y_coord);
+        currentCircle.setAttribute('r', '12');
+        currentCircle.setAttribute('fill', '#3b82f6');
+        currentCircle.setAttribute('stroke', '#ffffff');
+        currentCircle.setAttribute('stroke-width', '3');
+        currentCircle.setAttribute('opacity', '0.7');
+
+        const currentText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        currentText.setAttribute('x', facility.x_coord);
+        currentText.setAttribute('y', facility.y_coord - 20);
+        currentText.setAttribute('text-anchor', 'middle');
+        currentText.setAttribute('font-size', '12');
+        currentText.setAttribute('font-weight', 'bold');
+        currentText.setAttribute('fill', '#1e40af');
+        currentText.textContent = '현재 위치';
+
+        g.appendChild(currentCircle);
+        g.appendChild(currentText);
+      }
+
+      // 클릭한 새 위치 마커 (빨간색)
+      if (clickedFacilityX !== null && clickedFacilityY !== null) {
+        const clickedCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        clickedCircle.setAttribute('cx', clickedFacilityX);
+        clickedCircle.setAttribute('cy', clickedFacilityY);
+        clickedCircle.setAttribute('r', '15');
+        clickedCircle.setAttribute('fill', '#ef4444');
+        clickedCircle.setAttribute('stroke', '#ffffff');
+        clickedCircle.setAttribute('stroke-width', '4');
+
+        const clickedText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        clickedText.setAttribute('x', clickedFacilityX);
+        clickedText.setAttribute('y', clickedFacilityY - 25);
+        clickedText.setAttribute('text-anchor', 'middle');
+        clickedText.setAttribute('font-size', '14');
+        clickedText.setAttribute('font-weight', 'bold');
+        clickedText.setAttribute('fill', '#dc2626');
+        clickedText.textContent = '새 위치';
+
+        g.appendChild(clickedCircle);
+        g.appendChild(clickedText);
+      }
+    }
+
     edges.forEach(([fromId, toId]) => {
       const fromNode = nodes.find(n => n.id === fromId);
       const toNode = nodes.find(n => n.id === toId);
@@ -552,24 +835,41 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
       const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       nodeGroup.setAttribute('class', 'node-group');
       nodeGroup.style.cursor = 'pointer';
-      
+
+      // 🆕 노드 색상 결정 (출발지/도착지/선택된 노드/일반 노드/맵전환 노드)
+      let fillColor = '#3b82f6'; // 기본 파란색 (일반 노드)
+      let strokeColor = '#ffffff';
+      let radius = 10;
+      let label = node.id.replace('node-', '');
+
+      if (node.id === startNode) {
+        fillColor = '#22c55e'; // 녹색 (출발지)
+        label = '🟢 ' + label;
+        radius = 12;
+      } else if (node.id === endNode) {
+        fillColor = '#ef4444'; // 빨간색 (도착지)
+        label = '🔴 ' + label;
+        radius = 12;
+      } else if (nodeTypes[node.id] === 'map_transition') {
+        fillColor = '#a855f7'; // 보라색 (맵 전환 노드)
+        label = '🟣 ' + label;
+      } else if (selectedNode?.id === node.id) {
+        fillColor = '#f59e0b'; // 주황색 (선택된 노드)
+        strokeColor = '#fbbf24';
+      }
+
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       circle.setAttribute('cx', node.x);
       circle.setAttribute('cy', node.y);
-      circle.setAttribute('r', '10');
-      circle.setAttribute('fill', selectedNode?.id === node.id ? '#ef4444' : '#3b82f6');
-      circle.setAttribute('stroke', '#ffffff');
+      circle.setAttribute('r', radius.toString());
+      circle.setAttribute('fill', fillColor);
+      circle.setAttribute('stroke', strokeColor);
       circle.setAttribute('stroke-width', '3');
-      circle.style.pointerEvents = 'auto'; // 노드는 클릭 가능하도록 설정
+      // 🔧 pointer-events를 'none'으로 설정하여 클릭 이벤트가 SVG로 전달되도록 함
+      circle.style.pointerEvents = 'none';
       circle.style.cursor = 'pointer';
-      
-      // 노드 클릭 이벤트 직접 등록
-      circle.addEventListener('click', (e) => {
-        e.stopPropagation(); // SVG 클릭 이벤트 전파 방지
-        handleNodeClick(node);
-      });
-      
-      // 노드 우클릭으로 삭제
+
+      // 노드 우클릭으로 삭제만 직접 등록
       circle.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -577,28 +877,169 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
           deleteNode(node.id);
         }
       });
-      
+
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.setAttribute('x', node.x);
-      text.setAttribute('y', node.y - 15);
+      text.setAttribute('y', node.y - (radius + 8));
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('font-size', '12');
       text.setAttribute('font-weight', 'bold');
       text.setAttribute('fill', '#1e40af');
       text.setAttribute('pointer-events', 'none'); // 텍스트는 클릭 이벤트 무시
-      text.textContent = node.id.replace('node-', '');
-      
+      text.textContent = label;
+
       nodeGroup.appendChild(circle);
       nodeGroup.appendChild(text);
       g.appendChild(nodeGroup);
     });
     
     svg.appendChild(g);
-  }, [nodes, edges, selectedNode, svgLoaded]);
+  }, [nodes, edges, selectedNode, svgLoaded, startNode, endNode, nodeTypes, startFacility, endFacility, mapId, facilityPositionMode, selectedFacilityForPosition, clickedFacilityX, clickedFacilityY]);
 
   return (
     <div className="w-full h-screen flex flex-col bg-gray-100">
+      {/* 🆕 출발지/도착지 표시 바 */}
+      {(startNode || endNode) && (
+        <div className="bg-gradient-to-r from-green-50 to-red-50 border-b border-gray-200 px-4 py-2">
+          <div className="flex items-center justify-center gap-6 text-sm font-medium">
+            {startNode && (
+              <div className="flex items-center gap-2">
+                <span className="text-green-700">🟢 출발지:</span>
+                <span className="text-green-900 font-bold">{startNode}</span>
+                {nodes.find(n => n.id === startNode) && (
+                  <span className="text-green-600">({nodes.find(n => n.id === startNode)?.name})</span>
+                )}
+                <button
+                  onClick={() => setStartNode(null)}
+                  className="ml-2 text-xs text-red-600 hover:text-red-800"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            {endNode && (
+              <div className="flex items-center gap-2">
+                <span className="text-red-700">🔴 도착지:</span>
+                <span className="text-red-900 font-bold">{endNode}</span>
+                {nodes.find(n => n.id === endNode) && (
+                  <span className="text-red-600">({nodes.find(n => n.id === endNode)?.name})</span>
+                )}
+                <button
+                  onClick={() => setEndNode(null)}
+                  className="ml-2 text-xs text-red-600 hover:text-red-800"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border-b p-4 shadow-sm">
+        {/* 🆕 출발/도착 시설 선택 바 */}
+        <div className="max-w-7xl mx-auto mb-3 pb-3 border-b">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-gray-700">경로 설정:</span>
+
+            {/* 출발 시설 */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-600">🟢 출발</span>
+              <select
+                value={startFacility}
+                onChange={(e) => {
+                  setStartFacility(e.target.value);
+                  // 출발 시설의 맵으로 자동 전환
+                  if (e.target.value && facilityRoutes[e.target.value]) {
+                    setMapId(facilityRoutes[e.target.value].mapId);
+                  }
+                }}
+                className="px-3 py-1.5 border rounded-lg text-sm bg-white"
+              >
+                <option value="">선택...</option>
+                <optgroup label="🏥 진료과">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => !name.startsWith('시연_') && !name.startsWith('진료과_구역_') &&
+                            !name.startsWith('네비게이션_노드_') && !name.startsWith('검사_') &&
+                            !name.startsWith('편의_') && name.includes('과'))
+                    .map(name => (
+                      <option key={name} value={name}>{facilityRoutes[name].description || name}</option>
+                    ))}
+                </optgroup>
+                <optgroup label="🔬 검사실">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('검사_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('검사_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="🏪 편의시설">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('편의_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('편의_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+              </select>
+            </div>
+
+            <span className="text-gray-400">→</span>
+
+            {/* 도착 시설 */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-600">🔴 도착</span>
+              <select
+                value={endFacility}
+                onChange={(e) => setEndFacility(e.target.value)}
+                className="px-3 py-1.5 border rounded-lg text-sm bg-white"
+              >
+                <option value="">선택...</option>
+                <optgroup label="🏥 진료과">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => !name.startsWith('시연_') && !name.startsWith('진료과_구역_') &&
+                            !name.startsWith('네비게이션_노드_') && !name.startsWith('검사_') &&
+                            !name.startsWith('편의_') && name.includes('과'))
+                    .map(name => (
+                      <option key={name} value={name}>{facilityRoutes[name].description || name}</option>
+                    ))}
+                </optgroup>
+                <optgroup label="🔬 검사실">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('검사_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('검사_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="🏪 편의시설">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('편의_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('편의_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+              </select>
+            </div>
+
+            {/* 경로명 자동 생성 */}
+            {startFacility && endFacility && (
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-xs text-gray-600">경로명:</span>
+                <span className="text-sm font-bold text-purple-700">
+                  {(facilityRoutes[startFacility]?.description || startFacility)} → {(facilityRoutes[endFacility]?.description || endFacility)}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center gap-4">
             <h2 className="text-xl font-bold">맵 경로 편집기</h2>
@@ -757,22 +1198,148 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
             )}
           </div>
         </div>
+
+        {/* 🆕 세 번째 칸: 시설 위치 설정 */}
+        <div className="max-w-7xl mx-auto mt-3 pt-3 border-t">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-semibold text-gray-700">📍 시설 위치 설정:</span>
+
+              {/* 시설 선택 */}
+              <select
+                value={selectedFacilityForPosition}
+                onChange={(e) => {
+                  setSelectedFacilityForPosition(e.target.value);
+                  // 시설의 기존 맵으로 전환
+                  if (e.target.value && facilityRoutes[e.target.value]) {
+                    setMapId(facilityRoutes[e.target.value].mapId);
+                  }
+                  // 기존 클릭 좌표 초기화
+                  setClickedFacilityX(null);
+                  setClickedFacilityY(null);
+                }}
+                className="px-3 py-1.5 border rounded-lg text-sm bg-white"
+                disabled={facilityPositionMode && !selectedFacilityForPosition}
+              >
+                <option value="">시설 선택...</option>
+                <optgroup label="🏥 진료과">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => !name.startsWith('시연_') && !name.startsWith('진료과_구역_') &&
+                            !name.startsWith('네비게이션_노드_') && !name.startsWith('검사_') &&
+                            !name.startsWith('편의_') && name.includes('과'))
+                    .map(name => (
+                      <option key={name} value={name}>{facilityRoutes[name].description || name}</option>
+                    ))}
+                </optgroup>
+                <optgroup label="🔬 검사실">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('검사_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('검사_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+                <optgroup label="🏪 편의시설">
+                  {Object.keys(facilityRoutes)
+                    .filter(name => name.startsWith('편의_'))
+                    .map(name => (
+                      <option key={name} value={name}>
+                        {facilityRoutes[name].description || name.replace('편의_', '')}
+                      </option>
+                    ))}
+                </optgroup>
+              </select>
+
+              {/* 모드 토글 버튼 */}
+              <button
+                onClick={() => {
+                  if (!selectedFacilityForPosition) {
+                    alert('먼저 시설을 선택해주세요!');
+                    return;
+                  }
+                  setFacilityPositionMode(!facilityPositionMode);
+                  if (!facilityPositionMode) {
+                    // 모드 진입 시 초기화
+                    setClickedFacilityX(null);
+                    setClickedFacilityY(null);
+                  }
+                }}
+                disabled={!selectedFacilityForPosition}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  facilityPositionMode
+                    ? 'bg-orange-600 text-white hover:bg-orange-700'
+                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                } ${!selectedFacilityForPosition ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {facilityPositionMode ? '🔴 위치 설정 모드 ON' : '📍 위치 설정 모드 시작'}
+              </button>
+
+              {/* 좌표 정보 표시 */}
+              {facilityPositionMode && clickedFacilityX !== null && clickedFacilityY !== null && (
+                <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-1.5">
+                  <span className="text-sm font-medium text-purple-900">
+                    좌표: ({clickedFacilityX}, {clickedFacilityY}) - {availableMaps.find(m => m.id === mapId)?.name}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* 저장/취소 버튼 */}
+            {facilityPositionMode && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setFacilityPositionMode(false);
+                    setClickedFacilityX(null);
+                    setClickedFacilityY(null);
+                  }}
+                  className="px-4 py-1.5 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium text-sm"
+                >
+                  ✕ 취소
+                </button>
+                <button
+                  onClick={saveFacilityPosition}
+                  disabled={clickedFacilityX === null || clickedFacilityY === null}
+                  className={`px-4 py-1.5 rounded-lg font-medium text-sm transition-colors ${
+                    clickedFacilityX === null || clickedFacilityY === null
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  💾 위치 저장
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 안내 메시지 */}
+          {facilityPositionMode && (
+            <div className="mt-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              <p className="text-sm text-blue-800">
+                📍 지도를 클릭하여 <strong>{facilityRoutes[selectedFacilityForPosition]?.description || selectedFacilityForPosition}</strong>의 위치를 설정하세요
+              </p>
+            </div>
+          )}
+        </div>
       </div>
-      
+
       {selectedNode && (
-        <div className="absolute right-4 top-20 bg-white rounded-lg shadow-lg p-4 w-64 z-20">
+        <div className="absolute right-4 top-20 bg-white rounded-lg shadow-lg p-4 w-72 z-20">
           <h3 className="font-bold mb-3">선택된 노드</h3>
-          <div className="space-y-2 text-sm">
-            <div>ID: {selectedNode.id}</div>
-            <div>X: {selectedNode.x}</div>
-            <div>Y: {selectedNode.y}</div>
-            
+          <div className="space-y-3 text-sm">
+            <div className="bg-gray-50 p-2 rounded">
+              <div>ID: <span className="font-mono font-bold">{selectedNode.id}</span></div>
+              <div>X: <span className="font-mono">{selectedNode.x}</span></div>
+              <div>Y: <span className="font-mono">{selectedNode.y}</span></div>
+            </div>
+
             <input
               type="text"
               value={selectedNode.name}
               onChange={(e) => {
-                setNodes(nodes.map(n => 
-                  n.id === selectedNode.id 
+                setNodes(nodes.map(n =>
+                  n.id === selectedNode.id
                     ? { ...n, name: e.target.value }
                     : n
                 ));
@@ -780,15 +1347,125 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
               className="w-full px-2 py-1 border rounded"
               placeholder="노드 이름"
             />
-            
-            <div className="flex gap-2 mt-4">
+
+            {/* 🆕 출발지/도착지 설정 버튼 */}
+            <div className="border-t pt-3 space-y-2">
+              <div className="text-xs font-semibold text-gray-600 mb-2">경로 지정</div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setStartNode(selectedNode.id);
+                    setSelectedNode(null);
+                  }}
+                  disabled={startNode === selectedNode.id}
+                  className={`flex-1 px-3 py-2 rounded text-sm font-medium ${
+                    startNode === selectedNode.id
+                      ? 'bg-green-100 text-green-700 cursor-not-allowed'
+                      : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  {startNode === selectedNode.id ? '✓ 출발지' : '🟢 출발지로'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    setEndNode(selectedNode.id);
+                    setSelectedNode(null);
+                  }}
+                  disabled={endNode === selectedNode.id}
+                  className={`flex-1 px-3 py-2 rounded text-sm font-medium ${
+                    endNode === selectedNode.id
+                      ? 'bg-red-100 text-red-700 cursor-not-allowed'
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  }`}
+                >
+                  {endNode === selectedNode.id ? '✓ 도착지' : '🔴 도착지로'}
+                </button>
+              </div>
+            </div>
+
+            {/* 🆕 노드 타입 선택 */}
+            <div className="border-t pt-3 space-y-2">
+              <div className="text-xs font-semibold text-gray-600 mb-2">노드 타입</div>
+              <select
+                value={nodeTypes[selectedNode.id] || 'place'}
+                onChange={(e) => {
+                  setNodeTypes(prev => ({
+                    ...prev,
+                    [selectedNode.id]: e.target.value
+                  }));
+                }}
+                className="w-full px-2 py-1.5 border rounded text-sm"
+              >
+                <option value="place">🔵 일반 장소</option>
+                <option value="map_transition">🟣 맵 전환 (층 이동)</option>
+              </select>
+
+              {/* 맵 전환 노드일 경우 연결 설정 */}
+              {nodeTypes[selectedNode.id] === 'map_transition' && (
+                <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded space-y-2">
+                  <div className="text-xs font-semibold text-purple-900">다음 맵 연결</div>
+                  <select
+                    value={nodeTransitions[selectedNode.id]?.targetMap || ''}
+                    onChange={(e) => {
+                      setNodeTransitions(prev => ({
+                        ...prev,
+                        [selectedNode.id]: {
+                          ...prev[selectedNode.id],
+                          targetMap: e.target.value
+                        }
+                      }));
+                    }}
+                    className="w-full px-2 py-1 border rounded text-xs"
+                  >
+                    <option value="">맵 선택...</option>
+                    {availableMaps.filter(m => m.id !== mapId).map(map => (
+                      <option key={map.id} value={map.id}>{map.name}</option>
+                    ))}
+                  </select>
+
+                  <input
+                    type="text"
+                    value={nodeTransitions[selectedNode.id]?.targetNode || ''}
+                    onChange={(e) => {
+                      setNodeTransitions(prev => ({
+                        ...prev,
+                        [selectedNode.id]: {
+                          ...prev[selectedNode.id],
+                          targetNode: e.target.value
+                        }
+                      }));
+                    }}
+                    placeholder="다음 노드 ID (예: node-1)"
+                    className="w-full px-2 py-1 border rounded text-xs"
+                  />
+
+                  {/* 🆕 다음 맵으로 이동 버튼 */}
+                  {nodeTransitions[selectedNode.id]?.targetMap && (
+                    <button
+                      onClick={() => {
+                        const targetMapId = nodeTransitions[selectedNode.id].targetMap;
+                        setMapId(targetMapId);
+                        setSelectedNode(null);
+                        alert(`✅ ${availableMaps.find(m => m.id === targetMapId)?.name}으로 전환했습니다!\n\n이제 이 맵에서 경로를 계속 그릴 수 있습니다.`);
+                      }}
+                      className="w-full px-3 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 text-xs font-medium flex items-center justify-center gap-1"
+                    >
+                      🟣 {availableMaps.find(m => m.id === nodeTransitions[selectedNode.id]?.targetMap)?.name}으로 이동
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 mt-4 border-t pt-3">
               <button
                 onClick={() => startConnecting(selectedNode)}
                 className="flex-1 px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
               >
                 연결하기
               </button>
-              
+
               <button
                 onClick={() => deleteNode(selectedNode.id)}
                 className="flex-1 px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm flex items-center justify-center gap-1"
@@ -829,11 +1506,11 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
       </div>
       
       <div className="flex-1 relative overflow-hidden">
-        <div 
-          ref={svgContainerRef} 
+        <div
+          ref={svgContainerRef}
           className="w-full h-full flex items-center justify-center bg-gray-50"
-          style={{ cursor: isConnecting ? 'crosshair' : 'default' }}
-          onClick={handleContainerClick}
+          style={{ cursor: isConnecting || facilityPositionMode ? 'crosshair' : 'default' }}
+          onClick={handleSvgClick}
         />
       </div>
     </div>

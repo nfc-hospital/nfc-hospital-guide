@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChevronDownIcon, MapPinIcon, ClockIcon, UserGroupIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 import useJourneyStore from '../../store/journeyStore';
+import useLocationStore from '../../store/locationStore';
 import MapNavigator from '../MapNavigator';
 
 /**
@@ -24,6 +25,9 @@ const UnifiedJourneyTemplate = () => {
   const taggedLocationInfo = useJourneyStore(state => state.taggedLocationInfo);
   const patientState = useJourneyStore(state => state.patientState);
   const calledModalMinimized = useJourneyStore(state => state.calledModalMinimized);
+
+  // locationStore에서도 위치 정보 가져오기
+  const locationStoreData = useLocationStore(state => state.currentLocation);
 
   // 일정 데이터 변환 (접수/수납 포함)
   const scheduleItems = React.useMemo(() => {
@@ -114,10 +118,21 @@ const UnifiedJourneyTemplate = () => {
     return journey;
   }, [todaysAppointments, patientState]);
 
-  // 실제 현재 위치 (NFC 태그 > currentLocation 우선순위)
+  // 실제 현재 위치 (우선순위: NFC 태그 > journeyStore.currentLocation > locationStore.currentLocation)
   const actualCurrentLocation = React.useMemo(() => {
-    return taggedLocationInfo || currentLocation;
-  }, [taggedLocationInfo, currentLocation]);
+    const location = taggedLocationInfo || currentLocation || locationStoreData;
+
+    if (!location) return null;
+
+    console.log('📍 actualCurrentLocation 계산:', {
+      taggedLocationInfo,
+      currentLocation,
+      locationStoreData,
+      selected: location
+    });
+
+    return location;
+  }, [taggedLocationInfo, currentLocation, locationStoreData]);
 
   // 대기 정보
   const waitingInfo = React.useMemo(() => {

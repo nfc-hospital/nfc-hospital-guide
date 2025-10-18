@@ -1,18 +1,34 @@
 import { api } from './client';
 
-// 시설별 경로 가져오기 (단순화된 버전)
+// 시설별 경로 가져오기 (multi-floor 지원)
 export const getFacilityRoute = async (facilityName) => {
   // 먼저 localStorage 확인
   const localRoutes = JSON.parse(localStorage.getItem('facilityRoutes') || '{}');
 
   if (localRoutes[facilityName]) {
     console.log(`✅ localStorage에서 경로 로드 (${facilityName}):`, localRoutes[facilityName]);
-    return {
-      facility_name: facilityName,
-      nodes: localRoutes[facilityName].nodes || [],
-      edges: localRoutes[facilityName].edges || [],
-      map_id: localRoutes[facilityName].mapId || 'main_1f'
-    };
+
+    // 🔄 Multi-floor 형식인지 확인
+    if (localRoutes[facilityName].maps) {
+      // 새 형식: 맵별 데이터
+      return {
+        facility_name: facilityName,
+        maps: localRoutes[facilityName].maps,
+        currentMap: localRoutes[facilityName].currentMap || 'main_1f'
+      };
+    } else {
+      // 구 형식: 단일 맵 (호환성)
+      return {
+        facility_name: facilityName,
+        nodes: localRoutes[facilityName].nodes || [],
+        edges: localRoutes[facilityName].edges || [],
+        map_id: localRoutes[facilityName].mapId || 'main_1f',
+        startNode: localRoutes[facilityName].startNode || null,
+        endNode: localRoutes[facilityName].endNode || null,
+        nodeTypes: localRoutes[facilityName].nodeTypes || {},
+        nodeTransitions: localRoutes[facilityName].nodeTransitions || {},
+      };
+    }
   }
 
   // localStorage에 없으면 API 호출
@@ -24,13 +40,27 @@ export const getFacilityRoute = async (facilityName) => {
     console.log(`✅ API 응답 (${facilityName}):`, response.data);
 
     // API가 유효한 데이터를 반환했는지 확인
-    if (response.data && response.data.nodes && response.data.nodes.length > 0) {
-      return {
-        facility_name: response.data.facility_name || facilityName,
-        nodes: response.data.nodes,
-        edges: response.data.edges || [],
-        map_id: response.data.map_id || 'main_1f'
-      };
+    if (response.data) {
+      // 🔄 Multi-floor 형식 확인
+      if (response.data.maps) {
+        return {
+          facility_name: response.data.facility_name || facilityName,
+          maps: response.data.maps,
+          currentMap: response.data.currentMap || 'main_1f'
+        };
+      } else if (response.data.nodes && response.data.nodes.length > 0) {
+        // 구 형식 (호환성)
+        return {
+          facility_name: response.data.facility_name || facilityName,
+          nodes: response.data.nodes,
+          edges: response.data.edges || [],
+          map_id: response.data.map_id || 'main_1f',
+          startNode: response.data.startNode || null,
+          endNode: response.data.endNode || null,
+          nodeTypes: response.data.nodeTypes || {},
+          nodeTransitions: response.data.nodeTransitions || {},
+        };
+      }
     }
 
     // 데이터가 없으면 에러 발생 (mapStore에서 처리하도록)
@@ -75,39 +105,88 @@ export const getDemoRoute = (facilityName) => {
   return demoRoutes[facilityName] || null;
 };
 
-// 경로 저장 (DB와 localStorage 모두)
-export const saveRoute = async (facilityName, nodes, edges, mapId = 'main_1f') => {
+// 경로 저장 (DB와 localStorage 모두) - multi-floor 지원
+export const saveRoute = async (facilityName, nodes, edges, mapId = 'main_1f', routeData = null) => {
+  // 🔄 Multi-floor 형식 확인
+  const isMultiFloor = routeData && routeData.maps;
+
   try {
     // DB에 저장 시도
-    const response = await api.post('/nfc/facility-routes/save_route/', {
-      facility_name: facilityName,
-      nodes: nodes,
-      edges: edges,
-      map_id: mapId,
-      svg_element_id: facilityMapping[facilityName] || ''
-    });
-    
-    console.log('DB에 경로 저장 성공:', response.data);
+    if (isMultiFloor) {
+      // 새 형식: 맵별 데이터
+      const response = await api.post('/nfc/facility-routes/save_route/', {
+        facility_name: facilityName,
+        maps: routeData.maps,
+        current_map: routeData.currentMap,
+        svg_element_id: facilityMapping[facilityName] || '',
+      });
+      console.log('✅ Multi-floor 경로 DB 저장 성공:', response.data);
+    } else {
+      // 구 형식 (호환성)
+      const startNode = routeData?.startNode || null;
+      const endNode = routeData?.endNode || null;
+      const nodeTypes = routeData?.nodeTypes || {};
+      const nodeTransitions = routeData?.nodeTransitions || {};
+
+      const response = await api.post('/nfc/facility-routes/save_route/', {
+        facility_name: facilityName,
+        nodes: nodes,
+        edges: edges,
+        map_id: mapId,
+        svg_element_id: facilityMapping[facilityName] || '',
+        start_node: startNode,
+        end_node: endNode,
+        node_types: nodeTypes,
+        node_transitions: nodeTransitions,
+      });
+      console.log('DB에 경로 저장 성공:', response.data);
+    }
   } catch (error) {
     console.error('DB 저장 실패, localStorage에만 저장:', error);
   }
-  
+
   // localStorage에도 저장 (백업)
   const localRoutes = JSON.parse(localStorage.getItem('facilityRoutes') || '{}');
-  localRoutes[facilityName] = {
-    nodes: nodes,
-    edges: edges,
-    mapId: mapId,
-    lastUpdated: new Date().toISOString()
-  };
+
+  if (isMultiFloor) {
+    // 새 형식: 맵별 데이터
+    localRoutes[facilityName] = {
+      maps: routeData.maps,
+      currentMap: routeData.currentMap,
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`✅ Multi-floor localStorage 저장 완료 (${facilityName}):`, {
+      mapsCount: Object.keys(routeData.maps).length,
+      maps: Object.keys(routeData.maps),
+      currentMap: routeData.currentMap
+    });
+  } else {
+    // 구 형식 (호환성)
+    const startNode = routeData?.startNode || null;
+    const endNode = routeData?.endNode || null;
+    const nodeTypes = routeData?.nodeTypes || {};
+    const nodeTransitions = routeData?.nodeTransitions || {};
+
+    localRoutes[facilityName] = {
+      nodes: nodes,
+      edges: edges,
+      mapId: mapId,
+      startNode: startNode,
+      endNode: endNode,
+      nodeTypes: nodeTypes,
+      nodeTransitions: nodeTransitions,
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`✅ localStorage에 경로 저장 완료 (${facilityName}):`, {
+      nodes: nodes?.length || 0,
+      edges: edges?.length || 0,
+      mapId: mapId
+    });
+  }
+
   localStorage.setItem('facilityRoutes', JSON.stringify(localRoutes));
-
-  console.log(`✅ localStorage에 경로 저장 완료 (${facilityName}):`, {
-    nodes: nodes.length,
-    edges: edges.length,
-    mapId: mapId
-  });
-
   return true;
 };
 

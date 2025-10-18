@@ -26,9 +26,48 @@ const MAIN_ENTRANCE_DATA = {
   category: 'entrance'
 };
 
+// mapId로부터 건물/층 정보 추론
+function getMapInfo(mapId) {
+  const mapInfoMapping = {
+    'main_1f': { building: '본관', floor: '1층' },
+    'main_2f': { building: '본관', floor: '2층' },
+    'annex_1f': { building: '별관', floor: '1층' },
+    'cancer_1f': { building: '암센터', floor: '1층' },
+    'cancer_2f': { building: '암센터', floor: '2층' },
+  };
+  return mapInfoMapping[mapId] || { building: '본관', floor: '1층' };
+}
+
+// 시설명으로부터 카테고리 추론
+function inferCategory(facilityName, description) {
+  const name = facilityName.toLowerCase();
+  const desc = (description || '').toLowerCase();
+
+  if (name.includes('입구') || name.includes('정문') || name.includes('entrance')) return 'entrance';
+  if (name.includes('응급') || name.includes('emergency')) return 'emergency';
+  if (name.includes('진료') || name.includes('과') || desc.includes('department')) return 'department';
+  if (name.includes('검사') || name.includes('실') || name.includes('ct') || name.includes('mri') || name.includes('x-ray')) return 'diagnostic';
+  if (name.includes('편의') || name.includes('약국') || name.includes('카페') || name.includes('은행')) return 'facility';
+
+  return 'custom';
+}
+
+// 카테고리별 기본 아이콘
+function getDefaultIcon(category) {
+  const iconMapping = {
+    'entrance': '🚪',
+    'emergency': '🚨',
+    'department': '🏥',
+    'diagnostic': '🔬',
+    'facility': '🏪',
+    'custom': '📍'
+  };
+  return iconMapping[category] || '📍';
+}
+
 // 실제 지도에 존재하는 시설들만 필터링 (node_id가 있는 것들)
 function getValidMapFacilities() {
-  // 정문을 맨 앞에 추가
+  // 1️⃣ 기본 시설 목록 (정문 + 고정 시설들)
   const allFacilities = [
     MAIN_ENTRANCE_DATA,
     ...MAJOR_FACILITIES,
@@ -36,11 +75,75 @@ function getValidMapFacilities() {
     ...DIAGNOSTIC_FACILITIES
   ];
 
-  // node_id가 존재하는 시설들만 필터링
+  // node_id가 존재하는 기본 시설들만 필터링
   const validFacilities = allFacilities.filter(facility => facility.node_id);
 
+  // 2️⃣ localStorage에서 map-editor로 추가한 시설들 가져오기
+  const customFacilities = [];
+  try {
+    const facilityRoutesData = localStorage.getItem('facilityRoutes');
+    if (facilityRoutesData) {
+      const facilityRoutes = JSON.parse(facilityRoutesData);
+
+      // x_coord, y_coord가 설정된 시설들만 추가
+      Object.entries(facilityRoutes).forEach(([facilityName, facilityData]) => {
+        // x_coord, y_coord가 모두 존재하는지 확인
+        if (facilityData.x_coord !== undefined &&
+            facilityData.y_coord !== undefined &&
+            facilityData.mapId) {
+
+          // 기본 시설 목록에 이미 있는지 확인 (중복 방지)
+          const isDuplicate = validFacilities.some(f =>
+            f.name === facilityName ||
+            f.name === facilityData.description
+          );
+
+          if (!isDuplicate) {
+            const mapInfo = getMapInfo(facilityData.mapId);
+            const category = inferCategory(facilityName, facilityData.description);
+            const icon = getDefaultIcon(category);
+
+            customFacilities.push({
+              id: `custom-${facilityName.replace(/\s+/g, '-')}`,
+              name: facilityData.description || facilityName,
+              icon: icon,
+              description: facilityData.description || facilityName,
+              building: mapInfo.building,
+              floor: mapInfo.floor,
+              room: facilityData.description || facilityName,
+              mapFile: `${facilityData.mapId}.svg`,
+              coordinates: { x: facilityData.x_coord, y: facilityData.y_coord },
+              x_coord: facilityData.x_coord,
+              y_coord: facilityData.y_coord,
+              node_id: facilityData.svgElementId || `node-${facilityName}`,
+              category: category,
+              isCustom: true  // 커스텀 시설 표시
+            });
+
+            console.log(`🆕 Map-editor 시설 추가: ${facilityName}`, {
+              coords: `(${facilityData.x_coord}, ${facilityData.y_coord})`,
+              mapId: facilityData.mapId,
+              category: category
+            });
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error('❌ localStorage facilityRoutes 읽기 실패:', error);
+  }
+
+  // 3️⃣ 기본 시설 + 커스텀 시설 합치기
+  const allValidFacilities = [...validFacilities, ...customFacilities];
+
+  console.log('📋 전체 유효한 시설 목록:', {
+    total: allValidFacilities.length,
+    builtin: validFacilities.length,
+    custom: customFacilities.length
+  });
+
   // MockNFC용 태그 형태로 변환
-  return validFacilities.map(facility => ({
+  return allValidFacilities.map(facility => ({
     tag_id: `mock-${facility.id}`,
     code: `nfc-${facility.id}-mock`,
     location_name: facility.name,
@@ -53,7 +156,8 @@ function getValidMapFacilities() {
     icon: facility.icon,
     category: facility.category,
     mapFile: facility.mapFile,
-    is_active: true
+    is_active: true,
+    isCustom: facility.isCustom || false  // 커스텀 시설 여부
   }));
 }
 
@@ -356,8 +460,23 @@ export default function MockNFCPanel() {
           floor: locationData.floor,
           code: tag.code
         };
-        
+
         updateCurrentLocation(mapLocationInfo);
+
+        // 🗺️ 현재 위치의 지도로 전환
+        const mapStoreState = useMapStore.getState();
+        const targetMapId = locationData.map_id;
+
+        console.log('🗺️ 지도 전환:', {
+          from: mapStoreState.currentMapId,
+          to: targetMapId,
+          location: locationData.location_name
+        });
+
+        // currentMapId 직접 업데이트
+        useMapStore.setState({ currentMapId: targetMapId });
+
+        console.log('✅ 지도 전환 완료:', targetMapId);
         
         // 4. 테스트용 목적지 설정 및 경로 자동 계산 (검증된 시설만 사용)
         const validFacilities = getValidMapFacilities();
@@ -623,6 +742,13 @@ export default function MockNFCPanel() {
                     </div>
                   )}
 
+                  {/* 커스텀 시설 표시 */}
+                  {tag.isCustom && !isCurrentLocation && !isMainEntrance && (
+                    <div className="absolute -top-2 -left-2 bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
+                      커스텀
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-lg">{tag.icon}</span>
                     <span className={`text-xs px-1 py-0.5 rounded ${
@@ -630,12 +756,14 @@ export default function MockNFCPanel() {
                       tag.category === 'emergency' ? 'bg-red-100 text-red-600' :
                       tag.category === 'department' ? 'bg-blue-100 text-blue-600' :
                       tag.category === 'diagnostic' ? 'bg-purple-100 text-purple-600' :
+                      tag.category === 'custom' ? 'bg-orange-100 text-orange-600' :
                       'bg-green-100 text-green-600'
                     }`}>
                       {tag.category === 'entrance' ? '입구' :
                        tag.category === 'emergency' ? '응급' :
                        tag.category === 'department' ? '진료' :
-                       tag.category === 'diagnostic' ? '검사' : '편의'}
+                       tag.category === 'diagnostic' ? '검사' :
+                       tag.category === 'custom' ? '커스텀' : '편의'}
                     </span>
                   </div>
                   <div className="font-semibold">{tag.location_name}</div>
@@ -686,6 +814,7 @@ export default function MockNFCPanel() {
                       category === 'department' ? 'bg-blue-50 text-blue-600' :
                       category === 'diagnostic' ? 'bg-purple-50 text-purple-600' :
                       category === 'facility' ? 'bg-green-50 text-green-600' :
+                      category === 'custom' ? 'bg-orange-50 text-orange-600' :
                       'bg-gray-50 text-gray-600'
                     }`}>
                       {category === 'entrance' ? '입구' :
@@ -693,6 +822,7 @@ export default function MockNFCPanel() {
                        category === 'department' ? '진료' :
                        category === 'diagnostic' ? '검사' :
                        category === 'facility' ? '편의' :
+                       category === 'custom' ? '커스텀' :
                        category} {count}
                     </span>
                   ));

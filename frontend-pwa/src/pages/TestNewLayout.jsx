@@ -135,6 +135,17 @@ const TestNewLayout = () => {
         floor: '2층',
         room: '304호',
         mapId: 'main_2f'
+      },
+      // 현재 위치 정보 (UnifiedTemplate에서 사용)
+      currentLocation: {
+        node_id: 'node_main_2f_304',
+        position: { x: 320, y: 240 },
+        map_id: 'main_2f',
+        location_name: '본관 2층 304호 앞',
+        building: '본관',
+        floor: '2층',
+        room: '304호 앞',
+        description: '본관 2층 304호 앞 복도'
       }
     };
 
@@ -143,6 +154,7 @@ const TestNewLayout = () => {
     store.todaysAppointments = mockJourneyData.appointments;
     store.currentQueues = [mockJourneyData.currentQueue];
     store.locationInfo = mockJourneyData.locationInfo;
+    store.currentLocation = mockJourneyData.currentLocation;
     store.patientState = 'WAITING';
   }, []);
 

@@ -238,8 +238,48 @@ const useMapStore = create(
             to: endNodeId
           });
 
-          // 5️⃣-A 수동 경로 먼저 확인 (map-editor에서 만든 경로)
+          // 5️⃣-A 시연용 경로 우선 확인 (localStorage의 activeDemoRoute)
           try {
+            const activeDemoRoute = localStorage.getItem('activeDemoRoute');
+
+            // 🎬 시연용 경로가 활성화되어 있으면 최우선으로 사용
+            if (activeDemoRoute) {
+              console.log('🎬 시연용 경로 감지:', activeDemoRoute);
+              const { getFacilityRoute } = await import('../api/facilityRoutes');
+              const demoRoute = await getFacilityRoute(activeDemoRoute);
+
+              if (demoRoute?.nodes?.length > 0) {
+                console.log('✅ 시연용 경로 사용 (최우선):', activeDemoRoute, {
+                  nodeCount: demoRoute.nodes.length,
+                  edgeCount: demoRoute.edges.length,
+                  mapId: demoRoute.map_id
+                });
+
+                set({
+                  activeRoute: {
+                    nodes: demoRoute.nodes,
+                    edges: demoRoute.edges,
+                    total_distance: 0,
+                    estimated_time: 0,
+                    manual_route: true,
+                    demo_route: true
+                  },
+                  navigationRoute: {
+                    nodes: demoRoute.nodes,
+                    edges: demoRoute.edges,
+                    map_id: demoRoute.map_id
+                  },
+                  routeError: null,
+                  isRouteLoading: false,
+                  currentMapId: demoRoute.map_id || 'main_1f'
+                });
+
+                console.log('✅ 시연용 경로 설정 완료');
+                return; // 시연용 경로 사용했으므로 스킵
+              }
+            }
+
+            // 🔄 시연용 경로가 없으면 일반 수동 경로 확인
             const { getFacilityRoute } = await import('../api/facilityRoutes');
             const facilityName = destinationFacility.name || destinationFacility.title;
             const manualRoute = await getFacilityRoute(facilityName);
@@ -251,7 +291,6 @@ const useMapStore = create(
                 mapId: manualRoute.map_id
               });
 
-              // 수동 경로를 activeRoute에 설정
               set({
                 activeRoute: {
                   nodes: manualRoute.nodes,
@@ -274,7 +313,7 @@ const useMapStore = create(
               return; // 수동 경로 사용했으므로 자동 계산 스킵
             }
           } catch (error) {
-            console.log('🔄 수동 경로 없음, 자동 계산 진행:', error.message);
+            console.log('🔄 수동/시연 경로 없음, 자동 계산 진행:', error.message);
           }
 
           // 5️⃣-B 수동 경로 없으면 기존 자동 경로 계산 (백엔드 API)

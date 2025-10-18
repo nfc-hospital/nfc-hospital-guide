@@ -84,20 +84,45 @@ const MapNavigator = ({
   let corridorEdges = (propPathEdges && propPathEdges.length > 0) ? propPathEdges :
     (routeData.edges?.length > 0 ? routeData.edges : stageEdges);
 
-  // 폴백: 경로 데이터가 전혀 없으면 기본 샘플 경로 사용 (시연용)
+  // 폴백: 경로 데이터가 전혀 없으면 시연용 경로 또는 기본 샘플 경로 사용
   if (corridorNodes.length === 0 && !stage?.isTransition) {
-    // 기본 샘플 경로 (현재 위치만 표시)
-    corridorNodes = [
-      { id: 'default-location', x: 150, y: 400, name: '현재 위치' }
-    ];
-    corridorEdges = [];
+    // 1. 먼저 localStorage에서 activeDemoRoute 확인
+    const activeDemoRoute = localStorage.getItem('activeDemoRoute');
+    let demoRouteLoaded = false;
 
-    // props에서 목적지가 있으면 경로 생성
-    if (targetLocation || highlightRoom || facilityName) {
-      corridorNodes.push(
-        { id: 'default-destination', x: 450, y: 300, name: targetLocation || highlightRoom || facilityName }
-      );
-      corridorEdges.push(['default-location', 'default-destination']);
+    if (activeDemoRoute) {
+      try {
+        const facilityRoutesData = localStorage.getItem('facilityRoutes');
+        if (facilityRoutesData) {
+          const facilityRoutes = JSON.parse(facilityRoutesData);
+          const demoRoute = facilityRoutes[activeDemoRoute];
+
+          if (demoRoute?.nodes?.length > 0) {
+            corridorNodes = demoRoute.nodes;
+            corridorEdges = demoRoute.edges || [];
+            demoRouteLoaded = true;
+            console.log('✅ MapNavigator: 시연용 경로 로드 완료', activeDemoRoute);
+          }
+        }
+      } catch (error) {
+        console.error('❌ 시연용 경로 로드 실패:', error);
+      }
+    }
+
+    // 2. 시연용 경로가 없으면 기본 샘플 경로 사용
+    if (!demoRouteLoaded) {
+      corridorNodes = [
+        { id: 'default-location', x: 150, y: 400, name: '현재 위치' }
+      ];
+      corridorEdges = [];
+
+      // props에서 목적지가 있으면 경로 생성
+      if (targetLocation || highlightRoom || facilityName) {
+        corridorNodes.push(
+          { id: 'default-destination', x: 450, y: 300, name: targetLocation || highlightRoom || facilityName }
+        );
+        corridorEdges.push(['default-location', 'default-destination']);
+      }
     }
   }
 
@@ -604,9 +629,9 @@ const MapNavigator = ({
         }
       }
     };
-    
+
     loadSvg();
-  }, [mapSrc, highlightRoom, currentMapIndex]); // 지도 변경 시에만 재로드
+  }, [mapId, mapSrc, highlightRoom, currentMapIndex]); // mapId 추가 - 지도 변경 시에만 재로드
 
   // 경로와 현재 위치만 업데이트하는 useEffect
   useEffect(() => {

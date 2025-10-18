@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import apiService from '../../api/apiService';
 import { PatientJourneyState, getStateColorClass } from '../../constants/states';
+import LocationMapPicker from '../../components/admin/LocationMapPicker';
 
 const TestDataManager = () => {
   const { user } = useAuth();
@@ -18,6 +19,7 @@ const TestDataManager = () => {
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [selectedPatientForLocation, setSelectedPatientForLocation] = useState(null);
   const [availableLocations, setAvailableLocations] = useState([]);
+  const [locationModalMode, setLocationModalMode] = useState('simple'); // 'simple' | 'map'
 
   // 환자 상태 색상 매핑 - 중앙화된 정의 사용
   const stateColors = {
@@ -236,23 +238,82 @@ const TestDataManager = () => {
     }
   };
 
-  // 환자 위치 업데이트
+  // 환자 위치 업데이트 (간편 선택)
   const updatePatientLocation = async (userId, locationKey) => {
     try {
       const response = await apiService.api.put('/test/patient-location/', {
         user_id: userId,
         location_key: locationKey
       });
-      
+
       if (response.data && response.data.message) {
         alert(`위치 변경 완료: ${response.data.message}`);
       }
-      
+
       await fetchPatients(); // 목록 새로고침
       setShowLocationModal(false);
       setSelectedPatientForLocation(null);
     } catch (error) {
       console.error('Failed to update patient location:', error);
+      alert('위치 업데이트에 실패했습니다.');
+    }
+  };
+
+  // 환자 위치 업데이트 (지도에서 선택)
+  const updatePatientLocationFromMap = async (locationData) => {
+    try {
+      const response = await apiService.api.put('/test/patient-location/', {
+        user_id: selectedPatientForLocation.user_id,
+        location_data: locationData // { x, y, mapId, name }
+      });
+
+      if (response.data && response.data.message) {
+        alert(`위치 변경 완료: ${locationData.name} (${locationData.x}, ${locationData.y})`);
+      }
+
+      await fetchPatients(); // 목록 새로고침
+
+      // 🆕 journeyStore도 업데이트 (환자 화면에 반영되도록)
+      // 이 환자가 현재 로그인한 사용자인 경우에만 journeyStore 갱신
+      if (window.localStorage.getItem('access_token')) {
+        try {
+          const { default: useJourneyStore } = await import('../../store/journeyStore');
+          const journeyStore = useJourneyStore.getState();
+
+          // 현재 로그인한 사용자의 user_id 확인
+          const currentUserId = journeyStore.user?.user_id;
+
+          if (currentUserId === selectedPatientForLocation.user_id) {
+            // 같은 사용자면 journeyStore의 taggedLocationInfo 업데이트
+            journeyStore.fetchTagInfo(null); // 기존 태그 정보 클리어
+
+            // 새 위치 정보로 수동 업데이트
+            useJourneyStore.setState({
+              taggedLocationInfo: {
+                x_coord: locationData.x,
+                y_coord: locationData.y,
+                building: locationData.mapId?.split('_')[0] || '본관',
+                floor: locationData.mapId?.split('_')[1]?.replace('f', '') || '1',
+                room: locationData.name,
+                description: locationData.name,
+                code: 'MANUAL_SET'
+              }
+            });
+
+            console.log('✅ journeyStore 위치 정보 업데이트 완료:', locationData);
+          } else {
+            console.log('ℹ️ 다른 환자의 위치 변경이므로 journeyStore 갱신 안 함');
+          }
+        } catch (storeError) {
+          console.warn('⚠️ journeyStore 업데이트 실패 (관리자 모드에서는 정상):', storeError);
+        }
+      }
+
+      setShowLocationModal(false);
+      setSelectedPatientForLocation(null);
+      setLocationModalMode('simple');
+    } catch (error) {
+      console.error('Failed to update patient location from map:', error);
       alert('위치 업데이트에 실패했습니다.');
     }
   };
@@ -808,10 +869,10 @@ const TestDataManager = () => {
         </div>
       )}
 
-      {/* 위치 선택 모달 */}
+      {/* 위치 선택 모달 (탭: 간편 선택 / 지도에서 선택) */}
       {showLocationModal && selectedPatientForLocation && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[85vh] overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* 모달 헤더 */}
             <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4">
               <div className="flex justify-between items-center">
@@ -830,6 +891,7 @@ const TestDataManager = () => {
                   onClick={() => {
                     setShowLocationModal(false);
                     setSelectedPatientForLocation(null);
+                    setLocationModalMode('simple');
                   }}
                   className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-colors"
                 >
@@ -840,81 +902,129 @@ const TestDataManager = () => {
               </div>
             </div>
 
-            {/* 모달 바디 - 위치 버튼 그리드 */}
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-140px)]">
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-                {availableLocations.map((location) => {
-                  const isCurrentLocation = selectedPatientForLocation.current_location === location.key;
-                  return (
-                    <button
-                      key={location.key}
-                      onClick={() => updatePatientLocation(selectedPatientForLocation.user_id, location.key)}
-                      className={`relative p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-lg ${
-                        isCurrentLocation
-                          ? 'bg-purple-50 border-purple-500 shadow-md'
-                          : 'bg-white border-gray-200 hover:border-purple-300 hover:bg-purple-50'
-                      }`}
-                    >
-                      {/* 현재 위치 표시 */}
-                      {isCurrentLocation && (
-                        <div className="absolute top-2 right-2">
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500 text-white">
-                            현재 위치
-                          </span>
-                        </div>
-                      )}
-                      
-                      {/* 위치 아이콘 */}
-                      <div className={`text-3xl mb-3 ${isCurrentLocation ? 'animate-pulse' : ''}`}>
-                        {location.icon || '📍'}
-                      </div>
-                      
-                      {/* 위치 이름 */}
-                      <div className="text-base font-semibold text-gray-900 mb-1">
-                        {location.key}
-                      </div>
-                      
-                      {/* 위치 상세 정보 */}
-                      <div className="text-xs text-gray-600 space-y-0.5">
-                        <div>{location.building} {location.floor}</div>
-                        <div className="text-gray-500">{location.room}</div>
-                      </div>
-                      
-                      {/* 좌표 정보 (개발용) */}
-                      <div className="text-xs text-gray-400 mt-2">
-                        좌표: ({location.x}, {location.y})
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+            {/* 탭 메뉴 */}
+            <div className="flex border-b border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setLocationModalMode('simple')}
+                className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                  locationModalMode === 'simple'
+                    ? 'bg-white text-purple-600 border-b-2 border-purple-600'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  간편 선택
+                </span>
+              </button>
+              <button
+                onClick={() => setLocationModalMode('map')}
+                className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+                  locationModalMode === 'map'
+                    ? 'bg-white text-purple-600 border-b-2 border-purple-600'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                  </svg>
+                  지도에서 선택
+                </span>
+              </button>
+            </div>
 
-              {/* 위치 정보가 없을 때 */}
-              {availableLocations.length === 0 && (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">🗺️</div>
-                  <p className="text-gray-500 text-lg">사용 가능한 위치가 없습니다.</p>
+            {/* 모달 바디 - 탭 콘텐츠 */}
+            <div className="flex-1 overflow-hidden">
+              {locationModalMode === 'simple' ? (
+                // 간편 선택 모드 - 기존 버튼 그리드
+                <div className="p-6 overflow-y-auto h-full">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                    {availableLocations.map((location) => {
+                      const isCurrentLocation = selectedPatientForLocation.current_location === location.key;
+                      return (
+                        <button
+                          key={location.key}
+                          onClick={() => updatePatientLocation(selectedPatientForLocation.user_id, location.key)}
+                          className={`relative p-5 rounded-xl border-2 transition-all duration-200 hover:shadow-lg ${
+                            isCurrentLocation
+                              ? 'bg-purple-50 border-purple-500 shadow-md'
+                              : 'bg-white border-gray-200 hover:border-purple-300 hover:bg-purple-50'
+                          }`}
+                        >
+                          {isCurrentLocation && (
+                            <div className="absolute top-2 right-2">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500 text-white">
+                                현재 위치
+                              </span>
+                            </div>
+                          )}
+
+                          <div className={`text-3xl mb-3 ${isCurrentLocation ? 'animate-pulse' : ''}`}>
+                            {location.icon || '📍'}
+                          </div>
+
+                          <div className="text-base font-semibold text-gray-900 mb-1">
+                            {location.key}
+                          </div>
+
+                          <div className="text-xs text-gray-600 space-y-0.5">
+                            <div>{location.building} {location.floor}</div>
+                            <div className="text-gray-500">{location.room}</div>
+                          </div>
+
+                          <div className="text-xs text-gray-400 mt-2">
+                            좌표: ({location.x}, {location.y})
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {availableLocations.length === 0 && (
+                    <div className="text-center py-12">
+                      <div className="text-6xl mb-4">🗺️</div>
+                      <p className="text-gray-500 text-lg">사용 가능한 위치가 없습니다.</p>
+                    </div>
+                  )}
                 </div>
+              ) : (
+                // 지도에서 선택 모드
+                <LocationMapPicker
+                  patientId={selectedPatientForLocation.user_id}
+                  currentLocation={null} // TODO: 현재 위치 데이터 구조 확인 후 전달
+                  onSave={updatePatientLocationFromMap}
+                  onCancel={() => {
+                    setShowLocationModal(false);
+                    setSelectedPatientForLocation(null);
+                    setLocationModalMode('simple');
+                  }}
+                />
               )}
             </div>
 
-            {/* 모달 푸터 */}
-            <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">
-                  총 {availableLocations.length}개의 위치
-                </span>
-                <button
-                  onClick={() => {
-                    setShowLocationModal(false);
-                    setSelectedPatientForLocation(null);
-                  }}
-                  className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
-                >
-                  취소
-                </button>
+            {/* 모달 푸터 (간편 선택 모드일 때만 표시) */}
+            {locationModalMode === 'simple' && (
+              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">
+                    총 {availableLocations.length}개의 위치
+                  </span>
+                  <button
+                    onClick={() => {
+                      setShowLocationModal(false);
+                      setSelectedPatientForLocation(null);
+                      setLocationModalMode('simple');
+                    }}
+                    className="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                  >
+                    취소
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}

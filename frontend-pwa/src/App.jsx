@@ -29,6 +29,7 @@ import MapManager from './pages/admin/MapManager';
 import ChatbotTest from './pages/ChatbotTest';
 import MapTest from './pages/MapTest';
 import MapEditor from './pages/MapEditor';
+import MapNodeEditorV2 from './components/MapNodeEditorV2';
 import LSTMTest from './pages/LSTMTest';
 import TestNewLayout from './pages/TestNewLayout';
 // New Chatbot System
@@ -131,6 +132,7 @@ function AppContent() {
           <Route path="/chatbot-test" element={<ChatbotTest />} />
           <Route path="/map-test" element={<MapTest />} />
           <Route path="/map-editor" element={<MapEditor />} />
+          <Route path="/map-editor-v2" element={<MapNodeEditorV2 />} />
           {/* Public NFC route - no authentication required */}
           <Route path="/nfc/:tagId" element={<Home />} />
           

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import InteractiveMapViewer from '../components/maps/InteractiveMapViewer';
+import useLocationStore from '../store/locationStore';
+import useJourneyStore from '../store/journeyStore';
 import './MapTest.css';
 
 // 병원 지도의 정확한 복도 노드 (세밀하게 조정됨)
@@ -163,7 +165,44 @@ const MapTest = () => {
   const [currentPathName, setCurrentPathName] = useState('');
   const [showNodes, setShowNodes] = useState(false);
 
-  const handleRoomSelection = (roomInfo) => setSelectedLocation(roomInfo);
+  // locationStore와 journeyStore 가져오기
+  const setCurrentLocation = useLocationStore(state => state.setCurrentLocation);
+  const setCoordinateLocation = useLocationStore(state => state.setCoordinateLocation);
+
+  const handleRoomSelection = (roomInfo) => {
+    setSelectedLocation(roomInfo);
+
+    // locationStore 업데이트 (좌표 기반)
+    if (roomInfo.id && roomInfo.x !== undefined && roomInfo.y !== undefined) {
+      setCoordinateLocation(
+        roomInfo.id,
+        { x: roomInfo.x, y: roomInfo.y },
+        'main_1f',
+        {
+          location_name: roomInfo.name || roomInfo.id,
+          building: '본관',
+          floor: '1층',
+          room: roomInfo.name || roomInfo.id
+        }
+      );
+
+      // journeyStore의 currentLocation도 업데이트
+      useJourneyStore.setState({
+        currentLocation: {
+          node_id: roomInfo.id,
+          position: { x: roomInfo.x, y: roomInfo.y },
+          map_id: 'main_1f',
+          location_name: roomInfo.name || roomInfo.id,
+          building: '본관',
+          floor: '1층',
+          room: roomInfo.name || roomInfo.id,
+          description: roomInfo.name || roomInfo.id
+        }
+      });
+
+      console.log('✅ 위치 선택됨:', roomInfo);
+    }
+  };
 
   const createPath = (pathName) => {
     const nodeIds = predefinedPaths[pathName];
