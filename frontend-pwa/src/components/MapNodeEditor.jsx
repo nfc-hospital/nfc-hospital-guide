@@ -74,39 +74,144 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
     }));
   };
 
+  // 🔧 수정: React 상태의 이전 값을 올바르게 참조하도록 변경
   const setNodes = (nodesOrUpdater) => {
-    const newNodes = typeof nodesOrUpdater === 'function'
-      ? nodesOrUpdater(nodes)
-      : nodesOrUpdater;
-    updateCurrentMap({ nodes: newNodes });
+    setMapData(prev => {
+      const prevMapData = prev[mapId] || {
+        nodes: [],
+        edges: [],
+        startNode: null,
+        endNode: null,
+        nodeTypes: {},
+        nodeTransitions: {},
+        nodeMetadata: {}
+      };
+
+      const newNodes = typeof nodesOrUpdater === 'function'
+        ? nodesOrUpdater(prevMapData.nodes)
+        : nodesOrUpdater;
+
+      console.log('🔧 setNodes 호출:', {
+        이전노드수: prevMapData.nodes.length,
+        새노드수: newNodes.length,
+        mapId
+      });
+
+      return {
+        ...prev,
+        [mapId]: {
+          ...prevMapData,
+          nodes: newNodes
+        }
+      };
+    });
   };
 
   const setEdges = (edgesOrUpdater) => {
-    const newEdges = typeof edgesOrUpdater === 'function'
-      ? edgesOrUpdater(edges)
-      : edgesOrUpdater;
-    updateCurrentMap({ edges: newEdges });
+    setMapData(prev => {
+      const prevMapData = prev[mapId] || {
+        nodes: [],
+        edges: [],
+        startNode: null,
+        endNode: null,
+        nodeTypes: {},
+        nodeTransitions: {},
+        nodeMetadata: {}
+      };
+
+      const newEdges = typeof edgesOrUpdater === 'function'
+        ? edgesOrUpdater(prevMapData.edges)
+        : edgesOrUpdater;
+
+      return {
+        ...prev,
+        [mapId]: {
+          ...prevMapData,
+          edges: newEdges
+        }
+      };
+    });
   };
 
   const setStartNode = (value) => updateCurrentMap({ startNode: value });
   const setEndNode = (value) => updateCurrentMap({ endNode: value });
+
   const setNodeTypes = (typesOrUpdater) => {
-    const newTypes = typeof typesOrUpdater === 'function'
-      ? typesOrUpdater(nodeTypes)
-      : typesOrUpdater;
-    updateCurrentMap({ nodeTypes: newTypes });
+    setMapData(prev => {
+      const prevMapData = prev[mapId] || {
+        nodes: [],
+        edges: [],
+        startNode: null,
+        endNode: null,
+        nodeTypes: {},
+        nodeTransitions: {},
+        nodeMetadata: {}
+      };
+
+      const newTypes = typeof typesOrUpdater === 'function'
+        ? typesOrUpdater(prevMapData.nodeTypes)
+        : typesOrUpdater;
+
+      return {
+        ...prev,
+        [mapId]: {
+          ...prevMapData,
+          nodeTypes: newTypes
+        }
+      };
+    });
   };
+
   const setNodeTransitions = (transitionsOrUpdater) => {
-    const newTransitions = typeof transitionsOrUpdater === 'function'
-      ? transitionsOrUpdater(nodeTransitions)
-      : transitionsOrUpdater;
-    updateCurrentMap({ nodeTransitions: newTransitions });
+    setMapData(prev => {
+      const prevMapData = prev[mapId] || {
+        nodes: [],
+        edges: [],
+        startNode: null,
+        endNode: null,
+        nodeTypes: {},
+        nodeTransitions: {},
+        nodeMetadata: {}
+      };
+
+      const newTransitions = typeof transitionsOrUpdater === 'function'
+        ? transitionsOrUpdater(prevMapData.nodeTransitions)
+        : transitionsOrUpdater;
+
+      return {
+        ...prev,
+        [mapId]: {
+          ...prevMapData,
+          nodeTransitions: newTransitions
+        }
+      };
+    });
   };
+
   const setNodeMetadata = (metadataOrUpdater) => {
-    const newMetadata = typeof metadataOrUpdater === 'function'
-      ? metadataOrUpdater(nodeMetadata)
-      : metadataOrUpdater;
-    updateCurrentMap({ nodeMetadata: newMetadata });
+    setMapData(prev => {
+      const prevMapData = prev[mapId] || {
+        nodes: [],
+        edges: [],
+        startNode: null,
+        endNode: null,
+        nodeTypes: {},
+        nodeTransitions: {},
+        nodeMetadata: {}
+      };
+
+      const newMetadata = typeof metadataOrUpdater === 'function'
+        ? metadataOrUpdater(prevMapData.nodeMetadata)
+        : metadataOrUpdater;
+
+      return {
+        ...prev,
+        [mapId]: {
+          ...prevMapData,
+          nodeMetadata: newMetadata
+        }
+      };
+    });
   };
 
   // ✅ state와 동기화될 ref를 생성
@@ -153,15 +258,24 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
     }
   }, [propMapId]);
 
+  // 🔧 이전 시설을 추적하여 변경 시에만 초기화
+  const prevSelectedFacilityRef = useRef(selectedFacility);
+
   // 시설 선택시 지도 변경 및 데이터 로드
   useEffect(() => {
-    console.log('시설 변경:', selectedFacility);
+    console.log('시설 변경:', selectedFacility, '이전:', prevSelectedFacilityRef.current);
 
-    // 먼저 모든 상태 초기화
-    setMapData({});
-    setSelectedNode(null);
-    setIsConnecting(false);
-    setConnectingFrom(null);
+    // 🔧 시설이 실제로 변경되었을 때만 초기화
+    const facilityChanged = prevSelectedFacilityRef.current !== selectedFacility;
+    if (facilityChanged && prevSelectedFacilityRef.current !== '') {
+      console.log('시설 변경 감지 - 데이터 초기화');
+      setMapData({});
+      setSelectedNode(null);
+      setIsConnecting(false);
+      setConnectingFrom(null);
+    }
+
+    prevSelectedFacilityRef.current = selectedFacility;
 
     if (selectedFacility && facilityRoutes[selectedFacility]) {
       const facility = facilityRoutes[selectedFacility];

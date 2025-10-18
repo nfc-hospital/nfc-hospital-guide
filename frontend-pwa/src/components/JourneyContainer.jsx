@@ -79,16 +79,36 @@ const JourneyContainer = ({ taggedLocation }) => {
   // FormatBTemplate에 필요한 추가 데이터 (useMemo로 메모이제이션)
   const todaySchedule = React.useMemo(() => {
     if (!todaysAppointments) return [];
-    return todaysAppointments.map((apt, index) => ({
-      id: apt.appointment_id,
-      examName: apt.exam?.title || `검사 ${index + 1}`,
-      location: apt.exam?.room || apt.exam?.title || '위치 미정',
-      status: apt.status,
-      description: apt.exam?.description,
-      duration: apt.exam?.average_duration || 30,
-      scheduled_at: apt.scheduled_at,
-      exam: apt.exam
-    }));
+    return todaysAppointments.map((apt, index) => {
+      // location 객체를 "본관 1층 수납창구" 형식으로 변환
+      const locationObj = apt.exam?.location;
+      let location = '위치 미정';
+
+      if (locationObj && (locationObj.building || locationObj.floor || locationObj.room)) {
+        const parts = [];
+        if (locationObj.building) parts.push(locationObj.building);
+        // 🔧 이미 "층"으로 끝나면 그대로, 아니면 "층" 붙이기
+        if (locationObj.floor) {
+          const floorStr = locationObj.floor.toString();
+          parts.push(floorStr.endsWith('층') ? floorStr : `${floorStr}층`);
+        }
+        if (locationObj.room) parts.push(locationObj.room);
+        location = parts.join(' ');
+      } else if (apt.exam?.department) {
+        location = apt.exam.department;
+      }
+
+      return {
+        id: apt.appointment_id,
+        examName: apt.exam?.title || `검사 ${index + 1}`,
+        location: location,
+        status: apt.status,
+        description: apt.exam?.description,
+        duration: apt.exam?.average_duration || 30,
+        scheduled_at: apt.scheduled_at,
+        exam: apt.exam
+      };
+    });
   }, [todaysAppointments]);
 
   const completionStats = React.useMemo(() => {

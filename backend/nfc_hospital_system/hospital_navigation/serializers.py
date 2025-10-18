@@ -5,8 +5,8 @@ Hospital Navigation Serializers
 
 from rest_framework import serializers
 from .models import (
-    HospitalMap, NavigationNode, NavigationEdge, 
-    PatientRoute, RouteProgress, DepartmentZone
+    HospitalMap, NavigationNode, NavigationEdge,
+    PatientRoute, RouteProgress, DepartmentZone, FacilityRoute
 )
 from nfc.models import NFCTag
 from appointments.models import Exam
@@ -291,7 +291,7 @@ class RouteSearchSerializer(serializers.Serializer):
 
 class DepartmentZoneSerializer(serializers.ModelSerializer):
     """진료과/시설 존 시리얼라이저"""
-    
+
     class Meta:
         model = DepartmentZone
         fields = [
@@ -300,3 +300,16 @@ class DepartmentZoneSerializer(serializers.ModelSerializer):
             'display_order', 'is_active', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class FacilityRouteSerializer(serializers.ModelSerializer):
+    """시설 경로 시리얼라이저"""
+
+    class Meta:
+        model = FacilityRoute
+        fields = [
+            'route_id', 'route_name', 'route_data', 'route_type',
+            'start_facility', 'end_facility', 'is_active',
+            'created_at', 'updated_at', 'created_by'
+        ]
+        read_only_fields = ['route_id', 'created_at', 'updated_at']

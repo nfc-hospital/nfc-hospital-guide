@@ -67,7 +67,11 @@ const UnifiedJourneyTemplate = () => {
         if (locationObj && (locationObj.building || locationObj.floor || locationObj.room)) {
           const parts = [];
           if (locationObj.building) parts.push(locationObj.building);
-          if (locationObj.floor) parts.push(`${locationObj.floor}층`);
+          // 🔧 이미 "층"으로 끝나면 그대로, 아니면 "층" 붙이기
+          if (locationObj.floor) {
+            const floorStr = locationObj.floor.toString();
+            parts.push(floorStr.endsWith('층') ? floorStr : `${floorStr}층`);
+          }
           if (locationObj.room) parts.push(locationObj.room);
           location = parts.join(' ');
         } else if (apt.exam?.department) {
@@ -532,9 +536,16 @@ const UnifiedJourneyTemplate = () => {
                                       if (actualCurrentLocation?.description) {
                                         return actualCurrentLocation.description;
                                       }
-                                      if (actualCurrentLocation?.building && actualCurrentLocation?.floor) {
-                                        const room = actualCurrentLocation.room ? ` ${actualCurrentLocation.room}` : '';
-                                        return `${actualCurrentLocation.building} ${actualCurrentLocation.floor}${room}`;
+                                      if (actualCurrentLocation) {
+                                        const parts = [];
+                                        if (actualCurrentLocation.building) parts.push(actualCurrentLocation.building);
+                                        // 🔧 이미 "층"으로 끝나면 그대로, 아니면 "층" 붙이기
+                                        if (actualCurrentLocation.floor) {
+                                          const floorStr = actualCurrentLocation.floor.toString();
+                                          parts.push(floorStr.endsWith('층') ? floorStr : `${floorStr}층`);
+                                        }
+                                        if (actualCurrentLocation.room) parts.push(actualCurrentLocation.room);
+                                        if (parts.length > 0) return parts.join(' ');
                                       }
                                       return '미확인';
                                     })()}
@@ -542,7 +553,25 @@ const UnifiedJourneyTemplate = () => {
                                   <span className="text-blue-600 mx-1 text-lg">→</span>
                                   <span className="text-gray-600 font-medium">도착지</span>
                                   <span className="font-bold text-blue-700">
-                                    {locationInfo?.name || locationInfo?.room || schedule.location}
+                                    {(() => {
+                                      // locationInfo가 있으면 building + floor + room 조합
+                                      if (locationInfo) {
+                                        if (locationInfo.name) {
+                                          return locationInfo.name;
+                                        }
+                                        const parts = [];
+                                        if (locationInfo.building) parts.push(locationInfo.building);
+                                        // 🔧 이미 "층"으로 끝나면 그대로, 아니면 "층" 붙이기
+                                        if (locationInfo.floor) {
+                                          const floorStr = locationInfo.floor.toString();
+                                          parts.push(floorStr.endsWith('층') ? floorStr : `${floorStr}층`);
+                                        }
+                                        if (locationInfo.room) parts.push(locationInfo.room);
+                                        if (parts.length > 0) return parts.join(' ');
+                                      }
+                                      // locationInfo가 없으면 schedule.location 사용
+                                      return schedule.location;
+                                    })()}
                                   </span>
                                 </div>
                               </div>

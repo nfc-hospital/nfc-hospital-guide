@@ -62,7 +62,7 @@ export default function CurrentTaskCard({ appointment }) {
           <div className="flex items-center text-gray-700">
             <MapPinIcon className="h-5 w-5 mr-2 text-gray-400" />
             <span className="text-sm">
-              {exam.building} {exam.floor}층 {exam.room}
+              {exam.building} {exam.floor?.toString().endsWith('층') ? exam.floor : `${exam.floor}층`} {exam.room}
             </span>
           </div>
         )}

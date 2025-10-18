@@ -155,7 +155,7 @@ export default function CalledModal({
                   <p className="text-center">
                     <span className="text-sm text-amber-600 mr-2">📍 위치:</span>
                     <span className="text-lg font-bold text-gray-800">
-                      {examInfo.building} {examInfo.floor}층 {examInfo.room}
+                      {examInfo.building} {examInfo.floor?.toString().endsWith('층') ? examInfo.floor : `${examInfo.floor}층`} {examInfo.room}
                     </span>
                   </p>
                 </div>

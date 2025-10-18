@@ -715,3 +715,91 @@ class DepartmentZone(models.Model):
             models.Index(fields=['building', 'floor']),
             models.Index(fields=['display_order']),
         ]
+
+
+class FacilityRoute(models.Model):
+    """
+    시설 경로 및 시연용 경로 저장
+    Map Editor에서 생성한 경로 데이터를 JSON으로 저장
+    """
+
+    route_id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name='경로 ID'
+    )
+
+    route_name = models.CharField(
+        max_length=200,
+        unique=True,
+        verbose_name='경로 이름',
+        help_text='예: route_검사_채혈실_to_검사_MRI실, 시연_P1_도착_원무과'
+    )
+
+    route_data = models.JSONField(
+        verbose_name='경로 데이터',
+        help_text='Map Editor에서 생성된 경로 데이터 (nodes, edges, transitions 등)'
+    )
+
+    route_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('facility', '시설 경로'),
+            ('demo', '시연용 경로'),
+        ],
+        default='facility',
+        verbose_name='경로 타입'
+    )
+
+    start_facility = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='출발 시설',
+        help_text='출발 시설 이름'
+    )
+
+    end_facility = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='도착 시설',
+        help_text='도착 시설 이름'
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='활성 상태'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='생성일시'
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='수정일시'
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_routes',
+        verbose_name='생성자'
+    )
+
+    class Meta:
+        db_table = 'facility_routes'
+        verbose_name = '시설 경로'
+        verbose_name_plural = '시설 경로 목록'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['route_name']),
+            models.Index(fields=['route_type', 'is_active']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.route_name} ({self.get_route_type_display()})"
