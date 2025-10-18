@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
+import useJourneyStore from '../../store/journeyStore';
 
-export default function CalledModal({ 
-  isOpen, 
-  onClose, 
+export default function CalledModal({
+  isOpen,
+  onClose,
   examInfo: propsExamInfo,
   userName,
   currentTask
 }) {
   const [isClosing, setIsClosing] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const setCalledModalMinimized = useJourneyStore(state => state.setCalledModalMinimized);
 
   // props로 전달받은 examInfo를 우선 사용
   const examInfo = propsExamInfo || currentTask?.exam;
@@ -42,24 +44,32 @@ export default function CalledModal({
     setTimeout(() => {
       setIsMinimized(true);
       setIsClosing(false);
+      setCalledModalMinimized(true); // 챗봇 애니메이션 트리거
     }, 300);
   };
 
   const handleReopen = () => {
     setIsMinimized(false);
+    setCalledModalMinimized(false); // 챗봇 애니메이션 복원
     // 깜빡임 효과 없이 종 애니메이션만 재시작
     if ('vibrate' in navigator) {
       navigator.vibrate([100]);
     }
   };
 
+  const handleClose = () => {
+    setIsMinimized(false);
+    setCalledModalMinimized(false); // 챗봇 애니메이션 복원
+    onClose();
+  };
+
   if (!isOpen) return null;
 
-  // 최소화된 상태 - 하단에 챗봇 옆에 가로로 길게 표시
+  // 최소화된 상태 - 챗봇 아래 오른쪽 정렬로 표시 (바닥에 가까이)
   if (isMinimized) {
     return (
-      <div className="fixed bottom-4 left-4 right-28 z-50"> {/* 우측에 챗봇과 여백 확보 */}
-        <button 
+      <div className="fixed bottom-4 right-4 z-40 max-w-xs">
+        <button
           onClick={handleReopen}
           className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 text-white rounded-xl p-3 shadow-lg border border-amber-400 hover:shadow-xl transition-all duration-300 group"
         >
@@ -68,10 +78,10 @@ export default function CalledModal({
               <span className="text-lg animate-pulse">🔔</span>
               <span className="text-sm font-bold">호출됨 - {examInfo?.title || '검사실'}로 이동해주세요</span>
             </div>
-            <span 
+            <span
               onClick={(e) => {
                 e.stopPropagation();
-                onClose();
+                handleClose();
               }}
               className="text-white/80 hover:text-white text-xl ml-2 px-2 hover:bg-white/20 rounded-lg transition-colors"
             >

@@ -531,7 +531,7 @@ export default function MockNFCPanel() {
       {!isExpanded ? (
         <button
           onClick={() => setIsExpanded(true)}
-          className="bg-white rounded-full shadow-lg border-2 border-gray-200 p-3 hover:shadow-xl transition-all duration-200"
+          className="bg-white rounded-full shadow-lg border-2 border-gray-200 p-3 hover:shadow-xl transition-all duration-200 opacity-50 hover:opacity-100"
         >
           <span className="text-xl">🏷️</span>
         </button>

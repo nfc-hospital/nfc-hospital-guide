@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import useJourneyStore from '../../store/journeyStore';
 import Stage1_FloatingButton from './stages/Stage1_FloatingButton';
 import Stage2_QuickSelect from './stages/Stage2_QuickSelect';
 import Stage3_FullChat from './stages/Stage3_FullChat';
@@ -10,6 +11,20 @@ const ChatbotSystem = ({ elderlyMode = false }) => {
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [position, setPosition] = useState({ x: 20, y: 20 });
   const [isTyping, setIsTyping] = useState(false);
+
+  // CalledModal 최소화 상태 구독
+  const calledModalMinimized = useJourneyStore(state => state.calledModalMinimized);
+
+  // CalledModal이 최소화되면 챗봇을 위로 이동
+  useEffect(() => {
+    if (calledModalMinimized) {
+      // 알림바(bottom: 16px, 높이: ~60px) + 여유 공간(24px) = 100px 위로 이동
+      setPosition({ x: 20, y: 100 });
+    } else {
+      // 원래 위치로 복원
+      setPosition({ x: 20, y: 20 });
+    }
+  }, [calledModalMinimized]);
 
   // 서버 중심 아키텍처: 프론트엔드는 컨텍스트 생성하지 않음
   // 모든 환자 정보는 서버가 직접 Django에서 가져옴

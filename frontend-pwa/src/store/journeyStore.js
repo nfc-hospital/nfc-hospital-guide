@@ -482,6 +482,12 @@ const useJourneyStore = create(
         isAdminLoading: false,
         adminError: null,
 
+        // CalledModal 최소화 상태 (챗봇 애니메이션 연동용)
+        calledModalMinimized: false,
+        setCalledModalMinimized: (isMinimized) => {
+          set({ calledModalMinimized: isMinimized });
+        },
+
         // 메인 데이터 페칭 함수 - 역할에 따른 선택적 로딩
         fetchJourneyData: async (tagId = null) => {
           set({ isLoading: true, error: null });

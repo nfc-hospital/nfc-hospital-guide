@@ -32,7 +32,8 @@ const Stage1_FloatingButton = ({
       style={{
         position: 'fixed',
         bottom: `${position.y}px`,
-        right: `${position.x}px`
+        right: `${position.x}px`,
+        transition: 'bottom 300ms ease-in-out'
       }}
       aria-label="챗봇 열기"
     >

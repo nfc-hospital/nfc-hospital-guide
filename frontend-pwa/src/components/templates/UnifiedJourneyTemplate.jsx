@@ -82,13 +82,15 @@ const UnifiedJourneyTemplate = () => {
       journey.push(...examSchedules);
     }
 
-    // 3. 수납 단계 추가 (PAYMENT 또는 FINISHED 상태)
-    if (patientState && ['PAYMENT', 'FINISHED'].includes(patientState)) {
+    // 3. 수납 단계 추가 (ARRIVED 이후 모든 상태)
+    if (patientState && ['ARRIVED', 'REGISTERED', 'WAITING', 'CALLED', 'IN_PROGRESS', 'PAYMENT', 'FINISHED'].includes(patientState)) {
       journey.push({
         id: 'payment',
         examName: '수납',
         location: '본관 1층 수납창구',
-        status: patientState === 'PAYMENT' ? 'waiting' : 'completed',
+        status: patientState === 'FINISHED' ? 'completed' :
+                patientState === 'PAYMENT' ? 'waiting' :
+                'pending',
         description: '진료비 및 검사비 수납',
         duration: 5,
         exam: {
@@ -131,12 +133,38 @@ const UnifiedJourneyTemplate = () => {
     return null;
   }, [currentQueues]);
 
-  // 현재 진행 중인 일정 인덱스
+  // 현재 진행 중인 일정 인덱스 (patientState 기반)
   const currentIndex = React.useMemo(() => {
+    // 1. patientState 기반으로 진행 중인 카드 찾기
+    if (patientState) {
+      // ARRIVED: 접수 카드
+      if (patientState === 'ARRIVED') {
+        const regIndex = scheduleItems.findIndex(s => s.id === 'registration');
+        if (regIndex !== -1) return regIndex;
+      }
+
+      // REGISTERED, WAITING, CALLED, IN_PROGRESS: 검사/진료 카드 중 waiting/called/in_progress 상태인 것
+      if (['REGISTERED', 'WAITING', 'CALLED', 'IN_PROGRESS'].includes(patientState)) {
+        const examIndex = scheduleItems.findIndex(s =>
+          s.id !== 'registration' &&
+          s.id !== 'payment' &&
+          ['waiting', 'called', 'in_progress'].includes(s.status)
+        );
+        if (examIndex !== -1) return examIndex;
+      }
+
+      // PAYMENT: 수납 카드
+      if (patientState === 'PAYMENT') {
+        const paymentIndex = scheduleItems.findIndex(s => s.id === 'payment');
+        if (paymentIndex !== -1) return paymentIndex;
+      }
+    }
+
+    // 2. 백업: 기존 로직 (status만 보기)
     return scheduleItems.findIndex(s =>
       ['waiting', 'called', 'in_progress'].includes(s.status)
     );
-  }, [scheduleItems]);
+  }, [scheduleItems, patientState]);
 
   // 정확한 padding 계산 (vh 대신 실제 컨테이너 높이 사용)
   useEffect(() => {
@@ -267,7 +295,7 @@ const UnifiedJourneyTemplate = () => {
     <div className="h-screen flex flex-col bg-gradient-to-br from-gray-50 via-blue-50/30 to-indigo-50/50">
       {/* 상단: Progress Bar (고정) */}
       <div className="flex-shrink-0 bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-xs text-gray-500 font-medium mb-1">오늘 일정</span>
             <span className="text-base font-bold text-gray-800">
@@ -305,7 +333,8 @@ const UnifiedJourneyTemplate = () => {
           scheduleItems.map((schedule, index) => {
             const isExpanded = expandedIndex === index;
             const isCurrent = index === currentIndex;
-            const isCompleted = schedule.status === 'completed';
+            // currentIndex보다 앞에 있는 카드는 모두 완료 처리
+            const isCompleted = schedule.status === 'completed' || (currentIndex !== -1 && index < currentIndex);
             const isPending = !isCompleted && !isCurrent;
 
             return (
@@ -336,7 +365,7 @@ const UnifiedJourneyTemplate = () => {
                 {/* 카드 헤더 */}
                 <button
                   onClick={() => toggleCard(index)}
-                  className={`w-full p-8 flex items-center gap-5 transition-all duration-300 ${
+                  className={`w-full p-5 flex items-center gap-4 transition-all duration-300 ${
                     isCurrent
                       ? 'bg-gradient-to-r from-blue-500 via-blue-600 to-blue-700 hover:from-blue-600 hover:via-blue-700 hover:to-blue-800'
                       : 'hover:bg-gray-50'
@@ -345,7 +374,7 @@ const UnifiedJourneyTemplate = () => {
                   {/* 상태 아이콘/번호 */}
                   <div className="relative flex-shrink-0">
                     <div
-                      className={`w-20 h-20 rounded-2xl flex items-center justify-center font-black text-3xl transition-all duration-500 ${
+                      className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl transition-all duration-500 ${
                         isCurrent
                           ? 'bg-emerald-400 text-white shadow-lg shadow-emerald-500/40 scale-110'
                           : isCompleted
@@ -354,7 +383,7 @@ const UnifiedJourneyTemplate = () => {
                       }`}
                     >
                       {isCompleted ? (
-                        <CheckCircleIcon className="w-12 h-12" />
+                        <CheckCircleIcon className="w-10 h-10" />
                       ) : (
                         <span>{index + 1}</span>
                       )}
@@ -367,7 +396,7 @@ const UnifiedJourneyTemplate = () => {
                   {/* 일정 정보 */}
                   <div className="flex-1 text-left">
                     <h3
-                      className={`text-3xl font-bold mb-2 ${
+                      className={`text-2xl font-bold mb-2 ${
                         isCurrent ? 'text-white' : isCompleted ? 'text-gray-700' : 'text-gray-900'
                       }`}
                     >
@@ -378,7 +407,7 @@ const UnifiedJourneyTemplate = () => {
                         isCurrent ? 'text-white/90' : 'text-gray-500'
                       }`}>
                         <MapPinIcon className="w-5 h-5" />
-                        <span className="text-base font-medium">{schedule.location}</span>
+                        <span className="text-sm font-medium">{schedule.location}</span>
                       </div>
                     </div>
                   </div>
@@ -422,23 +451,23 @@ const UnifiedJourneyTemplate = () => {
                           {waitingInfo && (
                             <div className="grid grid-cols-2 gap-3">
                               {/* 내 앞에 */}
-                              <div className="bg-white rounded-2xl p-5 border-2 border-amber-300 shadow-lg">
+                              <div className="bg-blue-50 rounded-2xl p-5 border-2 border-blue-300 shadow-lg">
                                 <div className="flex flex-col items-center justify-center">
-                                  <p className="text-gray-600 text-sm font-medium mb-2">내 앞에</p>
+                                  <p className="text-blue-700 text-sm font-medium mb-2">내 앞에</p>
                                   <p className="flex items-baseline">
-                                    <span className="text-orange-600 text-4xl font-black">{waitingInfo.peopleAhead}</span>
-                                    <span className="text-gray-600 text-base font-bold ml-1.5">명</span>
+                                    <span className="text-blue-600 text-4xl font-black">{waitingInfo.peopleAhead}</span>
+                                    <span className="text-blue-700 text-base font-bold ml-1.5">명</span>
                                   </p>
                                 </div>
                               </div>
 
                               {/* 예상 대기 */}
-                              <div className="bg-white rounded-2xl p-5 border-2 border-amber-300 shadow-lg">
+                              <div className="bg-blue-50 rounded-2xl p-5 border-2 border-blue-300 shadow-lg">
                                 <div className="flex flex-col items-center justify-center">
-                                  <p className="text-gray-600 text-sm font-medium mb-2">예상 대기</p>
+                                  <p className="text-blue-700 text-sm font-medium mb-2">예상 대기</p>
                                   <p className="flex items-baseline">
-                                    <span className="text-orange-600 text-4xl font-black">{waitingInfo.estimatedTime}</span>
-                                    <span className="text-gray-600 text-base font-bold ml-1.5">분</span>
+                                    <span className="text-blue-600 text-4xl font-black">{waitingInfo.estimatedTime}</span>
+                                    <span className="text-blue-700 text-base font-bold ml-1.5">분</span>
                                   </p>
                                 </div>
                               </div>
@@ -469,9 +498,9 @@ const UnifiedJourneyTemplate = () => {
                                 </div>
 
                                 {/* 출발 → 도착 */}
-                                <div className="flex items-center gap-2 text-sm">
-                                  <span className="text-gray-500">현재 위치</span>
-                                  <span className="font-medium text-gray-700">
+                                <div className="flex items-center gap-2 text-base">
+                                  <span className="text-gray-600 font-medium">현재 위치</span>
+                                  <span className="font-bold text-gray-800">
                                     {(() => {
                                       if (actualCurrentLocation?.description) {
                                         return actualCurrentLocation.description;
@@ -483,9 +512,9 @@ const UnifiedJourneyTemplate = () => {
                                       return '미확인';
                                     })()}
                                   </span>
-                                  <span className="text-blue-600 mx-1">→</span>
-                                  <span className="text-gray-500">도착지</span>
-                                  <span className="font-semibold text-blue-700">
+                                  <span className="text-blue-600 mx-1 text-lg">→</span>
+                                  <span className="text-gray-600 font-medium">도착지</span>
+                                  <span className="font-bold text-blue-700">
                                     {locationInfo?.name || locationInfo?.room || schedule.location}
                                   </span>
                                 </div>
@@ -599,15 +628,6 @@ const UnifiedJourneyTemplate = () => {
         )}
       </div>
 
-      {/* 스크롤 인디케이터 */}
-      {scheduleItems.length > 1 && (
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-20 animate-bounce pointer-events-none">
-          <div className="bg-blue-600 text-white rounded-full p-2 shadow-xl">
-            <ChevronDownIcon className="w-6 h-6" />
-          </div>
-        </div>
-      )}
-
       {/* 플로팅: 다른 장소 찾기 버튼 (왼쪽 하단) */}
       <button
         className="fixed bottom-5 left-5 z-[9999] px-6 py-4 bg-white border-2 border-gray-300 rounded-full shadow-2xl hover:shadow-3xl hover:bg-gray-50 hover:border-gray-400 active:scale-95 flex items-center justify-center gap-2 font-bold text-gray-700 transition-all duration-300"
@@ -616,7 +636,7 @@ const UnifiedJourneyTemplate = () => {
           height: '56px'
         }}
       >
-        <MagnifyingGlassIcon className="w-6 h-6" />
+        <MagnifyingGlassIcon className="w-6 h-6 text-blue-600" />
         다른 장소 찾기
       </button>
     </div>
