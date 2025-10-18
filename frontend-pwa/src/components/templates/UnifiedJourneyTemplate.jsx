@@ -177,7 +177,7 @@ const UnifiedJourneyTemplate = () => {
       const containerHeight = container.clientHeight;
       const visualCenterPosition = containerHeight * 0.35;
 
-      container.style.paddingTop = `0px`; // 진행 중 카드 헤더가 보이도록 padding 제거
+      container.style.paddingTop = `50px`; // 진행 중 카드 헤더가 보이도록 padding 제거
       container.style.paddingBottom = `${containerHeight - visualCenterPosition}px`;
     };
 
