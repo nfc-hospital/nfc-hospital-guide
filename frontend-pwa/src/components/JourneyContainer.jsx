@@ -160,24 +160,9 @@ const JourneyContainer = ({ taggedLocation }) => {
       }
     }
 
-    // finished 상태일 때는 실제 다음 예약 정보 사용
+    // finished 상태일 때는 하드코딩된 다음 예약 정보 사용
     if (currentState === PatientJourneyState.FINISHED) {
-      if (loadingNextAppointment) {
-        return '다음 예약 확인 중...';
-      }
-      if (nextAppointment && nextAppointment.exam) {
-        const appointmentDate = new Date(nextAppointment.scheduled_at);
-        const dateStr = appointmentDate.toLocaleDateString('ko-KR', {
-          month: 'long',
-          day: 'numeric'
-        });
-        const timeStr = appointmentDate.toLocaleTimeString('ko-KR', {
-          hour: 'numeric',
-          hour12: true
-        });
-        return `다음: ${dateStr} ${timeStr}`;
-      }
-      return '다음: 예약된 일정이 없습니다'; // 다음 예약이 없어도 영역 표시
+      return '다음: 2025년 12월 20일 오후 2시';
     }
 
     if (!appointments || appointments.length === 0) return null;
@@ -381,12 +366,93 @@ const JourneyContainer = ({ taggedLocation }) => {
 
     // FINISHED: mainContent로 전달하되, completion 관련 props도 함께 전달
     if (currentState === PatientJourneyState.FINISHED) {
-      // 처방전 여부 확인
-      const hasPrescription = journeySummary.completedAppointments?.some(apt =>
-        apt.exam?.department === '내과' ||
-        apt.exam?.department === '정형외과' ||
-        apt.exam?.has_prescription
-      ) || false;
+      // 🎯 하드코딩된 Mock 데이터
+      const mockCompletedExams = [
+        {
+          appointment_id: 'apt_001',
+          exam: {
+            exam_id: 'blood_test_001',
+            title: '혈액검사',
+            description: '일반혈액검사, 간기능, 신장기능, 혈당 검사',
+            department: '진단검사의학과',
+            building: '본관',
+            floor: '1',
+            room: '채혈실',
+            cost: '45,000',
+            base_price: 150000,
+            patient_cost: 45000,
+            insurance_amount: 105000,
+            average_duration: 20
+          },
+          status: 'completed',
+          scheduled_at: '2025-11-18T09:00:00',
+          completed_at: '2025-11-18T09:20:00',
+          completedAt: '09:20 완료'
+        },
+        {
+          appointment_id: 'apt_002',
+          exam: {
+            exam_id: 'urine_test_001',
+            title: '소변검사',
+            description: '요단백, 요당, 현미경 검사',
+            department: '진단검사의학과',
+            building: '본관',
+            floor: '1',
+            room: '검체실',
+            cost: '15,000',
+            base_price: 50000,
+            patient_cost: 15000,
+            insurance_amount: 35000,
+            average_duration: 15
+          },
+          status: 'completed',
+          scheduled_at: '2025-11-18T09:25:00',
+          completed_at: '2025-11-18T09:40:00',
+          completedAt: '09:40 완료'
+        },
+        {
+          appointment_id: 'apt_003',
+          exam: {
+            exam_id: 'ct_scan_001',
+            title: 'CT 촬영',
+            description: '복부 CT 촬영 (조영제 포함)',
+            department: '영상의학과',
+            building: '본관',
+            floor: '지하1',
+            room: 'CT실',
+            cost: '180,000',
+            base_price: 600000,
+            patient_cost: 180000,
+            insurance_amount: 420000,
+            average_duration: 30
+          },
+          status: 'completed',
+          scheduled_at: '2025-11-18T09:50:00',
+          completed_at: '2025-11-18T10:20:00',
+          completedAt: '10:20 완료'
+        },
+        {
+          appointment_id: 'apt_004',
+          exam: {
+            exam_id: 'mri_scan_001',
+            title: 'MRI 촬영',
+            description: '뇌 MRI 촬영',
+            department: '영상의학과',
+            building: '본관',
+            floor: '지하1',
+            room: 'MRI실',
+            cost: '350,000',
+            base_price: 1166667,
+            patient_cost: 350000,
+            insurance_amount: 816667,
+            average_duration: 45
+          },
+          status: 'completed',
+          scheduled_at: '2025-11-18T10:30:00',
+          completed_at: '2025-11-18T11:15:00',
+          completedAt: '11:15 완료'
+        }
+      ];
 
       return {
         ...baseProps,
@@ -394,22 +460,34 @@ const JourneyContainer = ({ taggedLocation }) => {
           <Content
             nextAppointment={nextAppointment}
             loadingNextAppointment={loadingNextAppointment}
-            completedAppointments={journeySummary.completedAppointments}
-            hasPrescription={hasPrescription}
+            completedAppointments={mockCompletedExams}
+            hasPrescription={false}
           />
         ),
-        completionStats: journeySummary,
-        completedAppointments: journeySummary.completedAppointments,
-        totalDuration: journeySummary.totalDuration,
-        completedCount: journeySummary.completedCount,
+        completionStats: {
+          completedCount: 4,
+          totalCount: 4,
+          completedAppointments: mockCompletedExams,
+          totalDuration: 135,
+          totalDurationText: '2시간 15분'
+        },
+        completedAppointments: mockCompletedExams,
+        totalDuration: 135,
+        completedCount: 4,
         showPaymentInfo: true,
-        paymentAmount: journeySummary.completedAppointments?.length > 0
-          ? journeySummary.completedAppointments.reduce((total, apt) => {
-              const cost = apt.exam?.patient_cost || apt.exam?.base_price || 0;
-              const numericCost = typeof cost === 'string' ? parseInt(cost.replace(/[^0-9]/g, '')) : Number(cost);
-              return total + numericCost;
-            }, 0)
-          : 0
+        paymentAmount: 590000,
+        todaySchedule: mockCompletedExams.map((apt, index) => ({
+          id: apt.appointment_id,
+          examName: apt.exam?.title,
+          location: `${apt.exam?.building} ${apt.exam?.floor}층 ${apt.exam?.room}`,
+          status: apt.status,
+          description: apt.exam?.description,
+          duration: apt.exam?.average_duration,
+          scheduled_at: apt.scheduled_at,
+          completedAt: apt.completedAt,
+          cost: apt.exam?.cost,
+          exam: apt.exam
+        }))
       };
     }
 

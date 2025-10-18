@@ -123,80 +123,91 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
     }
   ];
 
-  // Mock 완료된 검사 데이터
+  // Mock 완료된 검사 데이터 (혈액검사 → 소변검사 → CT촬영 → MRI촬영)
   const mockCompletedExams = [
     {
       appointment_id: 'apt_001',
       exam: {
         exam_id: 'blood_test_001',
-        title: '채혈 검사',
-        description: '혈당, 콜레스테롤, 간 기능 검사',
+        title: '혈액검사',
+        description: '일반혈액검사, 간기능, 신장기능, 혈당 검사',
         department: '진단검사의학과',
         building: '본관',
         floor: '1',
         room: '채혈실',
-        cost: '35,000',
-        average_duration: 15
+        cost: '45,000',
+        base_price: 150000,
+        patient_cost: 45000,
+        insurance_amount: 105000,
+        average_duration: 20
       },
       status: 'completed',
-      scheduled_at: '2025-08-25T13:00:00',
-      completed_at: '2025-08-25T13:15:00',
-      completedAt: '13:15 완료'  // FormatBTemplate용
+      scheduled_at: '2025-11-18T09:00:00',
+      completed_at: '2025-11-18T09:20:00',
+      completedAt: '09:20 완료'  // FormatBTemplate용
     },
     {
       appointment_id: 'apt_002',
       exam: {
         exam_id: 'urine_test_001',
-        title: '소변 검사',
-        description: '당뇨, 신장 기능 검사',
+        title: '소변검사',
+        description: '요단백, 요당, 현미경 검사',
         department: '진단검사의학과',
         building: '본관',
         floor: '1',
-        room: '검체 채취실',
+        room: '검체실',
         cost: '15,000',
-        average_duration: 10
+        base_price: 50000,
+        patient_cost: 15000,
+        insurance_amount: 35000,
+        average_duration: 15
       },
       status: 'completed',
-      scheduled_at: '2025-08-25T13:20:00',
-      completed_at: '2025-08-25T13:30:00',
-      completedAt: '13:30 완료'  // FormatBTemplate용
+      scheduled_at: '2025-11-18T09:25:00',
+      completed_at: '2025-11-18T09:40:00',
+      completedAt: '09:40 완료'  // FormatBTemplate용
     },
     {
       appointment_id: 'apt_003',
       exam: {
-        exam_id: 'xray_001',
-        title: '흉부 X-ray',
-        description: '폐 건강 확인',
+        exam_id: 'ct_scan_001',
+        title: 'CT 촬영',
+        description: '복부 CT 촬영 (조영제 포함)',
         department: '영상의학과',
         building: '본관',
-        floor: '2',
-        room: 'X-ray 촬영실',
-        cost: '25,000',
-        average_duration: 20
+        floor: '지하1',
+        room: 'CT실',
+        cost: '180,000',
+        base_price: 600000,
+        patient_cost: 180000,
+        insurance_amount: 420000,
+        average_duration: 30
       },
       status: 'completed',
-      scheduled_at: '2025-08-25T13:35:00',
-      completed_at: '2025-08-25T13:55:00',
-      completedAt: '13:55 완료'  // FormatBTemplate용
+      scheduled_at: '2025-11-18T09:50:00',
+      completed_at: '2025-11-18T10:20:00',
+      completedAt: '10:20 완료'  // FormatBTemplate용
     },
     {
       appointment_id: 'apt_004',
       exam: {
-        exam_id: 'consultation_001',
-        title: '내과 진료',
-        description: '고혈압 약물 처방 및 상담',
-        department: '내과',
+        exam_id: 'mri_scan_001',
+        title: 'MRI 촬영',
+        description: '뇌 MRI 촬영',
+        department: '영상의학과',
         building: '본관',
-        floor: '3',
-        room: '내과 2 진료실',
-        cost: '15,000',
-        average_duration: 20,
-        has_prescription: true
+        floor: '지하1',
+        room: 'MRI실',
+        cost: '350,000',
+        base_price: 1166667,
+        patient_cost: 350000,
+        insurance_amount: 816667,
+        average_duration: 45
       },
       status: 'completed',
-      scheduled_at: '2025-08-25T14:00:00',
-      completed_at: '2025-08-25T14:20:00',
-      completedAt: '14:20 완료'  // FormatBTemplate용
+      scheduled_at: '2025-11-18T10:30:00',
+      completed_at: '2025-11-18T11:15:00',
+      completedAt: '11:15 완료'  // FormatBTemplate용
     }
   ];
 
@@ -204,16 +215,16 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
   const calculateTotalDuration = () => {
     // Mock 데이터 사용 시 고정값 반환
     if (!todaysAppointments || todaysAppointments.length === 0) {
-      // 13:00 검사 시작 ~ 14:20 내과 진료 완료 = 80분
-      return 80;
+      // 09:00 검사 시작 ~ 11:15 MRI 완료 = 135분 (2시간 15분)
+      return 135;
     }
     
     // 완료된 검사들만 필터링
-    const completedAppts = todaysAppointments.filter(apt => 
+    const completedAppts = todaysAppointments.filter(apt =>
       ['completed', 'done'].includes(apt.status)
     );
-    
-    if (completedAppts.length === 0) return 80; // Mock 데이터 기본값
+
+    if (completedAppts.length === 0) return 135; // Mock 데이터 기본값
     
     // 가장 이른 시작 시간 찾기 (접수 시간 또는 첫 검사 시작)
     const startTimes = completedAppts.map(apt => {
@@ -222,8 +233,8 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
       // 없으면 scheduled_at 사용
       return new Date(apt.scheduled_at);
     }).filter(date => !isNaN(date));
-    
-    if (startTimes.length === 0) return 80; // Mock 데이터 기본값
+
+    if (startTimes.length === 0) return 135; // Mock 데이터 기본값
     
     const firstTime = new Date(Math.min(...startTimes));
     
@@ -236,8 +247,8 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
       const duration = apt.exam?.average_duration || 30;
       return new Date(scheduled.getTime() + duration * 60 * 1000);
     }).filter(date => !isNaN(date));
-    
-    if (endTimes.length === 0) return 80; // Mock 데이터 기본값
+
+    if (endTimes.length === 0) return 135; // Mock 데이터 기본값
     
     const lastTime = new Date(Math.max(...endTimes));
     
@@ -325,45 +336,19 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
   
   const nextAppointment = findNextAppointment();
   
-  // 다음 일정 텍스트 생성
+  // 다음 일정 텍스트 생성 (하드코딩)
   const getNextScheduleText = () => {
-    if (!nextAppointment) {
-      return '예정된 일정이 없습니다';
-    }
-    
-    const date = new Date(nextAppointment.scheduled_at);
-    const today = new Date();
-    const isToday = date.toDateString() === today.toDateString();
-    
-    if (isToday) {
-      return `오늘 ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - ${nextAppointment.exam?.title || '다음 검사'}`;
-    } else {
-      return `${date.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' })} ${date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} - ${nextAppointment.exam?.title || '다음 검사'}`;
-    }
+    // 하드코딩된 다음 일정 반환
+    return '2025년 12월 20일 14:00 - 결과 상담 (신경과)';
   };
   
   const nextSchedule = getNextScheduleText();
 
-  // 완료 통계
-  const completedAppointments = todaysAppointments.filter(apt => 
-    ['completed', 'done'].includes(apt.status)
-  );
-  // 완료된 검사 개수 - Mock 데이터가 있으면 4개 (채혈, 소변, X-ray, 내과진료)
-  const completedCount = completedAppointments.length > 0 ? completedAppointments.length : 4;
-  
-  // 소요 시간 계산 - 고정값 사용
-  const totalDuration = calculateTotalDuration();
-  
-  // 총 비용 계산 - API에서 받은 실제 환자 본인부담금 사용
-  const totalCost = completedAppointments.length > 0
-    ? completedAppointments.reduce((sum, apt) => {
-        // API에서 받은 실제 환자 본인부담금 사용
-        const cost = apt.exam?.patient_cost || apt.exam?.base_price || 0;
-        const numericCost = typeof cost === 'string' ?
-          parseInt(cost.replace(/[^0-9]/g, '')) : Number(cost);
-        return sum + numericCost;
-      }, 0)
-    : 0; // 기본값을 0으로 변경
+  // 완료 통계 - 하드코딩
+  const completedAppointments = mockCompletedExams;
+  const completedCount = 4;
+  const totalDuration = 135;
+  const totalCost = 590000;
 
   // 처방 여부 확인
   const hasPrescription = completedAppointments.some(apt => 
@@ -532,10 +517,10 @@ export default function FinishedScreen({ taggedLocation, completed_tasks }) {
       summaryCards={[]}
       todaySchedule={todaySchedule}
       showPaymentInfo={true}
-      paymentAmount={totalCost}
-      completedAppointments={completedAppointments.length > 0 ? completedAppointments : mockCompletedExams} // 데이터 없으면 Mock 사용
-      totalDuration={totalDuration}
-      completedCount={completedCount}
+      paymentAmount={590000}
+      completedAppointments={mockCompletedExams}
+      totalDuration={135}
+      completedCount={4}
       precautions={precautions}
       locationInfo={locationInfo}
       taggedLocation={taggedLocation}
