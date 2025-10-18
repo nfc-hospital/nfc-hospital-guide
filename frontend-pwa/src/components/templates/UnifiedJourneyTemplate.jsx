@@ -204,13 +204,12 @@ const UnifiedJourneyTemplate = () => {
           const cardRect = currentCard.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
 
-          // 컨테이너 높이의 35% 지점에 카드 중앙이 오도록
+          // 카드 상단이 화면 상단 근처에 오도록 (헤더가 보이게)
           const targetScrollTop =
             container.scrollTop +
             cardRect.top -
             containerRect.top -
-            (containerRect.height * 0.35) +
-            (cardRect.height / 2);
+            20; // 상단에서 20px 여백
 
           container.scrollTo({
             top: targetScrollTop,
