@@ -177,7 +177,7 @@ const UnifiedJourneyTemplate = () => {
       const containerHeight = container.clientHeight;
       const visualCenterPosition = containerHeight * 0.35;
 
-      container.style.paddingTop = `20px`; // 상단 여백 최소화
+      container.style.paddingTop = `0px`; // 진행 중 카드 헤더가 보이도록 padding 제거
       container.style.paddingBottom = `${containerHeight - visualCenterPosition}px`;
     };
 
@@ -204,12 +204,12 @@ const UnifiedJourneyTemplate = () => {
           const cardRect = currentCard.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
 
-          // 카드 상단이 화면 상단 근처에 오도록 (헤더가 보이게)
+          // 카드 상단이 화면 최상단에 오도록 (헤더가 완전히 보이게)
           const targetScrollTop =
             container.scrollTop +
             cardRect.top -
-            containerRect.top -
-            20; // 상단에서 20px 여백
+            containerRect.top +
+            10; // 상단에서 10px 아래 여유 공간
 
           container.scrollTo({
             top: targetScrollTop,
@@ -337,7 +337,7 @@ const UnifiedJourneyTemplate = () => {
         className="flex-1 overflow-y-auto relative hide-scrollbar"
         style={{
           scrollSnapType: 'y proximity', // mandatory → proximity로 부드럽게
-          scrollPaddingTop: '35%',
+          scrollPaddingTop: '0px',
           scrollPaddingBottom: '65%',
         }}
       >
