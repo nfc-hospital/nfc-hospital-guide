@@ -238,19 +238,50 @@ class AdminNFCTagUpdateSerializer(serializers.ModelSerializer):
 
 
 class FacilityRouteSerializer(serializers.ModelSerializer):
-    """시설별 경로 데이터 직렬화"""
-    created_by_name = serializers.CharField(source='created_by.name', read_only=True)
-    
+    """
+    시설별 경로 데이터 직렬화
+    기존 필드와 새 필드를 모두 지원하여 하위 호환성 유지
+    """
+    created_by_name = serializers.CharField(source='created_by.name', read_only=True, allow_null=True)
+    route_type_display = serializers.CharField(source='get_route_type_display', read_only=True)
+
     class Meta:
         model = FacilityRoute
         fields = [
-            'id', 'facility_name', 'nodes', 'edges', 'map_id',
-            'svg_element_id', 'created_at', 'updated_at', 
-            'created_by', 'created_by_name'
+            # 새 구조 필드
+            'route_id', 'route_name', 'route_data', 'route_type', 'route_type_display',
+            'start_facility', 'end_facility', 'is_active',
+            # 기존 필드 (하위 호환성)
+            'facility_name', 'nodes', 'edges', 'map_id', 'svg_element_id',
+            # 공통 필드
+            'created_at', 'updated_at', 'created_by', 'created_by_name'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
-    
+        read_only_fields = ['route_id', 'created_at', 'updated_at', 'created_by', 'created_by_name', 'route_type_display']
+
     def create(self, validated_data):
+        """경로 생성 시 생성자 자동 설정"""
         if self.context.get('request'):
             validated_data['created_by'] = self.context['request'].user
         return super().create(validated_data)
+
+    def validate(self, data):
+        """
+        데이터 검증
+        - route_name 또는 facility_name 중 하나는 필수
+        - route_data 또는 nodes/edges 중 하나는 필수
+        """
+        if not data.get('route_name') and not data.get('facility_name'):
+            raise serializers.ValidationError({
+                "route_name": "route_name 또는 facility_name 중 하나는 필수입니다."
+            })
+
+        # route_data와 nodes/edges가 모두 비어있는지 확인
+        has_route_data = bool(data.get('route_data'))
+        has_legacy_data = bool(data.get('nodes') or data.get('edges'))
+
+        if not has_route_data and not has_legacy_data:
+            raise serializers.ValidationError({
+                "route_data": "route_data 또는 nodes/edges 중 하나는 필수입니다."
+            })
+
+        return data

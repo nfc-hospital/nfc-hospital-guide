@@ -304,20 +304,155 @@ class NFCTagExam(models.Model):
 
 
 class FacilityRoute(models.Model):
-    """시설별 경로 데이터를 DB에 저장"""
-    facility_name = models.CharField(max_length=100, unique=True)
-    nodes = models.JSONField(default=list)  # 노드 배열
-    edges = models.JSONField(default=list)  # 엣지 배열
-    map_id = models.CharField(max_length=50)
-    svg_element_id = models.CharField(max_length=100, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    """
+    시설 경로 및 시연용 경로 저장
+    Map Editor에서 생성한 경로 데이터를 JSON으로 저장
+
+    기존 필드와 새 필드를 모두 포함하여 하위 호환성 유지
+    """
+
+    # 새 구조 필드
+    route_id = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name='경로 ID'
+    )
+
+    route_name = models.CharField(
+        max_length=200,
+        unique=True,
+        verbose_name='경로 이름',
+        help_text='예: route_검사_채혈실_to_검사_MRI실, 시연_P1_도착_원무과'
+    )
+
+    # 기존 필드 유지 (하위 호환성)
+    facility_name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        verbose_name='시설명 (구 버전)',
+        help_text='하위 호환성을 위해 유지. route_name 사용 권장'
+    )
+
+    nodes = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='노드 배열 (구 버전)',
+        help_text='하위 호환성을 위해 유지. route_data 사용 권장'
+    )
+
+    edges = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name='엣지 배열 (구 버전)',
+        help_text='하위 호환성을 위해 유지. route_data 사용 권장'
+    )
+
+    map_id = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name='지도 ID'
+    )
+
+    svg_element_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name='SVG 요소 ID'
+    )
+
+    # 새 구조 필드
+    route_data = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name='경로 데이터',
+        help_text='Map Editor에서 생성된 경로 데이터 (nodes, edges, transitions 등)'
+    )
+
+    route_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('facility', '시설 경로'),
+            ('demo', '시연용 경로'),
+        ],
+        default='facility',
+        verbose_name='경로 타입'
+    )
+
+    start_facility = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='출발 시설',
+        help_text='출발 시설 이름'
+    )
+
+    end_facility = models.CharField(
+        max_length=200,
+        blank=True,
+        verbose_name='도착 시설',
+        help_text='도착 시설 이름'
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='활성 상태'
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='생성일시'
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name='수정일시'
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='created_routes',
+        verbose_name='생성자'
+    )
 
     class Meta:
         db_table = 'facility_routes'
         verbose_name = '시설 경로'
         verbose_name_plural = '시설 경로 목록'
-        
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['route_name']),
+            models.Index(fields=['route_type', 'is_active']),
+            models.Index(fields=['created_at']),
+        ]
+
     def __str__(self):
-        return f"{self.facility_name} 경로"
+        return f"{self.route_name} ({self.get_route_type_display()})"
+
+    def save(self, *args, **kwargs):
+        """
+        저장 시 기존 필드와 새 필드 간 동기화
+        - route_name이 없으면 facility_name 사용
+        - route_data가 비어있으면 nodes/edges로 채우기
+        """
+        # route_name이 없으면 facility_name 사용
+        if not self.route_name and self.facility_name:
+            self.route_name = f"route_{self.facility_name}"
+
+        # route_data가 비어있고 nodes/edges가 있으면 변환
+        if not self.route_data and (self.nodes or self.edges):
+            self.route_data = {
+                'nodes': self.nodes,
+                'edges': self.edges,
+                'map_id': self.map_id,
+                'svg_element_id': self.svg_element_id
+            }
+
+        # 반대로 route_data가 있고 nodes/edges가 없으면 역변환
+        if self.route_data and not self.nodes:
+            self.nodes = self.route_data.get('nodes', [])
+            self.edges = self.route_data.get('edges', [])
+
+        super().save(*args, **kwargs)

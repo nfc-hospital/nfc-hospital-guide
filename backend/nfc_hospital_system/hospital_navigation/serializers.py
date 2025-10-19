@@ -6,9 +6,9 @@ Hospital Navigation Serializers
 from rest_framework import serializers
 from .models import (
     HospitalMap, NavigationNode, NavigationEdge,
-    PatientRoute, RouteProgress, DepartmentZone, FacilityRoute
+    PatientRoute, RouteProgress, DepartmentZone
 )
-from nfc.models import NFCTag
+from nfc.models import NFCTag, FacilityRoute  # FacilityRoute는 nfc.models로 통합됨
 from appointments.models import Exam
 import logging
 

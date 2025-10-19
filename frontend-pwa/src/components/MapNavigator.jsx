@@ -78,53 +78,95 @@ const MapNavigator = ({
   // Store에서 경로 데이터 가져오기 (navigationRoute 우선)
   const routeData = navigationRoute || activeRoute || {};
 
-  // 경로 데이터 우선순위: props가 있으면 props 우선 (시연 모드), 없으면 store > stage
-  let corridorNodes = (propPathNodes && propPathNodes.length > 0) ? propPathNodes :
-    (routeData.nodes?.length > 0 ? routeData.nodes : stageNodes);
-  let corridorEdges = (propPathEdges && propPathEdges.length > 0) ? propPathEdges :
-    (routeData.edges?.length > 0 ? routeData.edges : stageEdges);
+  // ✨ 경로 데이터 우선순위 (최우선: 시연 경로)
+  let corridorNodes = [];
+  let corridorEdges = [];
+  let routeSource = 'none'; // 디버깅용
 
-  // 폴백: 경로 데이터가 전혀 없으면 시연용 경로 또는 기본 샘플 경로 사용
-  if (corridorNodes.length === 0 && !stage?.isTransition) {
-    // 1. 먼저 localStorage에서 activeDemoRoute 확인
-    const activeDemoRoute = localStorage.getItem('activeDemoRoute');
-    let demoRouteLoaded = false;
+  // 1️⃣ 최우선: localStorage의 activeDemoRoute (시연 모드)
+  const activeDemoRoute = localStorage.getItem('activeDemoRoute');
+  if (activeDemoRoute) {
+    try {
+      const facilityRoutesData = localStorage.getItem('facilityRoutes');
+      if (facilityRoutesData) {
+        const facilityRoutes = JSON.parse(facilityRoutesData);
+        const demoRoute = facilityRoutes[activeDemoRoute];
 
-    if (activeDemoRoute) {
-      try {
-        const facilityRoutesData = localStorage.getItem('facilityRoutes');
-        if (facilityRoutesData) {
-          const facilityRoutes = JSON.parse(facilityRoutesData);
-          const demoRoute = facilityRoutes[activeDemoRoute];
-
-          if (demoRoute?.nodes?.length > 0) {
+        if (demoRoute) {
+          // Multi-floor 경로 지원: maps 객체 구조 확인
+          if (demoRoute.maps && typeof demoRoute.maps === 'object') {
+            // Multi-floor 경로: 현재 mapId에 해당하는 맵 데이터만 추출
+            const currentMapData = demoRoute.maps[mapId];
+            if (currentMapData?.nodes?.length > 0) {
+              corridorNodes = currentMapData.nodes;
+              corridorEdges = currentMapData.edges || [];
+              routeSource = 'activeDemoRoute-multifloor';
+              console.log(`✅ MapNavigator: 시연 경로 로드 (${mapId})`, activeDemoRoute);
+            } else {
+              // 현재 맵에 데이터가 없으면 첫 번째 맵 사용
+              const firstMapId = Object.keys(demoRoute.maps)[0];
+              const firstMapData = demoRoute.maps[firstMapId];
+              if (firstMapData?.nodes?.length > 0) {
+                corridorNodes = firstMapData.nodes;
+                corridorEdges = firstMapData.edges || [];
+                routeSource = 'activeDemoRoute-multifloor-fallback';
+                console.log(`✅ MapNavigator: 시연 경로 로드 (폴백: ${firstMapId})`, activeDemoRoute);
+              }
+            }
+          }
+          // 기존 단일 층 경로 지원 (하위 호환성)
+          else if (demoRoute.nodes?.length > 0) {
             corridorNodes = demoRoute.nodes;
             corridorEdges = demoRoute.edges || [];
-            demoRouteLoaded = true;
-            console.log('✅ MapNavigator: 시연용 경로 로드 완료', activeDemoRoute);
+            routeSource = 'activeDemoRoute-singlefloor';
+            console.log('✅ MapNavigator: 시연 경로 로드 (단일 층)', activeDemoRoute);
           }
         }
-      } catch (error) {
-        console.error('❌ 시연용 경로 로드 실패:', error);
       }
-    }
-
-    // 2. 시연용 경로가 없으면 기본 샘플 경로 사용
-    if (!demoRouteLoaded) {
-      corridorNodes = [
-        { id: 'default-location', x: 150, y: 400, name: '현재 위치' }
-      ];
-      corridorEdges = [];
-
-      // props에서 목적지가 있으면 경로 생성
-      if (targetLocation || highlightRoom || facilityName) {
-        corridorNodes.push(
-          { id: 'default-destination', x: 450, y: 300, name: targetLocation || highlightRoom || facilityName }
-        );
-        corridorEdges.push(['default-location', 'default-destination']);
-      }
+    } catch (error) {
+      console.error('❌ 시연용 경로 로드 실패:', error);
     }
   }
+
+  // 2️⃣ props로 전달받은 경로 (시연 경로가 없을 때만)
+  if (corridorNodes.length === 0 && propPathNodes && propPathNodes.length > 0) {
+    corridorNodes = propPathNodes;
+    corridorEdges = propPathEdges || [];
+    routeSource = 'props';
+  }
+
+  // 3️⃣ store의 경로 데이터 (props도 없을 때만)
+  if (corridorNodes.length === 0 && routeData.nodes?.length > 0) {
+    corridorNodes = routeData.nodes;
+    corridorEdges = routeData.edges || [];
+    routeSource = 'store';
+  }
+
+  // 4️⃣ stage의 경로 데이터 (store도 없을 때만)
+  if (corridorNodes.length === 0 && stageNodes.length > 0) {
+    corridorNodes = stageNodes;
+    corridorEdges = stageEdges;
+    routeSource = 'stage';
+  }
+
+  // 5️⃣ 기본 샘플 경로 (모든 경로가 없을 때만)
+  if (corridorNodes.length === 0 && !stage?.isTransition) {
+    corridorNodes = [
+      { id: 'default-location', x: 150, y: 400, name: '현재 위치' }
+    ];
+    corridorEdges = [];
+    routeSource = 'default';
+
+    // props에서 목적지가 있으면 경로 생성
+    if (targetLocation || highlightRoom || facilityName) {
+      corridorNodes.push(
+        { id: 'default-destination', x: 450, y: 300, name: targetLocation || highlightRoom || facilityName }
+      );
+      corridorEdges.push(['default-location', 'default-destination']);
+    }
+  }
+
+  console.log('🗺️ MapNavigator 경로 출처:', routeSource);
 
   // 현재 위치 설정 - props가 있으면 props의 첫 노드를 사용 (시연 모드)
   const currentLocation = (propPathNodes && propPathNodes.length > 0) ?

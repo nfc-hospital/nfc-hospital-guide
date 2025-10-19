@@ -592,8 +592,6 @@ const UnifiedJourneyTemplate = () => {
                                       multiFloor={false}
                                       startFloor="main_1f"
                                       endFloor={locationInfo?.mapFile?.replace('.svg', '') || 'main_2f'}
-                                      pathNodes={[]}
-                                      pathEdges={[]}
                                     />
                                   </div>
                                 </div>

@@ -209,12 +209,8 @@ class DepartmentZoneAdmin(admin.ModelAdmin):
     deactivate_zones.short_description = "선택한 구역 비활성화"
 
 
-# FacilityRoute 통합 관리를 위한 프록시 모델
-class FacilityRouteProxy(FacilityRoute):
-    class Meta:
-        proxy = True
-        verbose_name = '시설 경로 (MapEditor)'
-        verbose_name_plural = '시설 경로 목록 (MapEditor)'
+# FacilityRoute 통합 관리를 위한 프록시 모델 (models.py에서 import)
+from .models import FacilityRouteProxy
 
 
 @admin.register(FacilityRouteProxy)
