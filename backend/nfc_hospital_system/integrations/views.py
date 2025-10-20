@@ -1642,34 +1642,70 @@ def test_get_facility_route(request, facility_name):
     """
     특정 시설의 경로 정보 반환
     GET /api/v1/test/facility-route/{facility_name}
+
+    Returns:
+    {
+        "route_id": "uuid",
+        "route_name": "route_시연_P1_도착_원무과",
+        "facility_name": "시연_P1_도착_원무과",
+        "route_data": { "maps": {...} } or { "nodes": [...], "edges": [...] },
+        "route_type": "demo" or "facility",
+        "map_id": "main_1f",
+        "nodes": [...],  // 하위 호환
+        "edges": [...],  // 하위 호환
+        "updated_at": "2025-10-19T..."
+    }
     """
     try:
-        route = FacilityRoute.objects.get(facility_name=facility_name)
-        
+        # route_name 기반 조회 시도 (우선순위)
+        route_name = f"route_{facility_name}"
+        route = FacilityRoute.objects.filter(
+            route_name=route_name,
+            is_active=True
+        ).first()
+
+        # 없으면 facility_name으로 조회 (하위 호환)
+        if not route:
+            route = FacilityRoute.objects.filter(
+                facility_name=facility_name,
+                is_active=True
+            ).first()
+
+        if not route:
+            return APIResponse.error(
+                message=f"시설 경로를 찾을 수 없습니다: {facility_name}",
+                code="NOT_FOUND",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
         # 시설의 위치 정보 (HOSPITAL_LOCATIONS에서)
         location_info = HOSPITAL_LOCATIONS.get(facility_name, {})
-        
+
         return APIResponse.success(
             data={
+                # 새 구조 필드
+                'route_id': str(route.route_id),
+                'route_name': route.route_name,
+                'route_data': route.route_data,  # 🆕 Multi-floor 또는 단일 층 데이터
+                'route_type': route.route_type,
+
+                # 기존 필드 (하위 호환)
                 'facility_name': route.facility_name,
                 'map_id': route.map_id,
                 'nodes': route.nodes,
                 'edges': route.edges,
                 'svg_element_id': route.svg_element_id,
-                'metadata': route.metadata,
+
+                # 추가 정보
                 'location_info': location_info,
-                'updated_at': route.updated_at.isoformat()
+                'is_active': route.is_active,
+                'updated_at': route.updated_at.isoformat(),
+                'created_at': route.created_at.isoformat()
             },
             message=f"{facility_name} 경로 정보를 조회했습니다."
         )
-    except FacilityRoute.DoesNotExist:
-        return APIResponse.error(
-            message=f"시설 경로를 찾을 수 없습니다: {facility_name}",
-            code="NOT_FOUND",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
     except Exception as e:
-        logger.error(f"Get facility route error: {str(e)}")
+        logger.error(f"Get facility route error: {str(e)}", exc_info=True)
         return APIResponse.error(
             message=f"경로 조회 중 오류가 발생했습니다: {str(e)}",
             code="FETCH_ERROR",
@@ -1683,53 +1719,102 @@ def test_save_facility_route(request):
     """
     시설 경로 저장/업데이트 (MapEditor에서 호출)
     POST /api/v1/test/save-facility-route
-    
-    Body:
+
+    Body (Multi-floor 형식):
+    {
+        "facility_name": "시연_P1_도착_원무과",
+        "maps": {
+            "main_1f": { "nodes": [...], "edges": [...] },
+            "main_2f": { "nodes": [...], "edges": [...] }
+        },
+        "current_map": "main_1f",
+        "svg_element_id": "room-reception"
+    }
+
+    Body (구 형식 - 하위 호환):
     {
         "facility_name": "채혈실",
         "nodes": [...],
         "edges": [...],
         "map_id": "main_1f",
-        "svg_element_id": "blood-test-room",
-        "metadata": {...}
+        "svg_element_id": "blood-test-room"
     }
     """
     try:
         facility_name = request.data.get('facility_name')
+
+        # 🆕 Multi-floor 데이터 확인
+        maps = request.data.get('maps')
+        current_map = request.data.get('current_map')
+
+        # 구 형식 데이터 (하위 호환)
         nodes = request.data.get('nodes', [])
         edges = request.data.get('edges', [])
         map_id = request.data.get('map_id')
-        svg_element_id = request.data.get('svg_element_id')
-        metadata = request.data.get('metadata', {})
-        
-        if not facility_name or not map_id:
+        svg_element_id = request.data.get('svg_element_id', '')
+
+        # 필수 값 검증
+        if not facility_name:
             return APIResponse.error(
-                message="facility_name과 map_id는 필수입니다",
+                message="facility_name은 필수입니다",
                 code="MISSING_FIELDS",
                 status_code=status.HTTP_400_BAD_REQUEST
             )
-        
-        route, created = FacilityRoute.objects.update_or_create(
-            facility_name=facility_name,
-            defaults={
+
+        # route_name 생성 (facility_name 기반, unique constraint)
+        route_name = f"route_{facility_name}"
+
+        # 🔄 route_data 구성
+        if maps:
+            # Multi-floor 형식
+            route_data = {
+                'maps': maps,
+                'currentMap': current_map or 'main_1f'
+            }
+            effective_map_id = current_map or 'main_1f'
+        else:
+            # 단일 층 형식 (하위 호환)
+            route_data = {
                 'nodes': nodes,
                 'edges': edges,
-                'map_id': map_id,
+                'map_id': map_id or 'main_1f'
+            }
+            effective_map_id = map_id or 'main_1f'
+
+        # route_type 자동 분류 (시연용 vs 일반 시설)
+        route_type = 'demo' if '시연' in facility_name else 'facility'
+
+        # ✅ route_name 기준으로 저장 (unique constraint)
+        route, created = FacilityRoute.objects.update_or_create(
+            route_name=route_name,
+            defaults={
+                # 새 구조 필드
+                'route_data': route_data,
+                'route_type': route_type,
+                'is_active': True,
+
+                # 하위 호환 필드 (기존 코드 지원)
+                'facility_name': facility_name,
+                'nodes': nodes,
+                'edges': edges,
+                'map_id': effective_map_id,
                 'svg_element_id': svg_element_id,
-                'metadata': metadata
             }
         )
-        
+
         return APIResponse.success(
             data={
+                'route_id': str(route.route_id),
+                'route_name': route.route_name,
                 'facility_name': route.facility_name,
+                'route_type': route.route_type,
                 'created': created,
                 'message': f"{'생성' if created else '업데이트'}되었습니다: {facility_name}"
             },
             message=f"경로가 {'생성' if created else '업데이트'}되었습니다."
         )
     except Exception as e:
-        logger.error(f"Save facility route error: {str(e)}")
+        logger.error(f"Save facility route error: {str(e)}", exc_info=True)
         return APIResponse.error(
             message=f"경로 저장 중 오류가 발생했습니다: {str(e)}",
             code="SAVE_ERROR",

@@ -5,7 +5,8 @@
       "Bash(npx eslint:*)",
       "Bash(node:*)",
       "Bash(pnpm dev:frontend:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Read(//mnt/d/2025/**)"
     ],
     "deny": []
   }
