@@ -2,7 +2,14 @@
 
 from .base import *
 from datetime import timedelta
-import debug_toolbar
+
+# Optional: django-debug-toolbar (only if installed)
+try:
+    import debug_toolbar
+    DEBUG_TOOLBAR_AVAILABLE = True
+except ImportError:
+    DEBUG_TOOLBAR_AVAILABLE = False
+    print("⚠️  django-debug-toolbar is not installed. Debug toolbar will be disabled.")
 
 # 개발 환경 전용 설정
 DEBUG = True
@@ -147,13 +154,15 @@ CHANNEL_LAYERS = {
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # 개발용 미들웨어 추가
-MIDDLEWARE = [
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
-] + MIDDLEWARE
+if DEBUG_TOOLBAR_AVAILABLE:
+    MIDDLEWARE = [
+        'debug_toolbar.middleware.DebugToolbarMiddleware',
+    ] + MIDDLEWARE
 
 # Django Debug Toolbar (개발용)
-INSTALLED_APPS += ['debug_toolbar']
-INTERNAL_IPS = ['127.0.0.1', 'localhost']
+if DEBUG_TOOLBAR_AVAILABLE:
+    INSTALLED_APPS += ['debug_toolbar']
+    INTERNAL_IPS = ['127.0.0.1', 'localhost']
 
 # 개발용 정적 파일 서빙
 STATICFILES_DIRS = [

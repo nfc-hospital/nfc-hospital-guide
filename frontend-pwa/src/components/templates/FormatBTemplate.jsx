@@ -5,7 +5,6 @@ import { CheckIcon as CheckIconSolid } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
 import useMapStore from '../../store/mapStore';
-import { getDemoRouteForScreen } from '../../data/demoRoutes';
 
 const FormatBTemplate = ({
   screenType, // 'unregistered' | 'completed'
@@ -48,7 +47,6 @@ const FormatBTemplate = ({
     screenType === 'unregistered' ? [0] : []
   );
   const [checkedItems, setCheckedItems] = useState({});
-  const [showDemoMap, setShowDemoMap] = useState(false);
 
   // 배경 색상 설정 - 더 부드럽고 모던한 그라데이션
   const getBackgroundColor = () => {
@@ -458,15 +456,8 @@ const FormatBTemplate = ({
             multiFloor={false}
             startFloor="main_1f"
             endFloor={locationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
-            pathNodes={(() => {
-              // 현재 상태에 따른 시연 경로 가져오기 (arrived 상태일 때)
-              const demoRoute = getDemoRouteForScreen(screenType === 'arrived' ? 'P-1' : patientState);
-              return demoRoute?.nodes || [];
-            })()}
-            pathEdges={(() => {
-              const demoRoute = getDemoRouteForScreen(screenType === 'arrived' ? 'P-1' : patientState);
-              return demoRoute?.edges || [];
-            })()}
+            pathNodes={[]}
+            pathEdges={[]}
           />
         </div>
       </div>

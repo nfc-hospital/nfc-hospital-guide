@@ -5,7 +5,6 @@ import { CheckIcon } from '@heroicons/react/24/solid';
 import MapNavigator from '../MapNavigator';
 import useJourneyStore from '../../store/journeyStore';
 import { PatientJourneyState, QueueDetailState } from '../../constants/states';
-import { getDemoRouteForScreen } from '../../data/demoRoutes';
 import { getDefaultLocationForState, generateDemoSchedule, generateDemoWaitingInfo } from '../../data/demoLocationData';
 
 // 상태와 NFC 태그 정보를 기반으로 다음 행동 안내 문구 생성
@@ -127,9 +126,7 @@ const FormatATemplate = ({
     screenType === 'finished' || screenType === 'payment' ? 'content' : 'location'
   );
   const [expandedItems, setExpandedItems] = useState([]);
-  const [showDemoMap, setShowDemoMap] = useState(true);
   const [isDemoExpanded, setIsDemoExpanded] = useState(true);
-  const [demoRoute, setDemoRoute] = useState(null);
 
   // 🎯 Store에서 기본 데이터만 구독 (계산 함수는 useMemo로 메모이제이션)
   const todaysAppointments = useJourneyStore(state => state.todaysAppointments);
@@ -231,77 +228,6 @@ const FormatATemplate = ({
 
   // nextAction 자동 생성 (effectiveLocationInfo 사용)
   const displayNextAction = getNextActionText(patientState, currentExam, actualCurrentLocation, effectiveLocationInfo);
-
-  // 시연 경로 로드
-  useEffect(() => {
-    const loadDemoRoute = async () => {
-      // 활성 시연 경로가 있으면 우선 사용
-      const activeDemoRoute = localStorage.getItem('activeDemoRoute');
-      let route;
-
-      if (activeDemoRoute) {
-        // 활성 시연 경로 직접 로드
-        const { getFacilityRoute } = await import('../../api/facilityRoutes');
-        const facilityData = await getFacilityRoute(activeDemoRoute);
-        if (facilityData && facilityData.nodes && facilityData.nodes.length > 0) {
-          route = {
-            facilityName: activeDemoRoute,
-            nodes: facilityData.nodes,
-            edges: facilityData.edges,
-            mapId: facilityData.map_id || 'main_1f'
-          };
-        }
-      }
-
-      // 활성 경로가 없으면 상태 기반 경로 사용
-      if (!route) {
-        route = await getDemoRouteForScreen(patientState) || await getDemoRouteForScreen(screenType);
-      }
-
-      setDemoRoute(route);
-      if (route) {
-        console.log('🎬 시연 모드 경로 로드:', {
-          activeDemoRoute,
-          state: patientState,
-          screenType: screenType,
-          route: route?.facilityName,
-          nodeCount: route?.nodes?.length || 0,
-          edges: route?.edges?.length || 0
-        });
-      }
-    };
-
-    loadDemoRoute();
-  }, [patientState, screenType]);
-
-  // localStorage 변경 감지
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'activeDemoRoute' || e.key === 'facilityRoutes') {
-        const loadDemoRoute = async () => {
-          const activeDemoRoute = localStorage.getItem('activeDemoRoute');
-          if (activeDemoRoute) {
-            const { getFacilityRoute } = await import('../../api/facilityRoutes');
-            const facilityData = await getFacilityRoute(activeDemoRoute);
-            if (facilityData && facilityData.nodes && facilityData.nodes.length > 0) {
-              const route = {
-                facilityName: activeDemoRoute,
-                nodes: facilityData.nodes,
-                edges: facilityData.edges,
-                mapId: facilityData.map_id || 'main_1f'
-              };
-              setDemoRoute(route);
-              console.log('🔄 시연 경로 갱신 (localStorage 변경):', route);
-            }
-          }
-        };
-        loadDemoRoute();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
 
   const toggleExpanded = (index) => {
     setExpandedItems(prev => 
@@ -513,69 +439,25 @@ const FormatATemplate = ({
                           >
                             로그인하기
                           </button>
-                          <button
-                            onClick={() => setShowDemoMap(true)}
-                            className="px-4 py-2 bg-white text-blue-600 border border-blue-300 rounded-lg text-sm font-medium hover:bg-blue-50 transition-colors"
-                          >
-                            데모 보기
-                          </button>
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
                 
-                {/* 지도 표시 영역 - 항상 표시 */}
-                <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden relative">
-                  <div>
-                    {/* 시연 모드 토글 버튼 - 왼쪽 아래 */}
-                    <div className="absolute bottom-2 left-2 z-30">
-                      <button
-                        onClick={() => setShowDemoMap(!showDemoMap)}
-                        className={`w-10 h-10 rounded-full text-lg transition-all flex items-center justify-center ${
-                          showDemoMap 
-                            ? 'bg-blue-600 text-white shadow-lg' 
-                            : 'bg-white border-2 border-blue-600 hover:bg-blue-50'
-                        }`}
-                      >
-                        🎬
-                      </button>
-                    </div>
-
-                    {/* 실제 지도 (데이터 연동) */}
-                    <div className={showDemoMap ? 'opacity-30' : ''}>
-                      <div className="p-6">
-                        <MapNavigator
-                          mapId={effectiveLocationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
-                          highlightRoom={effectiveLocationInfo?.name || ''}
-                          facilityName={effectiveLocationInfo?.name || ''}
-                          multiFloor={false} // 실제 데이터는 단일 층만
-                          startFloor="main_1f"
-                          endFloor={effectiveLocationInfo?.mapFile?.replace('.svg', '') || 'main_2f'}
-                          pathNodes={[]} // 실제 경로는 API 연동 시 표시
-                          pathEdges={[]}
-                        />
-                      </div>
-                    </div>
-
-                    {/* 시연용 지도 오버레이 */}
-                    {showDemoMap && (
-                      <div className="absolute inset-0 bg-white transition-all duration-300">
-                        {/* 시연용 지도 내용 - 상태별 자동 선택 */}
-                        <div className="p-4 h-full">
-                          <MapNavigator
-                            mapId={demoRoute?.mapId || 'main_1f'}
-                            highlightRoom={effectiveLocationInfo?.name || ''}
-                            facilityName={demoRoute?.facilityName || '시연_경로'}
-                            multiFloor={false} // 단일 층 표시
-                            startFloor="main_1f"
-                            endFloor="main_2f"
-                            pathNodes={demoRoute?.nodes || []}
-                            pathEdges={demoRoute?.edges || []}
-                          />
-                        </div>
-                      </div>
-                    )}
+                {/* 지도 표시 영역 */}
+                <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-200 overflow-hidden">
+                  <div className="p-6">
+                    <MapNavigator
+                      mapId={effectiveLocationInfo?.mapFile?.replace('.svg', '') || 'main_1f'}
+                      highlightRoom={effectiveLocationInfo?.name || ''}
+                      facilityName={effectiveLocationInfo?.name || ''}
+                      multiFloor={false}
+                      startFloor="main_1f"
+                      endFloor={effectiveLocationInfo?.mapFile?.replace('.svg', '') || 'main_2f'}
+                      pathNodes={[]}
+                      pathEdges={[]}
+                    />
                   </div>
                 </div>
 

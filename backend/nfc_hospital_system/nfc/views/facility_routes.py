@@ -17,15 +17,19 @@ class FacilityRouteViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], url_path='save_route')
     def save_route(self, request):
-        """경로 데이터 저장 또는 업데이트"""
+        """경로 데이터 저장 또는 업데이트 (multi-floor 지원)"""
         facility_name = request.data.get('facility_name')
-        
+
         if not facility_name:
             return Response(
-                {'error': '시설 이름이 필요합니다.'}, 
+                {'error': '시설 이름이 필요합니다.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+        # metadata에 multi-floor 데이터가 있는지 확인
+        metadata = request.data.get('metadata', {})
+        is_multi_floor = metadata.get('isMultiFloor', False)
+
         # 기존 경로가 있으면 업데이트, 없으면 생성
         route, created = FacilityRoute.objects.update_or_create(
             facility_name=facility_name,
@@ -34,14 +38,25 @@ class FacilityRouteViewSet(viewsets.ModelViewSet):
                 'edges': request.data.get('edges', []),
                 'map_id': request.data.get('map_id', ''),
                 'svg_element_id': request.data.get('svg_element_id', ''),
+                'metadata': metadata if metadata else {},  # 🆕 metadata 저장
                 'created_by': request.user if request.user.is_authenticated else None
             }
         )
-        
+
         serializer = self.get_serializer(route)
+
+        # 로그 출력
+        if is_multi_floor:
+            maps_count = len(metadata.get('maps', {}))
+            print(f"✅ Multi-floor 경로 저장: {facility_name}, 맵 개수: {maps_count}")
+        else:
+            print(f"✅ 단일 맵 경로 저장: {facility_name}")
+
         return Response({
-            'message': '경로가 저장되었습니다.' if created else '경로가 업데이트되었습니다.',
-            'data': serializer.data
+            'message': f"{'Multi-floor ' if is_multi_floor else ''}경로가 {'저장' if created else '업데이트'}되었습니다.",
+            'data': serializer.data,
+            'isMultiFloor': is_multi_floor,
+            'mapsCount': len(metadata.get('maps', {})) if is_multi_floor else 1
         }, status=status.HTTP_200_OK)
     
     @action(detail=False, methods=['get'], url_path='by_facility')

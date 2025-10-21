@@ -313,10 +313,11 @@ class FacilityRoute(models.Model):
 
     # 새 구조 필드
     route_id = models.UUIDField(
-        primary_key=True,
+        unique=True,  # Changed from primary_key=True to unique for safer migration
         default=uuid.uuid4,
         editable=False,
-        verbose_name='경로 ID'
+        verbose_name='경로 ID',
+        db_index=True  # Add index for performance
     )
 
     route_name = models.CharField(

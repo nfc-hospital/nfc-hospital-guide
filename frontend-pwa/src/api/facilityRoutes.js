@@ -41,15 +41,26 @@ export const getFacilityRoute = async (facilityName) => {
 
     // API가 유효한 데이터를 반환했는지 확인
     if (response.data) {
-      // 🔄 Multi-floor 형식 확인
-      if (response.data.maps) {
+      // 🔄 Multi-floor 형식 확인 (metadata에 저장된 경우)
+      if (response.data.metadata?.maps) {
+        console.log(`✅ metadata에서 multi-floor 데이터 발견:`, Object.keys(response.data.metadata.maps));
+        return {
+          facility_name: response.data.facility_name || facilityName,
+          maps: response.data.metadata.maps,
+          currentMap: response.data.metadata.currentMap || response.data.map_id || 'main_1f',
+          routeName: response.data.metadata.routeName,
+          startFacility: response.data.metadata.startFacility,
+          endFacility: response.data.metadata.endFacility
+        };
+      } else if (response.data.maps) {
+        // 직접 maps 필드가 있는 경우 (구버전 호환)
         return {
           facility_name: response.data.facility_name || facilityName,
           maps: response.data.maps,
           currentMap: response.data.currentMap || 'main_1f'
         };
       } else if (response.data.nodes && response.data.nodes.length > 0) {
-        // 구 형식 (호환성)
+        // 단일 맵 형식 (호환성)
         return {
           facility_name: response.data.facility_name || facilityName,
           nodes: response.data.nodes,
@@ -113,12 +124,22 @@ export const saveRoute = async (facilityName, nodes, edges, mapId = 'main_1f', r
   try {
     // DB에 저장 시도
     if (isMultiFloor) {
-      // 새 형식: 맵별 데이터
+      // 새 형식: 맵별 데이터 → metadata에 저장
       const response = await api.post('/nfc/facility-routes/save_route/', {
         facility_name: facilityName,
-        maps: routeData.maps,
-        current_map: routeData.currentMap,
+        nodes: [],  // 빈 배열 (multi-floor이므로 metadata에 저장)
+        edges: [],  // 빈 배열
+        map_id: routeData.currentMap || 'main_1f',
         svg_element_id: facilityMapping[facilityName] || '',
+        metadata: {
+          maps: routeData.maps,  // 🆕 metadata에 multi-floor 데이터 저장
+          currentMap: routeData.currentMap,
+          isMultiFloor: true,
+          routeName: routeData.routeName || facilityName,
+          startFacility: routeData.startFacility || null,
+          endFacility: routeData.endFacility || null,
+          createdAt: routeData.createdAt || new Date().toISOString()
+        }
       });
       console.log('✅ Multi-floor 경로 DB 저장 성공:', response.data);
     } else {
@@ -139,10 +160,11 @@ export const saveRoute = async (facilityName, nodes, edges, mapId = 'main_1f', r
         node_types: nodeTypes,
         node_transitions: nodeTransitions,
       });
-      console.log('DB에 경로 저장 성공:', response.data);
+      console.log('✅ 단일 맵 경로 DB 저장 성공:', response.data);
     }
   } catch (error) {
-    console.error('DB 저장 실패, localStorage에만 저장:', error);
+    console.error('❌ DB 저장 실패, localStorage에만 저장:', error);
+    throw error;  // 에러를 상위로 전파하여 사용자에게 알림
   }
 
   // localStorage에도 저장 (백업)

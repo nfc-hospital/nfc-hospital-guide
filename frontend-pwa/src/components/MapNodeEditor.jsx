@@ -683,18 +683,16 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
   };
 
   const exportNodes = async () => {
-    // 🆕 출발/도착 시설 기반 저장
-    if (!startFacility || !endFacility) {
-      alert('출발 시설과 도착 시설을 선택해주세요!');
-      return;
-    }
-
     // 최소 하나의 맵에라도 노드가 있는지 확인
     const hasNodes = Object.values(mapData).some(data => data.nodes && data.nodes.length > 0);
     if (!hasNodes) {
       alert('최소 하나의 맵에 노드를 추가해주세요!');
       return;
     }
+
+    // 🆕 출발/도착 시설이 없으면 기본값 사용
+    const effectiveStartFacility = startFacility || '출발지_미정';
+    const effectiveEndFacility = endFacility || '도착지_미정';
 
     // 🔄 모든 맵의 데이터를 정리하고 저장
     const processedMapData = {};
@@ -751,14 +749,14 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
     }
 
     // 🆕 경로명 생성 (출발-도착 쌍)
-    const routeName = `route_${startFacility}_to_${endFacility}`;
-    const routeDisplayName = `${facilityRoutes[startFacility]?.description || startFacility} → ${facilityRoutes[endFacility]?.description || endFacility}`;
+    const routeName = `route_${effectiveStartFacility}_to_${effectiveEndFacility}`;
+    const routeDisplayName = `${facilityRoutes[effectiveStartFacility]?.description || effectiveStartFacility} → ${facilityRoutes[effectiveEndFacility]?.description || effectiveEndFacility}`;
 
     // 🔄 Multi-floor 형식으로 저장
     const routeData = {
       routeName: routeName,
-      startFacility: startFacility,
-      endFacility: endFacility,
+      startFacility: effectiveStartFacility,
+      endFacility: effectiveEndFacility,
       maps: processedMapData,  // 각 맵별 데이터
       currentMap: mapId,       // 현재 편집 중인 맵
       createdAt: new Date().toISOString()
@@ -772,8 +770,8 @@ const MapNodeEditor = ({ mapId: propMapId = 'main_1f', facilityName = '' }) => {
       console.log(`=== ${routeDisplayName} 경로 코드 생성 완료 ===`);
       console.log('\n// Multi-floor 경로 데이터:');
       console.log(`const ${routeName} = {`);
-      console.log(`  startFacility: "${startFacility}",`);
-      console.log(`  endFacility: "${endFacility}",`);
+      console.log(`  startFacility: "${effectiveStartFacility}",`);
+      console.log(`  endFacility: "${effectiveEndFacility}",`);
       console.log(`  maps: ${JSON.stringify(processedMapData, null, 2)}`);
       console.log('};');
 

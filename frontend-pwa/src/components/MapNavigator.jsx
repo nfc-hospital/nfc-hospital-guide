@@ -73,7 +73,7 @@ const MapNavigator = ({
   const stageEdges = stage?.routeData?.edges || [];
   
   // Props의 mapId 우선순위: stage > props > store
-  const mapId = stageMapId || propMapId || currentMapId || 'main_1f';
+  let baseMapId = stageMapId || propMapId || currentMapId || 'main_1f';
 
   // Store에서 경로 데이터 가져오기 (navigationRoute 우선)
   const routeData = navigationRoute || activeRoute || {};
@@ -96,12 +96,12 @@ const MapNavigator = ({
           // Multi-floor 경로 지원: maps 객체 구조 확인
           if (demoRoute.maps && typeof demoRoute.maps === 'object') {
             // Multi-floor 경로: 현재 mapId에 해당하는 맵 데이터만 추출
-            const currentMapData = demoRoute.maps[mapId];
+            const currentMapData = demoRoute.maps[baseMapId];
             if (currentMapData?.nodes?.length > 0) {
               corridorNodes = currentMapData.nodes;
               corridorEdges = currentMapData.edges || [];
               routeSource = 'activeDemoRoute-multifloor';
-              console.log(`✅ MapNavigator: 시연 경로 로드 (${mapId})`, activeDemoRoute);
+              console.log(`✅ MapNavigator: 시연 경로 로드 (${baseMapId})`, activeDemoRoute);
             } else {
               // 현재 맵에 데이터가 없으면 첫 번째 맵 사용
               const firstMapId = Object.keys(demoRoute.maps)[0];
@@ -219,58 +219,100 @@ const MapNavigator = ({
     'default': '/images/maps/test.svg'  // 기본값도 테스트 지도로 변경
   };
 
-  // 다중 층 경로 설정
+  // 🔄 다중 층 경로 설정 (자동 감지 추가)
   const mapSequence = [];
-  if (multiFloor && startFloor && endFloor) {
-    // 예: main_1f -> main_2f 경로
-    if (startFloor.includes('1f') && endFloor.includes('2f')) {
-      mapSequence.push({ 
-        id: 'main_1f', 
-        label: '1층', 
-        fullLabel: ' ',
-        highlight: '현재 위치',
-        description: ' ' 
-      });
-      mapSequence.push({ 
-        id: 'main_2f', 
-        label: '2층',
-        fullLabel: '본관 2층 - 도착지',
-        highlight: highlightRoom,
-        description: '내과 대기실까지 이동' 
-      });
-    } else if (startFloor.includes('main') && endFloor.includes('annex')) {
-      mapSequence.push({ 
-        id: startFloor, 
-        label: '본관',
-        fullLabel: '본관 - 출발지',
-        highlight: '현재 위치' 
-      });
-      mapSequence.push({ 
-        id: endFloor, 
-        label: '별관',
-        fullLabel: '별관 - 도착지',
-        highlight: highlightRoom 
-      });
+
+  // 1️⃣ activeDemoRoute의 maps에서 자동으로 multi-floor 감지
+  let autoDetectedMultiFloor = false;
+  if (activeDemoRoute) {
+    try {
+      const facilityRoutesData = localStorage.getItem('facilityRoutes');
+      if (facilityRoutesData) {
+        const facilityRoutes = JSON.parse(facilityRoutesData);
+        const demoRoute = facilityRoutes[activeDemoRoute];
+
+        if (demoRoute?.maps && typeof demoRoute.maps === 'object') {
+          const mapIds = Object.keys(demoRoute.maps);
+          if (mapIds.length > 1) {
+            // Multi-floor 경로 자동 감지!
+            autoDetectedMultiFloor = true;
+            mapIds.forEach((mapKey, index) => {
+              const mapData = demoRoute.maps[mapKey];
+              const floorName = mapKey.replace('_', ' ').replace('main', '본관').replace('cancer', '암센터').replace('1f', '1층').replace('2f', '2층');
+
+              mapSequence.push({
+                id: mapKey,
+                label: floorName,
+                fullLabel: `${floorName} ${index === 0 ? '(출발)' : index === mapIds.length - 1 ? '(도착)' : ''}`,
+                highlight: index === mapIds.length - 1 ? highlightRoom : null,
+                description: `${mapData.nodes?.length || 0}개 노드`
+              });
+            });
+            console.log(`✅ Multi-floor 자동 감지: ${mapIds.length}개 맵`, mapIds);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Multi-floor 자동 감지 실패:', error);
+    }
+  }
+
+  // 2️⃣ 자동 감지 실패 시 기존 로직 사용
+  if (!autoDetectedMultiFloor) {
+    if (multiFloor && startFloor && endFloor) {
+      // 예: main_1f -> main_2f 경로
+      if (startFloor.includes('1f') && endFloor.includes('2f')) {
+        mapSequence.push({
+          id: 'main_1f',
+          label: '1층',
+          fullLabel: ' ',
+          highlight: '현재 위치',
+          description: ' '
+        });
+        mapSequence.push({
+          id: 'main_2f',
+          label: '2층',
+          fullLabel: '본관 2층 - 도착지',
+          highlight: highlightRoom,
+          description: '내과 대기실까지 이동'
+        });
+      } else if (startFloor.includes('main') && endFloor.includes('annex')) {
+        mapSequence.push({
+          id: startFloor,
+          label: '본관',
+          fullLabel: '본관 - 출발지',
+          highlight: '현재 위치'
+        });
+        mapSequence.push({
+          id: endFloor,
+          label: '별관',
+          fullLabel: '별관 - 도착지',
+          highlight: highlightRoom
+        });
+      } else {
+        mapSequence.push({
+          id: baseMapId,
+          label: '현재',
+          fullLabel: '현재 위치',
+          highlight: highlightRoom
+        });
+      }
     } else {
-      mapSequence.push({ 
-        id: mapId, 
+      // 단일 층
+      mapSequence.push({
+        id: baseMapId,
         label: '현재',
         fullLabel: '현재 위치',
-        highlight: highlightRoom 
+        highlight: highlightRoom
       });
     }
-  } else {
-    // 단일 층
-    mapSequence.push({ 
-      id: mapId, 
-      label: '현재',
-      fullLabel: '현재 위치',
-      highlight: highlightRoom 
-    });
   }
 
   const currentMap = mapSequence[currentMapIndex];
   const mapSrc = mapImages[currentMap?.id] || mapImages.default;
+
+  // 🔄 실제 사용할 mapId: multi-floor인 경우 currentMap.id, 아니면 baseMapId
+  const mapId = currentMap?.id || baseMapId;
   
   // stage가 transition인 경우 특별한 UI 표시
   if (stage?.isTransition) {

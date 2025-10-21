@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import MapNodeEditor from '../components/MapNodeEditor';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { getAllFacilityRoutes, getFacilityRoute } from '../api/facilityRoutes';
 
 const MapEditor = () => {
   const [mode, setMode] = useState('normal'); // 'normal' or 'demo'
@@ -8,24 +9,10 @@ const MapEditor = () => {
   const [activeDemoRoute, setActiveDemoRoute] = useState(
     localStorage.getItem('activeDemoRoute') || '시연_P3_로비_채혈실'
   );
+  const [isLoadingScenarios, setIsLoadingScenarios] = useState(false);
 
-  // 🆕 동적 시연 시나리오 관리
-  const [demoScenarios, setDemoScenarios] = useState(() => {
-    const saved = localStorage.getItem('demoScenarios');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-    // 기본 시연 시나리오
-    return [
-      { id: '시연_P1_도착_원무과', name: 'P-1: 도착 → 원무과 접수', floor: '본관 1층', mapId: 'main_1f' },
-      { id: '시연_P3_로비_채혈실', name: 'P-3: 로비 → 채혈실', floor: '본관 1층', mapId: 'main_1f' },
-      { id: '시연_P4_채혈실_대기실', name: 'P-4: 채혈실 대기실', floor: '본관 1층', mapId: 'main_1f' },
-      { id: '시연_P6_채혈실_소변검사실', name: 'P-6: 채혈실 → 소변검사실', floor: '본관 1층', mapId: 'main_1f' },
-      { id: '시연_P6_소변검사실_엑스레이', name: 'P-6: 소변검사실 → X-ray', floor: '본관 2층', mapId: 'main_2f' },
-      { id: '시연_P7_수납창구', name: 'P-7: 수납창구', floor: '본관 1층', mapId: 'main_1f' },
-      { id: '시연_P7_수납_정문', name: 'P-7: 수납 → 정문', floor: '본관 1층', mapId: 'main_1f' },
-    ];
-  });
+  // 🆕 동적 시연 시나리오 관리 (DB 우선, localStorage 폴백)
+  const [demoScenarios, setDemoScenarios] = useState([]);
 
   // 🆕 새 시연 시나리오 추가 폼 상태
   const [showAddForm, setShowAddForm] = useState(false);
@@ -36,10 +23,86 @@ const MapEditor = () => {
     mapId: 'main_1f'
   });
 
-  // localStorage에 시연 시나리오 저장
+  // 🔄 DB에서 시연 경로 목록 불러오기
   useEffect(() => {
-    localStorage.setItem('demoScenarios', JSON.stringify(demoScenarios));
-  }, [demoScenarios]);
+    loadDemoScenariosFromDB();
+  }, []);
+
+  const loadDemoScenariosFromDB = async () => {
+    setIsLoadingScenarios(true);
+    try {
+      // 1️⃣ DB에서 모든 경로 가져오기
+      const allRoutes = await getAllFacilityRoutes();
+
+      // 2️⃣ "시연_"으로 시작하는 경로만 필터링
+      const demoRoutes = allRoutes
+        .filter(route => route.facility_name && route.facility_name.startsWith('시연_'))
+        .map(route => {
+          // metadata에서 정보 추출 (multi-floor 경로)
+          const metadata = route.metadata || {};
+          const isMultiFloor = metadata.isMultiFloor;
+
+          // 첫 번째 맵 ID 찾기
+          let firstMapId = 'main_1f';
+          if (isMultiFloor && metadata.maps) {
+            firstMapId = Object.keys(metadata.maps)[0] || 'main_1f';
+          } else if (route.map_id) {
+            firstMapId = route.map_id;
+          }
+
+          return {
+            id: route.facility_name,
+            name: metadata.routeName || route.facility_name.replace('시연_', ''),
+            floor: getFloorName(firstMapId),
+            mapId: firstMapId,
+            isMultiFloor: isMultiFloor,
+            mapsCount: isMultiFloor ? Object.keys(metadata.maps || {}).length : 1
+          };
+        });
+
+      console.log(`✅ DB에서 시연 경로 ${demoRoutes.length}개 로드:`, demoRoutes.map(r => r.id));
+
+      // 3️⃣ DB에서 가져온 경로가 있으면 사용, 없으면 localStorage 폴백
+      if (demoRoutes.length > 0) {
+        setDemoScenarios(demoRoutes);
+      } else {
+        // 폴백: localStorage에서 가져오기
+        const saved = localStorage.getItem('demoScenarios');
+        if (saved) {
+          setDemoScenarios(JSON.parse(saved));
+          console.log('⚠️ DB에 시연 경로 없음, localStorage 사용');
+        } else {
+          // 기본 시연 시나리오
+          setDemoScenarios([
+            { id: '시연_P1_도착_원무과', name: 'P-1: 도착 → 원무과 접수', floor: '본관 1층', mapId: 'main_1f' },
+            { id: '시연_P3_로비_채혈실', name: 'P-3: 로비 → 채혈실', floor: '본관 1층', mapId: 'main_1f' },
+          ]);
+        }
+      }
+    } catch (error) {
+      console.error('❌ DB에서 시연 경로 로드 실패:', error);
+      // 에러 시 localStorage 폴백
+      const saved = localStorage.getItem('demoScenarios');
+      if (saved) {
+        setDemoScenarios(JSON.parse(saved));
+      }
+    } finally {
+      setIsLoadingScenarios(false);
+    }
+  };
+
+  // 맵 ID를 층 이름으로 변환
+  const getFloorName = (mapId) => {
+    const mapNames = {
+      'main_1f': '본관 1층',
+      'main_2f': '본관 2층',
+      'main_3f': '본관 3층',
+      'cancer_1f': '암센터 1층',
+      'cancer_2f': '암센터 2층',
+      'annex_1f': '별관 1층'
+    };
+    return mapNames[mapId] || mapId;
+  };
 
   // 🆕 새 시연 시나리오 추가
   const addDemoScenario = () => {
@@ -58,6 +121,50 @@ const MapEditor = () => {
     setNewScenario({ id: '', name: '', floor: '본관 1층', mapId: 'main_1f' });
     setShowAddForm(false);
     alert(`✅ 시연 시나리오 "${newScenario.name}" 추가 완료!`);
+  };
+
+  // 🆕 시연 경로 활성화 (DB → localStorage)
+  const activateDemoScenario = async (scenarioId) => {
+    try {
+      // DB에서 경로 데이터 가져오기
+      const routeData = await getFacilityRoute(scenarioId);
+
+      if (!routeData) {
+        alert('❌ 경로 데이터를 찾을 수 없습니다.');
+        return;
+      }
+
+      // localStorage에 저장
+      const facilityRoutes = JSON.parse(localStorage.getItem('facilityRoutes') || '{}');
+      facilityRoutes[scenarioId] = routeData.maps ? {
+        maps: routeData.maps,
+        currentMap: routeData.currentMap || Object.keys(routeData.maps)[0],
+        lastUpdated: new Date().toISOString()
+      } : {
+        nodes: routeData.nodes || [],
+        edges: routeData.edges || [],
+        mapId: routeData.map_id || 'main_1f',
+        lastUpdated: new Date().toISOString()
+      };
+
+      localStorage.setItem('facilityRoutes', JSON.stringify(facilityRoutes));
+
+      // activeDemoRoute 설정
+      localStorage.setItem('activeDemoRoute', scenarioId);
+      setActiveDemoRoute(scenarioId);
+
+      alert(`✅ "${demoScenarios.find(s => s.id === scenarioId)?.name}" 경로가 활성화되었습니다!\n\n/home 페이지에서 시연 경로를 확인할 수 있습니다.`);
+    } catch (error) {
+      console.error('❌ 시연 경로 활성화 실패:', error);
+      alert(`❌ 경로 활성화 실패: ${error.message}`);
+    }
+  };
+
+  // 🆕 시연 경로 비활성화
+  const deactivateDemoScenario = () => {
+    localStorage.removeItem('activeDemoRoute');
+    setActiveDemoRoute('');
+    alert('✅ 시연 경로가 비활성화되었습니다!\n\n이제 목적지 이름으로 자동 경로 검색이 작동합니다.');
   };
 
   // 🆕 시연 시나리오 삭제
@@ -209,7 +316,17 @@ const MapEditor = () => {
               )}
 
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold">시연 시나리오 선택</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-semibold">시연 시나리오 선택</h2>
+                  {isLoadingScenarios && (
+                    <span className="text-sm text-gray-500">🔄 DB에서 로딩 중...</span>
+                  )}
+                  {!isLoadingScenarios && demoScenarios.length > 0 && (
+                    <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                      ✓ DB에서 {demoScenarios.length}개 로드됨
+                    </span>
+                  )}
+                </div>
                 {!showAddForm && (
                   <button
                     onClick={() => setShowAddForm(true)}
@@ -238,11 +355,33 @@ const MapEditor = () => {
                       className="w-full text-left"
                     >
                       <div className="font-semibold text-sm">{scenario.name}</div>
-                      <div className="text-xs text-gray-600">{scenario.floor}</div>
+                      <div className="text-xs text-gray-600">
+                        {scenario.floor}
+                        {scenario.isMultiFloor && ` • ${scenario.mapsCount}개 맵`}
+                      </div>
                       {activeDemoRoute === scenario.id && (
-                        <div className="text-xs text-green-600 font-bold mt-1">✓ 활성</div>
+                        <div className="text-xs text-green-600 font-bold mt-1">✓ 활성화됨</div>
                       )}
                     </button>
+
+                    {/* 🆕 활성화/비활성화 토글 버튼 */}
+                    {activeDemoRoute === scenario.id ? (
+                      <button
+                        onClick={deactivateDemoScenario}
+                        className="mt-2 w-full px-2 py-1 bg-gray-500 text-white text-xs rounded hover:bg-gray-600 transition-colors"
+                        title="이 경로를 비활성화 (자동 검색 모드로 전환)"
+                      >
+                        ❌ 비활성화
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => activateDemoScenario(scenario.id)}
+                        className="mt-2 w-full px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600 transition-colors"
+                        title="이 경로를 /home에 활성화"
+                      >
+                        🚀 활성화
+                      </button>
+                    )}
 
                     {/* 🆕 삭제 버튼 (기본 시나리오가 아닌 경우만) */}
                     {!scenario.id.startsWith('시연_P') && (

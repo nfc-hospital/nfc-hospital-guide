@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>LocalStorage 경로 → DB 업로드</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 1200px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    .route-item {
+      border: 1px solid #ddd;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 8px;
+      background: #f9f9f9;
+    }
+    .route-name {
+      font-weight: bold;
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    .route-info {
+      font-size: 14px;
+      color: #666;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    .upload-btn {
+      background: #22c55e;
+      color: white;
+    }
+    .upload-btn:hover {
+      background: #16a34a;
+    }
+    .upload-all-btn {
+      background: #3b82f6;
+      color: white;
+      font-size: 16px;
+      padding: 15px 30px;
+      margin: 20px 0;
+    }
+    .upload-all-btn:hover {
+      background: #2563eb;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+    .error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <h1>📤 LocalStorage 경로 → DB 업로드</h1>
+  <p>LocalStorage에 저장된 모든 경로를 서버 DB에 업로드합니다.</p>
+
+  <button class="upload-all-btn" onclick="uploadAllRoutes()">🚀 모든 경로 일괄 업로드</button>
+
+  <div id="routes-container"></div>
+
+  <script>
+    const API_BASE_URL = 'http://127.0.0.1:8000/api/v1';  // Vite 설정과 동일한 URL 사용
+
+    // LocalStorage에서 모든 경로 가져오기
+    function loadLocalRoutes() {
+      const facilityRoutes = JSON.parse(localStorage.getItem('facilityRoutes') || '{}');
+      const container = document.getElementById('routes-container');
+      container.innerHTML = '';
+
+      if (Object.keys(facilityRoutes).length === 0) {
+        container.innerHTML = '<p>LocalStorage에 저장된 경로가 없습니다.</p>';
+        return;
+      }
+
+      console.log('📦 LocalStorage 경로 목록:', Object.keys(facilityRoutes));
+
+      Object.entries(facilityRoutes).forEach(([name, data]) => {
+        const div = document.createElement('div');
+        div.className = 'route-item';
+        div.id = `route-${name.replace(/\s/g, '-')}`;
+
+        // Multi-floor인지 확인
+        const isMultiFloor = data.maps && typeof data.maps === 'object';
+        const mapsCount = isMultiFloor ? Object.keys(data.maps).length : 1;
+        const nodeCount = isMultiFloor
+          ? Object.values(data.maps).reduce((sum, map) => sum + (map.nodes?.length || 0), 0)
+          : data.nodes?.length || 0;
+
+        div.innerHTML = `
+          <div class="route-name">${name}</div>
+          <div class="route-info">
+            ${isMultiFloor ? `🗺️ Multi-floor (${mapsCount}개 맵)` : '📍 단일 맵'}
+            | 노드: ${nodeCount}개
+            | 마지막 업데이트: ${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : '알 수 없음'}
+          </div>
+          <button class="upload-btn" onclick="uploadRoute('${name}')">
+            ⬆️ DB에 업로드
+          </button>
+          <div id="status-${name.replace(/\s/g, '-')}" class="status" style="display:none;"></div>
+        `;
+
+        container.appendChild(div);
+      });
+    }
+
+    // 개별 경로 업로드
+    async function uploadRoute(facilityName) {
+      const facilityRoutes = JSON.parse(localStorage.getItem('facilityRoutes') || '{}');
+      const routeData = facilityRoutes[facilityName];
+
+      if (!routeData) {
+        alert(`경로를 찾을 수 없습니다: ${facilityName}`);
+        return;
+      }
+
+      const statusDiv = document.getElementById(`status-${facilityName.replace(/\s/g, '-')}`);
+      statusDiv.style.display = 'block';
+      statusDiv.className = 'status';
+      statusDiv.textContent = '업로드 중...';
+
+      try {
+        // Multi-floor 형식 확인
+        const isMultiFloor = routeData.maps && typeof routeData.maps === 'object';
+
+        const payload = isMultiFloor ? {
+          facility_name: facilityName,
+          nodes: [],
+          edges: [],
+          map_id: routeData.currentMap || Object.keys(routeData.maps)[0] || 'main_1f',
+          svg_element_id: '',
+          metadata: {
+            maps: routeData.maps,
+            currentMap: routeData.currentMap,
+            isMultiFloor: true,
+            routeName: facilityName,
+            createdAt: routeData.lastUpdated || new Date().toISOString()
+          }
+        } : {
+          facility_name: facilityName,
+          nodes: routeData.nodes || [],
+          edges: routeData.edges || [],
+          map_id: routeData.mapId || 'main_1f',
+          svg_element_id: '',
+          start_node: routeData.startNode || null,
+          end_node: routeData.endNode || null,
+          node_types: routeData.nodeTypes || {},
+          node_transitions: routeData.nodeTransitions || {}
+        };
+
+        console.log(`📤 업로드 시작: ${facilityName}`, payload);
+
+        const response = await fetch(`${API_BASE_URL}/nfc/facility-routes/save_route/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          statusDiv.className = 'status success';
+          statusDiv.textContent = `✅ 업로드 성공! ${result.message}`;
+          console.log(`✅ ${facilityName} 업로드 완료:`, result);
+        } else {
+          throw new Error(result.error || '업로드 실패');
+        }
+      } catch (error) {
+        statusDiv.className = 'status error';
+        statusDiv.textContent = `❌ 업로드 실패: ${error.message}`;
+        console.error(`❌ ${facilityName} 업로드 실패:`, error);
+      }
+    }
+
+    // 모든 경로 일괄 업로드
+    async function uploadAllRoutes() {
+      if (!confirm('모든 경로를 DB에 업로드하시겠습니까?')) {
+        return;
+      }
+
+      const facilityRoutes = JSON.parse(localStorage.getItem('facilityRoutes') || '{}');
+      const routeNames = Object.keys(facilityRoutes);
+
+      console.log(`🚀 ${routeNames.length}개 경로 일괄 업로드 시작`);
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const name of routeNames) {
+        try {
+          await uploadRoute(name);
+          successCount++;
+          await new Promise(resolve => setTimeout(resolve, 500)); // 0.5초 대기
+        } catch (error) {
+          failCount++;
+          console.error(`실패: ${name}`, error);
+        }
+      }
+
+      alert(`업로드 완료!\n성공: ${successCount}개\n실패: ${failCount}개`);
+    }
+
+    // 페이지 로드시 경로 목록 표시
+    loadLocalRoutes();
+  </script>
+</body>
+</html>
