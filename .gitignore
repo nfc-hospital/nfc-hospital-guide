@@ -90,4 +90,4 @@ pnpm-debug.log*
 
 # Firebase 서비스 계정 키 (보안 중요!)
 firebase-service-account.json
-/backend/nfc_hospital_system/firebase-service-account.json
+/backend/nfc_hospital_system/firebase-service-account.jsonbackend/nfc_hospital_system/nul

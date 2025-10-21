@@ -1,7 +1,176 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, BarChart, Bar, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Clock, AlertCircle, Users, Activity, ChevronRight, RefreshCw, Loader } from 'lucide-react';
+import { TrendingUp, TrendingDown, Clock, AlertCircle, Users, Activity, ChevronRight, RefreshCw, Loader, Database, Brain, Zap, CheckCircle } from 'lucide-react';
 import apiService from '../../../api/apiService';
+
+// Count-up animation hook
+const useCountUp = (end, duration = 1000, start = 0, shouldAnimate = true) => {
+  const [count, setCount] = useState(start);
+
+  useEffect(() => {
+    if (!shouldAnimate) {
+      setCount(end);
+      return;
+    }
+
+    let startTime;
+    let animationFrame;
+
+    const animate = (timestamp) => {
+      if (!startTime) startTime = timestamp;
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+
+      setCount(Math.floor(progress * (end - start) + start));
+
+      if (progress < 1) {
+        animationFrame = requestAnimationFrame(animate);
+      }
+    };
+
+    animationFrame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrame);
+  }, [end, duration, start, shouldAnimate]);
+
+  return count;
+};
+
+// Separate component for department card to use hooks properly
+const DepartmentCard = ({ dept, prediction, index, showCards, data, selectedTimeframe, getStatusColor, getStatusLabel }) => {
+  // Count-up animation for wait time (now at component level, not in map)
+  const animatedWaitTime = useCountUp(
+    prediction.waitTime,
+    1200,
+    0,
+    showCards
+  );
+
+  // Staggered animation delay (0.1s per card)
+  const animationDelay = index * 100;
+
+  return (
+    <div
+      className={`border-2 rounded-xl p-4 transition-all hover:shadow-lg transform ${
+        getStatusColor(prediction.status)
+      } ${showCards ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}
+      style={{
+        transitionDelay: `${animationDelay}ms`,
+        transitionDuration: '600ms'
+      }}
+    >
+      {/* 부서명과 상태 */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-gray-900">{dept.name}</h3>
+            {/* Hybrid Algorithm Badge */}
+            {data?.data?.departments?.[dept.name]?.hybrid && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-full">
+                <Zap className="w-3 h-3" />
+                Hybrid
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`inline-block px-2 py-1 text-xs rounded-full font-medium ${
+              prediction.status === 'critical' ? 'bg-red-600 text-white' :
+              prediction.status === 'warning' ? 'bg-yellow-600 text-white' :
+              'bg-green-600 text-white'
+            }`}>
+              {getStatusLabel(prediction.status)}
+            </span>
+            {/* Hybrid Confidence Badge */}
+            {data?.data?.departments?.[dept.name]?.hybrid?.confidence && (
+              <span className="text-xs text-purple-600 font-medium">
+                신뢰도 {Math.round(data.data.departments[dept.name].hybrid.confidence * 100)}%
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          {dept.trend === 'up' ? (
+            <TrendingUp className="w-4 h-4 text-red-500" />
+          ) : (
+            <TrendingDown className="w-4 h-4 text-green-500" />
+          )}
+        </div>
+      </div>
+
+      {/* 예측 데이터 */}
+      <div className="space-y-2">
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">예상 대기시간</span>
+          <span className="text-2xl font-bold tabular-nums" style={{ color: dept.color }}>
+            {animatedWaitTime}분
+          </span>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">현재 대기시간</span>
+          <span className="text-sm font-medium text-gray-900">{dept.current || 0}분</span>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">혼잡도</span>
+          <div className="flex items-center gap-2 flex-1 ml-4">
+            <div className="flex-1 bg-gray-200 rounded-full h-2">
+              <div
+                className={`h-2 rounded-full transition-all duration-500 ${
+                  prediction.congestion > 80 ? 'bg-red-500' :
+                  prediction.congestion > 60 ? 'bg-yellow-500' :
+                  'bg-green-500'
+                }`}
+                style={{ width: `${prediction.congestion}%` }}
+              />
+            </div>
+            <span className="text-sm font-medium text-gray-900">{prediction.congestion}%</span>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-gray-600">예측 신뢰도</span>
+          <span className="text-sm font-medium text-blue-600">{prediction.confidence.toFixed(1)}%</span>
+        </div>
+      </div>
+
+      {/* 미니 차트 */}
+      <div className="mt-3 h-16">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={dept.data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+            <XAxis
+              dataKey="time"
+              tick={{ fontSize: 10 }}
+              interval={0}
+            />
+            <YAxis
+              label={{ value: '대기시간(분)', angle: -90, position: 'insideLeft', style: { fontSize: 10 } }}
+              tick={{ fontSize: 10 }}
+            />
+            <Tooltip
+              formatter={(value) => `${value}분`}
+              labelStyle={{ color: '#333' }}
+            />
+            <Line
+              type="linear"
+              dataKey="waitTime"
+              stroke={dept.color}
+              strokeWidth={3}
+              dot={{ fill: dept.color, strokeWidth: 2, r: 6 }}
+              activeDot={{ r: 8 }}
+              name="대기시간"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* 상세 보기 */}
+      <button className="mt-3 w-full flex items-center justify-center gap-2 py-2 bg-white bg-opacity-50 rounded-lg hover:bg-opacity-70 transition-all text-sm font-medium text-gray-700">
+        상세 분석 보기
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>
+  );
+};
 
 const LSTMPrediction = () => {
   const [departmentPredictions, setDepartmentPredictions] = useState({});
@@ -11,6 +180,12 @@ const LSTMPrediction = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Animation states
+  const [processStep, setProcessStep] = useState(0);
+  const [showCards, setShowCards] = useState(false);
+  const [animateCharts, setAnimateCharts] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);  // 분석 시작 여부
 
   const lastUpdateTime = useRef(new Date());
   const previousTimeframe = useRef(selectedTimeframe);
@@ -71,6 +246,27 @@ const LSTMPrediction = () => {
 
     return () => clearInterval(interval);
   }, [fetchPredictions, selectedTimeframe]);
+
+  // 애니메이션 시퀀스 트리거 함수
+  const triggerAnimations = useCallback(() => {
+    setProcessStep(0);
+    setShowCards(false);
+    setAnimateCharts(false);
+
+    // Sequence animations
+    const stepTimers = [
+      setTimeout(() => setProcessStep(1), 300),
+      setTimeout(() => setProcessStep(2), 600),
+      setTimeout(() => setProcessStep(3), 900),
+      setTimeout(() => setProcessStep(4), 1200),
+      setTimeout(() => {
+        setShowCards(true);
+        setAnimateCharts(true);
+      }, 1500),
+    ];
+
+    return () => stepTimers.forEach(timer => clearTimeout(timer));
+  }, []);
 
   // API 데이터 처리 (data가 변경될 때만)
   useEffect(() => {
@@ -188,7 +384,13 @@ const LSTMPrediction = () => {
     setDepartmentPredictions(predictions);
     setAccuracyData(barChartData);
     setChartData(barChartData);
-  }, [data, selectedTimeframe]);
+
+    // 데이터 로드 시 자동으로 애니메이션 시작
+    if (!isAnalyzing) {
+      setIsAnalyzing(true);
+      triggerAnimations();
+    }
+  }, [data, selectedTimeframe, isAnalyzing, triggerAnimations]);
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -281,8 +483,90 @@ const LSTMPrediction = () => {
         </div>
       </div>
 
+      {/* AI 프로세스 플로우 시각화 */}
+      {isAnalyzing && (
+      <div className="mb-6 p-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 rounded-xl border-2 border-indigo-200">
+        <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
+          <Brain className="w-5 h-5 text-indigo-600" />
+          AI 예측 프로세스
+        </h3>
+        <div className="flex items-center justify-between gap-3">
+          {/* Step 1: Data Collection */}
+          <div className={`flex-1 flex flex-col items-center transition-all duration-500 ${
+            processStep >= 1 ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+          }`}>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 transition-all duration-300 ${
+              processStep >= 1 ? 'bg-blue-600 text-white scale-110' : 'bg-gray-300 text-gray-500'
+            }`}>
+              <Database className="w-7 h-7" />
+            </div>
+            <p className="text-xs font-semibold text-gray-700">데이터 수집</p>
+            <p className="text-xs text-gray-500 text-center mt-1">Queue 분석</p>
+          </div>
+
+          <ChevronRight className={`w-6 h-6 transition-all duration-300 ${
+            processStep >= 2 ? 'text-indigo-600' : 'text-gray-400'
+          }`} />
+
+          {/* Step 2: LSTM Prediction */}
+          <div className={`flex-1 flex flex-col items-center transition-all duration-500 delay-100 ${
+            processStep >= 2 ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+          }`}>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 transition-all duration-300 ${
+              processStep >= 2 ? 'bg-purple-600 text-white scale-110' : 'bg-gray-300 text-gray-500'
+            }`}>
+              <Brain className="w-7 h-7" />
+            </div>
+            <p className="text-xs font-semibold text-gray-700">LSTM 예측</p>
+            <p className="text-xs text-gray-500 text-center mt-1">딥러닝 분석</p>
+          </div>
+
+          <ChevronRight className={`w-6 h-6 transition-all duration-300 ${
+            processStep >= 3 ? 'text-indigo-600' : 'text-gray-400'
+          }`} />
+
+          {/* Step 3: Hybrid Algorithm */}
+          <div className={`flex-1 flex flex-col items-center transition-all duration-500 delay-200 ${
+            processStep >= 3 ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+          }`}>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 transition-all duration-300 ${
+              processStep >= 3 ? 'bg-pink-600 text-white scale-110' : 'bg-gray-300 text-gray-500'
+            }`}>
+              <Zap className="w-7 h-7" />
+            </div>
+            <p className="text-xs font-semibold text-gray-700">Hybrid 보정</p>
+            <p className="text-xs text-gray-500 text-center mt-1">6가지 규칙</p>
+          </div>
+
+          <ChevronRight className={`w-6 h-6 transition-all duration-300 ${
+            processStep >= 4 ? 'text-indigo-600' : 'text-gray-400'
+          }`} />
+
+          {/* Step 4: Final Results */}
+          <div className={`flex-1 flex flex-col items-center transition-all duration-500 delay-300 ${
+            processStep >= 4 ? 'opacity-100 scale-100' : 'opacity-0 scale-90'
+          }`}>
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-2 transition-all duration-300 ${
+              processStep >= 4 ? 'bg-green-600 text-white scale-110' : 'bg-gray-300 text-gray-500'
+            }`}>
+              <CheckCircle className="w-7 h-7" />
+            </div>
+            <p className="text-xs font-semibold text-gray-700">최종 예측</p>
+            <p className="text-xs text-gray-500 text-center mt-1">결과 출력</p>
+          </div>
+        </div>
+        <div className={`mt-4 p-3 bg-white rounded-lg transition-all duration-500 ${
+          processStep >= 4 ? 'opacity-100' : 'opacity-0'
+        }`}>
+          <p className="text-xs text-gray-600 text-center">
+            ✨ <strong>실시간 AI 분석:</strong> 대기열 데이터 → LSTM 딥러닝 → Hybrid 보정 → 정확도 향상
+          </p>
+        </div>
+      </div>
+      )}
+
       {/* 바 차트: AI 예측 정확도 검증 */}
-      {accuracyData.length > 0 && (
+      {isAnalyzing && accuracyData.length > 0 && (
         <div className="mb-6 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border-2 border-purple-200">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-900">📊 AI 예측 정확도 검증</h3>
@@ -319,7 +603,7 @@ const LSTMPrediction = () => {
       )}
 
       {/* 부서별 예측 카드 그리드 */}
-      {Object.keys(departmentPredictions).length === 0 ? (
+      {isAnalyzing && Object.keys(departmentPredictions).length === 0 ? (
         <div className="text-center py-12 bg-gray-50 rounded-xl">
           <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
           <p className="text-gray-600">학습된 부서의 예측 데이터를 불러오는 중입니다...</p>
@@ -327,11 +611,11 @@ const LSTMPrediction = () => {
             현재 6개 부서만 학습되어 있습니다: 내과, 정형외과, 진단검사의학과, CT실, MRI실, X-ray실
           </p>
         </div>
-      ) : (
+      ) : isAnalyzing && (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {console.log('🎯 렌더링할 부서 예측 데이터:', departmentPredictions)}
         {console.log('🎯 선택된 시간대:', selectedTimeframe)}
-        {Object.values(departmentPredictions).map(dept => {
+        {Object.values(departmentPredictions).map((dept, index) => {
           console.log(`📍 ${dept.name} 렌더링 시도, predictions:`, dept.predictions);
           const prediction = dept.predictions?.[selectedTimeframe];
           console.log(`📍 ${dept.name}의 ${selectedTimeframe} 예측:`, prediction);
@@ -343,113 +627,37 @@ const LSTMPrediction = () => {
           }
 
           return (
-            <div
+            <DepartmentCard
               key={dept.name}
-              className={`border-2 rounded-xl p-4 transition-all hover:shadow-lg ${
-                getStatusColor(prediction.status)
-              }`}
-            >
-              {/* 부서명과 상태 */}
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <h3 className="font-bold text-gray-900">{dept.name}</h3>
-                  <span className={`inline-block mt-1 px-2 py-1 text-xs rounded-full font-medium ${
-                    prediction.status === 'critical' ? 'bg-red-600 text-white' :
-                    prediction.status === 'warning' ? 'bg-yellow-600 text-white' :
-                    'bg-green-600 text-white'
-                  }`}>
-                    {getStatusLabel(prediction.status)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {dept.trend === 'up' ? (
-                    <TrendingUp className="w-4 h-4 text-red-500" />
-                  ) : (
-                    <TrendingDown className="w-4 h-4 text-green-500" />
-                  )}
-                </div>
-              </div>
-
-              {/* 예측 데이터 */}
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">예상 대기시간</span>
-                  <span className="text-2xl font-bold" style={{ color: dept.color }}>
-                    {prediction.waitTime}분
-                  </span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">현재 대기시간</span>
-                  <span className="text-sm font-medium text-gray-900">{dept.current || 0}분</span>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">혼잡도</span>
-                  <div className="flex items-center gap-2 flex-1 ml-4">
-                    <div className="flex-1 bg-gray-200 rounded-full h-2">
-                      <div
-                        className={`h-2 rounded-full transition-all duration-500 ${
-                          prediction.congestion > 80 ? 'bg-red-500' :
-                          prediction.congestion > 60 ? 'bg-yellow-500' :
-                          'bg-green-500'
-                        }`}
-                        style={{ width: `${prediction.congestion}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">{prediction.congestion}%</span>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600">예측 신뢰도</span>
-                  <span className="text-sm font-medium text-blue-600">{prediction.confidence.toFixed(1)}%</span>
-                </div>
-              </div>
-
-              {/* 미니 차트 */}
-              <div className="mt-3 h-16">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={dept.data}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                    <XAxis
-                      dataKey="time"
-                      tick={{ fontSize: 10 }}
-                      interval={0}
-                    />
-                    <YAxis
-                      label={{ value: '대기시간(분)', angle: -90, position: 'insideLeft', style: { fontSize: 10 } }}
-                      tick={{ fontSize: 10 }}
-                    />
-                    <Tooltip
-                      formatter={(value) => `${value}분`}
-                      labelStyle={{ color: '#333' }}
-                    />
-                    <Line
-                      type="linear"
-                      dataKey="waitTime"
-                      stroke={dept.color}
-                      strokeWidth={3}
-                      dot={{ fill: dept.color, strokeWidth: 2, r: 6 }}
-                      activeDot={{ r: 8 }}
-                      name="대기시간"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* 상세 보기 */}
-              <button className="mt-3 w-full flex items-center justify-center gap-2 py-2 bg-white bg-opacity-50 rounded-lg hover:bg-opacity-70 transition-all text-sm font-medium text-gray-700">
-                상세 분석 보기
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+              dept={dept}
+              prediction={prediction}
+              index={index}
+              showCards={showCards}
+              data={data}
+              selectedTimeframe={selectedTimeframe}
+              getStatusColor={getStatusColor}
+              getStatusLabel={getStatusLabel}
+            />
           );
         })}
       </div>
       )}
 
+      {/* 다시 분석하기 버튼 */}
+      {isAnalyzing && (
+        <div className="mt-6 flex items-center justify-center">
+          <button
+            onClick={triggerAnimations}
+            className="group px-8 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 font-semibold flex items-center gap-2"
+          >
+            <RefreshCw className="w-5 h-5" />
+            <span>다시 분석하기</span>
+          </button>
+        </div>
+      )}
+
       {/* 하단 요약 */}
+      {isAnalyzing && (
       <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl">
         <div className="flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
@@ -470,6 +678,7 @@ const LSTMPrediction = () => {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
